@@ -1,0 +1,548 @@
+{
+  "entities": {
+    "PublicUser": {
+      "title": "PublicUser",
+      "description": "Public social profile for HELLO users without private PII.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "Display name" },
+        "handle": { "type": "string", "description": "Unique social handle" },
+        "bio": { "type": "string", "description": "User bio" },
+        "photoUrl": { "type": "string", "description": "Avatar URL or URI" },
+        "coverUrl": { "type": "string", "description": "Cover photo URL or URI" },
+        "isOnline": { "type": "boolean", "description": "Online presence flag" },
+        "profilePrivacy": { "type": "string", "enum": ["public", "friends", "private"] },
+        "acceptSecretLove": { "type": "boolean", "description": "Whether user accepts Secret Love messages" },
+        "friendsCount": { "type": "integer" },
+        "followersCount": { "type": "integer" },
+        "isVerifiedOwner": { "type": "boolean" },
+        "role": { "type": "string", "enum": ["user", "admin", "owner"] },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "displayName", "handle", "profilePrivacy", "acceptSecretLove", "role", "createdAt", "updatedAt"]
+    },
+    "PrivateUser": {
+      "title": "PrivateUser",
+      "description": "Private PII and notification/account preferences isolated per user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "notifLikes": { "type": "boolean" },
+        "notifComments": { "type": "boolean" },
+        "notifFriends": { "type": "boolean" },
+        "notifMessages": { "type": "boolean" },
+        "notifSecretLove": { "type": "boolean" },
+        "notifSos": { "type": "boolean" },
+        "isDeactivated": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "isDeactivated", "createdAt", "updatedAt"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "Home feed, group, or page social post.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "content": { "type": "string" },
+        "mediaUri": { "type": "string" },
+        "mediaType": { "type": "string", "enum": ["none", "image", "video"] },
+        "privacy": { "type": "string", "enum": ["public", "friends", "only_me"] },
+        "allowedViewerUids": { "type": "array" },
+        "groupId": { "type": "string" },
+        "pageId": { "type": "string" },
+        "likesCount": { "type": "integer" },
+        "commentsCount": { "type": "integer" },
+        "sharesCount": { "type": "integer" },
+        "sharedFromPostId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "authorName", "content", "mediaType", "privacy", "allowedViewerUids", "likesCount", "commentsCount", "sharesCount", "createdAt", "updatedAt"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "Comment or reply on a post or reel.",
+      "type": "object",
+      "properties": {
+        "parentCommentId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "authorName", "text", "createdAt"]
+    },
+    "PostReaction": {
+      "title": "PostReaction",
+      "description": "User emoji reaction on a post.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "emoji": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "emoji", "createdAt"]
+    },
+    "Story": {
+      "title": "Story",
+      "description": "Ephemeral social story.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "mediaUri": { "type": "string" },
+        "mediaType": { "type": "string", "enum": ["text", "image", "video"] },
+        "caption": { "type": "string" },
+        "backgroundHex": { "type": "string" },
+        "privacy": { "type": "string", "enum": ["public", "friends"] },
+        "allowedViewerUids": { "type": "array" },
+        "viewersCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "authorName", "mediaType", "privacy", "allowedViewerUids", "viewersCount", "createdAt"]
+    },
+    "StoryReaction": {
+      "title": "StoryReaction",
+      "description": "Reaction or reply on a story.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "emoji": { "type": "string" },
+        "replyText": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "emoji", "createdAt"]
+    },
+    "Reel": {
+      "title": "Reel",
+      "description": "Short video reel.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "caption": { "type": "string" },
+        "videoUri": { "type": "string" },
+        "coverHex": { "type": "string" },
+        "audioTitle": { "type": "string" },
+        "likesCount": { "type": "integer" },
+        "commentsCount": { "type": "integer" },
+        "sharesCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "authorName", "caption", "likesCount", "commentsCount", "sharesCount", "createdAt"]
+    },
+    "FriendRequest": {
+      "title": "FriendRequest",
+      "description": "Friend request between two users.",
+      "type": "object",
+      "properties": {
+        "fromUid": { "type": "string" },
+        "toUid": { "type": "string" },
+        "fromName": { "type": "string" },
+        "fromAvatar": { "type": "string" },
+        "toName": { "type": "string" },
+        "toAvatar": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "rejected"] },
+        "participantUids": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fromUid", "toUid", "status", "participantUids", "createdAt", "updatedAt"]
+    },
+    "Friendship": {
+      "title": "Friendship",
+      "description": "Confirmed bidirectional friendship record.",
+      "type": "object",
+      "properties": {
+        "participantUids": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["participantUids", "createdAt"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "1:1 or group Messenger conversation.",
+      "type": "object",
+      "properties": {
+        "isGroup": { "type": "boolean" },
+        "title": { "type": "string" },
+        "participantUids": { "type": "array" },
+        "participantNames": { "type": "object" },
+        "lastMessage": { "type": "string" },
+        "lastSenderId": { "type": "string" },
+        "typingUids": { "type": "array" },
+        "readByUids": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["isGroup", "title", "participantUids", "typingUids", "readByUids", "createdAt", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Message inside a Messenger conversation.",
+      "type": "object",
+      "properties": {
+        "conversationId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "text": { "type": "string" },
+        "mediaUri": { "type": "string" },
+        "mediaType": { "type": "string", "enum": ["none", "image", "video", "file"] },
+        "fileName": { "type": "string" },
+        "reactions": { "type": "object" },
+        "participantUids": { "type": "array" },
+        "isDeleted": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["conversationId", "senderId", "senderName", "mediaType", "participantUids", "isDeleted", "createdAt"]
+    },
+    "Group": {
+      "title": "Group",
+      "description": "Community group with Emergency SOS support.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "privacy": { "type": "string", "enum": ["public", "private"] },
+        "creatorId": { "type": "string" },
+        "adminUids": { "type": "array" },
+        "memberUids": { "type": "array" },
+        "membersCount": { "type": "integer" },
+        "sosEnabled": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "privacy", "creatorId", "adminUids", "memberUids", "membersCount", "sosEnabled", "createdAt", "updatedAt"]
+    },
+    "SosAlert": {
+      "title": "SosAlert",
+      "description": "Private Emergency SOS alert visible only to sender and selected group recipients.",
+      "type": "object",
+      "properties": {
+        "groupId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "message": { "type": "string" },
+        "recipientUids": { "type": "array" },
+        "shareLiveLocation": { "type": "boolean" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "stopped", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["groupId", "senderId", "senderName", "message", "recipientUids", "shareLiveLocation", "status", "createdAt", "updatedAt"]
+    },
+    "PageEntity": {
+      "title": "PageEntity",
+      "description": "Public creator/brand page.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "bio": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "adminUids": { "type": "array" },
+        "followerUids": { "type": "array" },
+        "followersCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "category", "creatorId", "adminUids", "followerUids", "followersCount", "createdAt", "updatedAt"]
+    },
+    "EventEntity": {
+      "title": "EventEntity",
+      "description": "Social event with RSVP and invitations.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "locationName": { "type": "string" },
+        "eventDateText": { "type": "string" },
+        "eventTimeText": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "creatorName": { "type": "string" },
+        "goingUids": { "type": "array" },
+        "interestedUids": { "type": "array" },
+        "invitedUids": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "locationName", "eventDateText", "eventTimeText", "creatorId", "goingUids", "interestedUids", "invitedUids", "createdAt", "updatedAt"]
+    },
+    "MarketplaceListing": {
+      "title": "MarketplaceListing",
+      "description": "Marketplace product listing.",
+      "type": "object",
+      "properties": {
+        "sellerId": { "type": "string" },
+        "sellerName": { "type": "string" },
+        "sellerAvatar": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "currency": { "type": "string" },
+        "category": { "type": "string" },
+        "condition": { "type": "string" },
+        "locationText": { "type": "string" },
+        "imageUri": { "type": "string" },
+        "status": { "type": "string", "enum": ["available", "sold"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["sellerId", "sellerName", "title", "price", "currency", "category", "status", "createdAt", "updatedAt"]
+    },
+    "SecretLoveMessage": {
+      "title": "SecretLoveMessage",
+      "description": "Recipient-facing Secret Love message without sender identity unless revealed.",
+      "type": "object",
+      "properties": {
+        "recipientId": { "type": "string" },
+        "message": { "type": "string" },
+        "moodEmoji": { "type": "string" },
+        "isRevealed": { "type": "boolean" },
+        "revealedSenderId": { "type": "string" },
+        "revealedSenderName": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "isBlocked": { "type": "boolean" },
+        "isReported": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["recipientId", "message", "moodEmoji", "isRevealed", "revealedSenderId", "revealedSenderName", "isRead", "isBlocked", "isReported", "createdAt"]
+    },
+    "SentSecretLove": {
+      "title": "SentSecretLove",
+      "description": "Sender-private receipt for managing sent Secret Love messages.",
+      "type": "object",
+      "properties": {
+        "messageId": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "recipientName": { "type": "string" },
+        "message": { "type": "string" },
+        "moodEmoji": { "type": "string" },
+        "isRevealed": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["messageId", "recipientId", "message", "isRevealed", "createdAt"]
+    },
+    "AppNotification": {
+      "title": "AppNotification",
+      "description": "User-scoped notification item.",
+      "type": "object",
+      "properties": {
+        "recipientId": { "type": "string" },
+        "actorId": { "type": "string" },
+        "actorName": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "targetId": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["recipientId", "actorId", "type", "title", "body", "isRead", "createdAt"]
+    },
+    "ReportEntity": {
+      "title": "ReportEntity",
+      "description": "Abuse or content report.",
+      "type": "object",
+      "properties": {
+        "reporterId": { "type": "string" },
+        "targetType": { "type": "string", "enum": ["post", "listing", "secret_love", "user"] },
+        "targetId": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "resolved", "dismissed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["reporterId", "targetType", "targetId", "reason", "status", "createdAt", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Admin role entry managed exclusively by Owner.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "addedByUid": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "addedByUid", "createdAt"]
+    },
+    "OwnerConfig": {
+      "title": "OwnerConfig",
+      "description": "Verified platform Owner profile with immutable ownerUid.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "ownerHandle": { "type": "string" },
+        "ownerAvatar": { "type": "string" },
+        "about": { "type": "string" },
+        "contactEmail": { "type": "string" },
+        "contactInfo": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "ownerName", "about", "updatedAt"]
+    },
+    "GlobalSettings": {
+      "title": "GlobalSettings",
+      "description": "Global platform configuration managed exclusively by Owner.",
+      "type": "object",
+      "properties": {
+        "appName": { "type": "string" },
+        "tagline": { "type": "string" },
+        "maintenanceBanner": { "type": "string" },
+        "sosFeatureEnabled": { "type": "boolean" },
+        "secretLoveEnabled": { "type": "boolean" },
+        "allowNewRegistrations": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["appName", "sosFeatureEnabled", "secretLoveEnabled", "allowNewRegistrations", "updatedAt"]
+    },
+    "SavedPost": {
+      "title": "SavedPost",
+      "description": "Bookmark reference for a saved post or reel.",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string" },
+        "itemType": { "type": "string", "enum": ["post", "reel"] },
+        "authorName": { "type": "string" },
+        "excerpt": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["postId", "itemType", "createdAt"]
+    },
+    "BlockedUser": {
+      "title": "BlockedUser",
+      "description": "User block record.",
+      "type": "object",
+      "properties": {
+        "blockedUid": { "type": "string" },
+        "blockedName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["blockedUid", "blockedName", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users_public/{userId}": {
+      "schema": { "$ref": "#/entities/PublicUser" },
+      "description": "Public social profiles for HELLO users."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/PrivateUser" },
+      "description": "Private PII and preferences strictly scoped to userId."
+    },
+    "/users/{userId}/saved_posts/{postId}": {
+      "schema": { "$ref": "#/entities/SavedPost" },
+      "description": "Saved posts and reels per user."
+    },
+    "/users/{userId}/blocked/{blockedUid}": {
+      "schema": { "$ref": "#/entities/BlockedUser" },
+      "description": "Blocked users list per user."
+    },
+    "/users/{userId}/notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/AppNotification" },
+      "description": "Real-time notifications scoped to recipient."
+    },
+    "/users/{userId}/sent_secret_loves/{messageId}": {
+      "schema": { "$ref": "#/entities/SentSecretLove" },
+      "description": "Sender-private receipts for Secret Love."
+    },
+    "/posts/{postId}": {
+      "schema": { "$ref": "#/entities/Post" },
+      "description": "Home feed, group, and page posts."
+    },
+    "/posts/{postId}/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/Comment" },
+      "description": "Comments and nested replies on a post."
+    },
+    "/posts/{postId}/reactions/{userId}": {
+      "schema": { "$ref": "#/entities/PostReaction" },
+      "description": "Per-user emoji reaction on a post."
+    },
+    "/stories/{storyId}": {
+      "schema": { "$ref": "#/entities/Story" },
+      "description": "Ephemeral stories."
+    },
+    "/stories/{storyId}/reactions/{reactionId}": {
+      "schema": { "$ref": "#/entities/StoryReaction" },
+      "description": "Story reactions and replies."
+    },
+    "/reels/{reelId}": {
+      "schema": { "$ref": "#/entities/Reel" },
+      "description": "Short video reels."
+    },
+    "/reels/{reelId}/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/Comment" },
+      "description": "Comments on reels."
+    },
+    "/friend_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/FriendRequest" },
+      "description": "Friend requests."
+    },
+    "/friendships/{friendshipId}": {
+      "schema": { "$ref": "#/entities/Friendship" },
+      "description": "Bidirectional friendships."
+    },
+    "/conversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/Conversation" },
+      "description": "Messenger 1:1 and group chats."
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Real-time messages inside conversations."
+    },
+    "/groups/{groupId}": {
+      "schema": { "$ref": "#/entities/Group" },
+      "description": "Groups and communities."
+    },
+    "/groups/{groupId}/sos_alerts/{alertId}": {
+      "schema": { "$ref": "#/entities/SosAlert" },
+      "description": "Private Emergency SOS alerts and consent-gated live location."
+    },
+    "/pages/{pageId}": {
+      "schema": { "$ref": "#/entities/PageEntity" },
+      "description": "Creator and brand pages."
+    },
+    "/events/{eventId}": {
+      "schema": { "$ref": "#/entities/EventEntity" },
+      "description": "Events and RSVPs."
+    },
+    "/marketplace_listings/{listingId}": {
+      "schema": { "$ref": "#/entities/MarketplaceListing" },
+      "description": "Marketplace product listings."
+    },
+    "/secret_loves/{messageId}": {
+      "schema": { "$ref": "#/entities/SecretLoveMessage" },
+      "description": "Anonymous Secret Love inbox messages."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/ReportEntity" },
+      "description": "Content and user abuse reports."
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Admin accounts managed by Owner."
+    },
+    "/app_config/{docId}": {
+      "schema": { "$ref": "#/entities/OwnerConfig" },
+      "description": "Platform owner profile and global settings."
+    }
+  }
+}
