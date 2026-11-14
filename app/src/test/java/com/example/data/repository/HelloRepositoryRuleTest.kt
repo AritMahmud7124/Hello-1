@@ -201,6 +201,47 @@ class HelloRepositoryRuleTest : FirestoreEmulatorTestBase() {
     assertTrue("Expected non-owner updateGlobalSettings to fail", updateSettingsRes.isFailure)
   }
 
+  @Test
+  fun firestoreMediaStore_uploadBytesAndResolve_worksWithoutStorageBucket() = runBlocking {
+    val aliceUid = signInTestUser(ALICE_EMAIL)
+    val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+    val samplePayload = "HELLO_SPARK_FREE_CLOUD_MEDIA_BYTES".toByteArray()
+
+    val mediaUri = withTimeout(DEFAULT_TIMEOUT_MS) {
+      com.example.data.media.FirestoreMediaStore.uploadBytes(
+        context = context,
+        db = firestore,
+        uid = aliceUid,
+        bytes = samplePayload,
+        mimeType = "audio/mp4",
+        ext = "m4a"
+      )
+    }
+    assertTrue("Expected firestore://media/ URI, got $mediaUri", mediaUri.startsWith("firestore://media/"))
+
+    val repo = SocialRepository(firestore, auth)
+    val postId = withTimeout(DEFAULT_TIMEOUT_MS) {
+      repo.createPost(
+        author = PublicUser(userId = aliceUid, displayName = "Alice"),
+        content = "Media post on Spark plan",
+        mediaUri = mediaUri,
+        mediaType = "image",
+        privacy = "public"
+      ).getOrThrow()
+    }
+    assertTrue(postId.isNotBlank())
+
+    // Delete local cache so Bob forces a live Firestore fetch
+    java.io.File(context.cacheDir, "hello_media").deleteRecursively()
+
+    signInTestUser(BOB_EMAIL)
+    val resolvedFile = withTimeout(DEFAULT_TIMEOUT_MS) {
+      com.example.data.media.FirestoreMediaStore.resolveToLocalFile(context, firestore, mediaUri)
+    }
+    assertTrue("Expected resolved local file to exist", resolvedFile.exists())
+    assertEquals("HELLO_SPARK_FREE_CLOUD_MEDIA_BYTES", resolvedFile.readText())
+  }
+
   private companion object {
     const val ALICE_EMAIL = "alice.hello@test.com"
     const val BOB_EMAIL = "bob.hello@test.com"

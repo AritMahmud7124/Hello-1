@@ -299,19 +299,20 @@ class CommunityRepository(
       mediaType == "file" -> "📎 ${fileName.ifBlank { "Attachment" }}"
       else -> "Message"
     }
+    val safeMediaType = if (mediaType in listOf("none", "image", "video", "file", "audio")) mediaType else "none"
     val batch = db.batch()
     batch.set(
       msgRef,
       mapOf(
         "conversationId" to conversation.id,
         "senderId" to uid,
-        "senderName" to sender.displayName.ifBlank { "Member" }.take(80),
+        "senderName" to sender.displayName.trim().ifBlank { "Member" }.take(80),
         "text" to text.trim().take(2000),
-        "mediaUri" to mediaUri.take(2000),
-        "mediaType" to mediaType,
-        "fileName" to fileName.take(200),
+        "mediaUri" to mediaUri.trim().take(2000),
+        "mediaType" to safeMediaType,
+        "fileName" to fileName.trim().take(200),
         "reactions" to emptyMap<String, String>(),
-        "participantUids" to conversation.participantUids,
+        "participantUids" to (conversation.participantUids + uid).distinct().take(50),
         "isDeleted" to false,
         "createdAt" to FieldValue.serverTimestamp()
       )
@@ -464,11 +465,11 @@ class CommunityRepository(
         mapOf(
           "recipientId" to recipientId,
           "actorId" to actorId,
-          "actorName" to actorName.take(80),
+          "actorName" to actorName.trim().take(80),
           "type" to type,
-          "title" to title.take(120),
-          "body" to body.take(400),
-          "targetId" to targetId.take(128),
+          "title" to title.trim().ifBlank { "HELLO" }.take(120),
+          "body" to body.trim().ifBlank { "New notification" }.take(400),
+          "targetId" to targetId.trim().take(128),
           "isRead" to false,
           "createdAt" to FieldValue.serverTimestamp()
         )

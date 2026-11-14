@@ -425,9 +425,8 @@ fun MarketplaceScreen(
       },
       confirmButton = {
         Button(onClick = {
-          if (me != null) {
-            spacesVm.createListing(context, me, title, desc, price, category, condition, locationText, imageUri)
-          }
+          val seller = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+          spacesVm.createListing(context, seller, title, desc, price, category, condition, locationText, imageUri)
           showCreate = false
         }) { Text("List Item") }
       },
@@ -467,12 +466,11 @@ fun MarketplaceScreen(
           }) { Text(if (item.status == "sold") "Mark Available" else "Mark Sold") }
         } else {
           Button(onClick = {
-            if (me != null) {
-              val seller = PublicUser(userId = item.sellerId, displayName = item.sellerName, photoUrl = item.sellerAvatar)
-              communityVm.startDirectChat(me, seller) { convId ->
-                detailListing = null
-                onOpenChat(convId)
-              }
+            val buyer = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+            val seller = PublicUser(userId = item.sellerId, displayName = item.sellerName, photoUrl = item.sellerAvatar)
+            communityVm.startDirectChat(buyer, seller) { convId ->
+              detailListing = null
+              onOpenChat(convId)
             }
           }) { Text("Contact Seller") }
         }

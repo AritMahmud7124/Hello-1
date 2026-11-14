@@ -371,3 +371,49 @@ test("Messenger voice notes, typing indicators, read receipts, and FCM token rul
     })
   );
 });
+
+test("Firestore cloud media_blobs enforce owner writes and authenticated get", async () => {
+  const unauthDb = testEnv.unauthenticatedContext().firestore();
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+
+  await assertFails(unauthDb.collection("media_blobs").doc("media_1").get());
+
+  // Spoofed ownerId rejected
+  await assertFails(
+    bobDb.collection("media_blobs").doc("media_1").set({
+      ownerId: ALICE_UID,
+      mimeType: "image/jpeg",
+      ext: "jpg",
+      chunkCount: 1,
+      byteSize: 1200,
+      createdAt: ts(),
+    })
+  );
+
+  // Alice writes valid metadata + chunk
+  await assertSucceeds(
+    aliceDb.collection("media_blobs").doc("media_1").set({
+      ownerId: ALICE_UID,
+      mimeType: "image/jpeg",
+      ext: "jpg",
+      chunkCount: 1,
+      byteSize: 12,
+      createdAt: ts(),
+    })
+  );
+  await assertSucceeds(
+    aliceDb.collection("media_blobs").doc("media_1").collection("chunks").doc("chunk_000").set({
+      ownerId: ALICE_UID,
+      index: 0,
+      data: "SGVsbG9Xb3JsZA==",
+      createdAt: ts(),
+    })
+  );
+
+  // Bob (signed in) can fetch metadata + chunks to view Alice's post/story, but cannot overwrite/list-all/delete
+  await assertSucceeds(bobDb.collection("media_blobs").doc("media_1").get());
+  await assertSucceeds(bobDb.collection("media_blobs").doc("media_1").collection("chunks").get());
+  await assertFails(bobDb.collection("media_blobs").get());
+  await assertFails(bobDb.collection("media_blobs").doc("media_1").delete());
+});

@@ -73,7 +73,7 @@ class SpacesRepository(
         "name" to name.trim().take(100),
         "description" to description.trim().take(600),
         "category" to category.trim().ifBlank { "Community" }.take(60),
-        "privacy" to privacy,
+        "privacy" to if (privacy in listOf("public", "private")) privacy else "public",
         "creatorId" to uid,
         "adminUids" to listOf(uid),
         "memberUids" to listOf(uid),
@@ -241,10 +241,11 @@ class SpacesRepository(
   suspend fun createPage(name: String, category: String, bio: String): Result<String> = runCatching {
     val uid = requireUserId()
     val ref = db.collection("pages").document()
+    val safeCategory = category.trim().let { if (it.length < 2) "Creator" else it }.take(60)
     ref.set(
       mapOf(
         "name" to name.trim().take(100),
-        "category" to category.trim().ifBlank { "Creator" }.take(60),
+        "category" to safeCategory,
         "bio" to bio.trim().take(600),
         "creatorId" to uid,
         "adminUids" to listOf(uid),
@@ -301,11 +302,11 @@ class SpacesRepository(
       mapOf(
         "title" to title.trim().take(120),
         "description" to description.trim().take(800),
-        "locationName" to locationName.trim().take(160),
-        "eventDateText" to dateText.trim().take(40),
-        "eventTimeText" to timeText.trim().take(40),
+        "locationName" to locationName.trim().ifBlank { "Online" }.take(160),
+        "eventDateText" to dateText.trim().ifBlank { "TBD" }.take(40),
+        "eventTimeText" to timeText.trim().ifBlank { "TBD" }.take(40),
         "creatorId" to uid,
-        "creatorName" to creatorName.ifBlank { "Member" }.take(80),
+        "creatorName" to creatorName.trim().ifBlank { "Member" }.take(80),
         "goingUids" to listOf(uid),
         "interestedUids" to emptyList<String>(),
         "invitedUids" to emptyList<String>(),

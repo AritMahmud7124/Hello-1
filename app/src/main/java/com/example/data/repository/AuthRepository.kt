@@ -33,6 +33,8 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 
@@ -40,6 +42,8 @@ class AuthRepository(
   private val db: FirebaseFirestore,
   private val auth: FirebaseAuth = Firebase.auth
 ) {
+  private val profileMutex = Mutex()
+
   constructor(context: Context) : this(
     FirebaseFirestore.getInstance(
       context.applicationContext.getString(R.string.firestore_database_id)
@@ -144,28 +148,34 @@ class AuthRepository(
     }
   }
 
-  suspend fun ensureUserProfile() {
-    val user = auth.currentUser ?: return
+  suspend fun ensureProfileReady(): Result<Unit> = runCatching {
+    ensureUserProfile()
+  }
+
+  suspend fun ensureUserProfile() = profileMutex.withLock {
+    val user = auth.currentUser ?: return@withLock
     val uid = user.uid
     val publicRef = db.collection("users_public").document(uid)
     val privateRef = db.collection("users").document(uid)
 
     try {
       val publicSnap = publicRef.get().await()
-      val displayName = user.displayName?.takeIf { it.isNotBlank() } ?: "Hello Member"
+      val displayName = user.displayName?.trim()?.takeIf { it.isNotBlank() }?.take(80) ?: "Hello Member"
       val baseHandle = "@" + (user.email?.substringBefore("@") ?: uid.take(8))
         .lowercase()
         .replace(Regex("[^a-z0-9_]"), "")
         .take(24)
         .ifBlank { "hello_${uid.take(6)}" }
+      val safePhotoUrl = (user.photoUrl?.toString() ?: "").trim().take(1000)
+      val safeEmail = (user.email ?: "").trim().take(160)
 
       if (!publicSnap.exists()) {
         val publicPayload = mapOf(
           "userId" to uid,
-          "displayName" to displayName.take(80),
-          "handle" to baseHandle,
+          "displayName" to displayName,
+          "handle" to baseHandle.take(40),
           "bio" to "Hey there! I'm on HELLO.",
-          "photoUrl" to (user.photoUrl?.toString() ?: ""),
+          "photoUrl" to safePhotoUrl,
           "coverUrl" to "",
           "isOnline" to true,
           "profilePrivacy" to "public",
@@ -191,7 +201,7 @@ class AuthRepository(
       if (!privateSnap.exists()) {
         val privatePayload = mapOf(
           "userId" to uid,
-          "email" to (user.email ?: ""),
+          "email" to safeEmail,
           "phone" to "",
           "fcmToken" to "",
           "notifLikes" to true,
@@ -217,11 +227,11 @@ class AuthRepository(
           ownerRef.set(
             mapOf(
               "ownerUid" to uid,
-              "ownerName" to displayName.take(80),
-              "ownerHandle" to baseHandle,
-              "ownerAvatar" to (user.photoUrl?.toString() ?: ""),
+              "ownerName" to displayName,
+              "ownerHandle" to baseHandle.take(40),
+              "ownerAvatar" to safePhotoUrl,
               "about" to "Founder & Owner of HELLO Social Network.",
-              "contactEmail" to (user.email ?: ""),
+              "contactEmail" to safeEmail,
               "contactInfo" to "Verified platform owner account.",
               "updatedAt" to FieldValue.serverTimestamp()
             )
@@ -250,6 +260,7 @@ class AuthRepository(
       throw e
     } catch (e: Exception) {
       handleFirestoreError(e, OperationType.WRITE, "users_public/$uid")
+      throw e
     }
   }
 
@@ -289,13 +300,18 @@ class AuthRepository(
   ): Result<Unit> = runCatching {
     val uid = requireUserId()
     val ref = db.collection("users_public").document(uid)
+    if (!ref.get().await().exists()) {
+      ensureUserProfile()
+    }
+    val safeName = displayName.trim().ifBlank { "Hello Member" }.take(80)
+    val safePrivacy = if (profilePrivacy in listOf("public", "friends", "private")) profilePrivacy else "public"
     ref.update(
       mapOf(
-        "displayName" to displayName.trim().take(80),
+        "displayName" to safeName,
         "bio" to bio.trim().take(300),
         "photoUrl" to photoUrl.trim().take(1000),
         "coverUrl" to coverUrl.trim().take(1000),
-        "profilePrivacy" to profilePrivacy,
+        "profilePrivacy" to safePrivacy,
         "acceptSecretLove" to acceptSecretLove,
         "isOnline" to isOnline,
         "updatedAt" to FieldValue.serverTimestamp()
@@ -319,6 +335,9 @@ class AuthRepository(
   ): Result<Unit> = runCatching {
     val uid = requireUserId()
     val ref = db.collection("users").document(uid)
+    if (!ref.get().await().exists()) {
+      ensureUserProfile()
+    }
     ref.update(
       mapOf(
         "notifLikes" to notifLikes,

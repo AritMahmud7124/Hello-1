@@ -418,6 +418,15 @@ fun CreatePostDialog(
           } else {
             Text("Video attached ✓", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
           }
+          TextButton(
+            onClick = {
+              mediaUri = ""
+              mediaType = "none"
+            },
+            contentPadding = PaddingValues(0.dp)
+          ) {
+            Text("Remove attachment", color = MaterialTheme.colorScheme.error)
+          }
         }
         Text("Privacy", style = MaterialTheme.typography.labelMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -434,6 +443,7 @@ fun CreatePostDialog(
     confirmButton = {
       Button(
         onClick = { onPublish(content, mediaUri, mediaType, privacy) },
+        enabled = content.isNotBlank() || mediaUri.isNotBlank(),
         modifier = Modifier.testTag("publish_post_button")
       ) { Text("Post") }
     },

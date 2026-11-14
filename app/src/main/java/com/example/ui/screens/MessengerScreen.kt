@@ -188,11 +188,10 @@ fun MessengerScreen(
       },
       confirmButton = {
         Button(onClick = {
-          if (me != null) {
-            viewModel.createGroupChat(title, me, selected.toList()) { convId ->
-              showNewGroup = false
-              onOpenThread(convId)
-            }
+          val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+          viewModel.createGroupChat(title, effectiveMe, selected.toList()) { convId ->
+            showNewGroup = false
+            onOpenThread(convId)
           }
         }) { Text("Create") }
       },
@@ -267,12 +266,13 @@ fun ChatThreadScreen(
     val file = recordedFile
     val duration = recordingSeconds.coerceAtLeast(1)
     releaseRecorder(deleteFile = false)
-    if (file != null && file.exists() && file.length() > 0L && conversation != null && me != null) {
+    val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+    if (file != null && file.exists() && file.length() > 0L && conversation != null) {
       val localUri = Uri.fromFile(file).toString()
       viewModel.sendMessage(
         context = context,
         conversation = conversation,
-        sender = me,
+        sender = effectiveMe,
         text = "",
         mediaUri = localUri,
         mediaType = "audio",
@@ -326,15 +326,17 @@ fun ChatThreadScreen(
   }
 
   val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-    if (uri != null && conversation != null && me != null) {
+    val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+    if (uri != null && conversation != null) {
       val mime = context.contentResolver.getType(uri).orEmpty()
       val mediaType = if (mime.startsWith("video")) "video" else "image"
-      viewModel.sendMessage(context, conversation, me, "", mediaUri = uri.toString(), mediaType = mediaType)
+      viewModel.sendMessage(context, conversation, effectiveMe, "", mediaUri = uri.toString(), mediaType = mediaType)
     }
   }
   val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-    if (uri != null && conversation != null && me != null) {
-      viewModel.sendMessage(context, conversation, me, "", mediaUri = uri.toString(), mediaType = "file", fileName = uri.lastPathSegment ?: "Document")
+    val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+    if (uri != null && conversation != null) {
+      viewModel.sendMessage(context, conversation, effectiveMe, "", mediaUri = uri.toString(), mediaType = "file", fileName = uri.lastPathSegment ?: "Document")
     }
   }
 
@@ -543,8 +545,9 @@ fun ChatThreadScreen(
         )
         IconButton(
           onClick = {
-            if (input.isNotBlank() && conversation != null && me != null) {
-              viewModel.sendMessage(context, conversation, me, input)
+            val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+            if (input.isNotBlank() && conversation != null) {
+              viewModel.sendMessage(context, conversation, effectiveMe, input)
               input = ""
               viewModel.setTyping(conversationId, false)
             }

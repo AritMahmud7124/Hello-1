@@ -24,12 +24,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.example.R
+import com.example.data.media.FirestoreMediaStore
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun VoiceNotePlayer(
@@ -38,6 +44,8 @@ fun VoiceNotePlayer(
   isMine: Boolean,
   modifier: Modifier = Modifier
 ) {
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
   var isPlaying by remember(audioUrl) { mutableStateOf(false) }
   var isPreparing by remember(audioUrl) { mutableStateOf(false) }
   var durationMs by remember(audioUrl) { mutableIntStateOf(0) }
@@ -96,37 +104,51 @@ fun VoiceNotePlayer(
             }
           } else if (!isPreparing) {
             isPreparing = true
-            val mp = MediaPlayer().apply {
-              setAudioAttributes(
-                AudioAttributes.Builder()
-                  .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                  .setUsage(AudioAttributes.USAGE_MEDIA)
-                  .build()
-              )
-              setOnPreparedListener { player ->
+            scope.launch {
+              val sourcePath = if (FirestoreMediaStore.isFirestoreMediaUri(audioUrl)) {
+                val db = FirebaseFirestore.getInstance(context.applicationContext.getString(R.string.firestore_database_id))
+                runCatching {
+                  FirestoreMediaStore.resolveToLocalFile(context.applicationContext, db, audioUrl).absolutePath
+                }.getOrNull()
+              } else {
+                audioUrl
+              }
+              if (sourcePath.isNullOrBlank()) {
                 isPreparing = false
-                durationMs = player.duration.coerceAtLeast(0)
-                player.start()
-                isPlaying = true
+                return@launch
               }
-              setOnCompletionListener {
-                isPlaying = false
-                positionMs = 0
+              val mp = MediaPlayer().apply {
+                setAudioAttributes(
+                  AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .build()
+                )
+                setOnPreparedListener { player ->
+                  isPreparing = false
+                  durationMs = player.duration.coerceAtLeast(0)
+                  player.start()
+                  isPlaying = true
+                }
+                setOnCompletionListener {
+                  isPlaying = false
+                  positionMs = 0
+                }
+                setOnErrorListener { _, _, _ ->
+                  isPreparing = false
+                  isPlaying = false
+                  true
+                }
               }
-              setOnErrorListener { _, _, _ ->
+              mediaPlayer = mp
+              runCatching {
+                mp.setDataSource(sourcePath)
+                mp.prepareAsync()
+              }.onFailure {
                 isPreparing = false
-                isPlaying = false
-                true
+                runCatching { mp.release() }
+                mediaPlayer = null
               }
-            }
-            mediaPlayer = mp
-            runCatching {
-              mp.setDataSource(audioUrl)
-              mp.prepareAsync()
-            }.onFailure {
-              isPreparing = false
-              runCatching { mp.release() }
-              mediaPlayer = null
             }
           }
         },

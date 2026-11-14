@@ -144,7 +144,8 @@ fun FriendsScreen(
               statusContent = {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                   IconButton(onClick = {
-                    if (me != null) viewModel.startDirectChat(me, user, onOpenChat)
+                    val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+                    viewModel.startDirectChat(effectiveMe, user, onOpenChat)
                   }) {
                     Icon(Icons.Filled.Message, contentDescription = "Message ${user.displayName}")
                   }
@@ -182,7 +183,8 @@ fun FriendsScreen(
                     }
                   } else {
                     Button(onClick = {
-                      if (me != null) viewModel.sendFriendRequest(me, user)
+                      val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+                      viewModel.sendFriendRequest(effectiveMe, user)
                     }) {
                       Icon(Icons.Filled.PersonAdd, null)
                       Spacer(Modifier.width(4.dp))

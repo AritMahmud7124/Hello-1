@@ -2,8 +2,10 @@ package com.example.data.repository
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import android.webkit.MimeTypeMap
 import com.example.R
+import com.example.data.media.FirestoreMediaStore
 import com.example.data.model.Comment
 import com.example.data.model.OperationType
 import com.example.data.model.Post
@@ -23,6 +25,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.snapshots
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageException
 import com.google.firebase.storage.StorageMetadata
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -53,10 +56,15 @@ class SocialRepository(
   ): Result<String> = runCatching {
     val trimmed = localUriString.trim()
     if (trimmed.isBlank()) return@runCatching ""
-    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-      return@runCatching trimmed
+    if (
+      trimmed.startsWith("http://") ||
+      trimmed.startsWith("https://") ||
+      FirestoreMediaStore.isFirestoreMediaUri(trimmed)
+    ) {
+      return@runCatching trimmed.take(2000)
     }
 
+    val safeFolder = if (folder in ALLOWED_MEDIA_FOLDERS) folder else "posts"
     val uid = requireUserId()
     val uri = Uri.parse(trimmed)
     val mimeType = runCatching { context.contentResolver.getType(uri) }.getOrNull()
@@ -65,22 +73,66 @@ class SocialRepository(
       ?.substringAfterLast('.', "")
       ?.lowercase()
       ?.takeIf { it.length in 1..6 && it.all(Char::isLetterOrDigit) }
-    val defaultExt = when (folder) {
+    val defaultExt = when (safeFolder) {
       "reels" -> "mp4"
       "messages" -> "bin"
       else -> "jpg"
     }
     val ext = extFromMime ?: extFromPath ?: defaultExt
-    val objectPath = "hello_media/$folder/$uid/${UUID.randomUUID()}.$ext"
-    val ref = storage.reference.child(objectPath)
+    val resolvedMime = mimeType
+      ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+      ?: when (ext) {
+        "m4a", "mp4" -> if (ext == "m4a") "audio/mp4" else "video/mp4"
+        "jpg", "jpeg" -> "image/jpeg"
+        "png" -> "image/png"
+        "webp" -> "image/webp"
+        else -> "application/octet-stream"
+      }
 
-    if (mimeType != null) {
-      val metadata = StorageMetadata.Builder().setContentType(mimeType).build()
-      ref.putFile(uri, metadata).await()
-    } else {
-      ref.putFile(uri).await()
+    if (storageBucketMissing) {
+      return@runCatching FirestoreMediaStore.uploadUri(context, db, uid, uri, resolvedMime, ext)
     }
-    ref.downloadUrl.await().toString()
+
+    val objectPath = "hello_media/$safeFolder/$uid/${UUID.randomUUID()}.$ext"
+    val ref = storage.reference.child(objectPath)
+    val metadata = StorageMetadata.Builder().setContentType(resolvedMime).build()
+
+    runCatching {
+      context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
+        if (afd.length >= MAX_MEDIA_BYTES) {
+          throw IllegalArgumentException("Selected file exceeds the 50 MB upload limit.")
+        }
+      }
+    }.onFailure { err ->
+      if (err is IllegalArgumentException) throw err
+    }
+
+    try {
+      val inputStream = runCatching { context.contentResolver.openInputStream(uri) }.getOrNull()
+      val uploadSnapshot = if (inputStream != null) {
+        inputStream.use { stream ->
+          ref.putStream(stream, metadata).await()
+        }
+      } else {
+        ref.putFile(uri, metadata).await()
+      }
+      uploadSnapshot.storage.downloadUrl.await().toString()
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      val storageErr = e as? StorageException
+      val isMissingBucket = storageErr?.errorCode == StorageException.ERROR_OBJECT_NOT_FOUND ||
+        storageErr?.httpResultCode == 404 ||
+        (e.message?.contains("does not exist", ignoreCase = true) == true)
+      if (isMissingBucket) {
+        Log.i(TAG, "Storage bucket unavailable (${storage.reference.bucket}); saving media directly to free Firestore cloud store.")
+        storageBucketMissing = true
+        FirestoreMediaStore.uploadUri(context, db, uid, uri, resolvedMime, ext)
+      } else {
+        Log.e(TAG, "Firebase Storage upload failed at $objectPath", e)
+        throw e
+      }
+    }
   }.onFailure { e ->
     if (e is CancellationException) throw e
   }
@@ -135,22 +187,34 @@ class SocialRepository(
     sharedFromPostId: String = ""
   ): Result<String> = runCatching {
     val uid = requireUserId()
+    val cleanMediaUri = mediaUri.trim().take(2000)
+    val safeMediaType = when {
+      cleanMediaUri.isBlank() -> "none"
+      mediaType in ALLOWED_POST_MEDIA_TYPES -> mediaType
+      else -> "none"
+    }
+    val safePrivacy = if (privacy in ALLOWED_POST_PRIVACY) privacy else "public"
+    val safeViewers = if (safePrivacy == "friends") {
+      allowedViewerUids.filter { it.isNotBlank() }.distinct().take(200)
+    } else {
+      emptyList()
+    }
     val docRef = db.collection("posts").document()
     val payload = mapOf(
       "authorId" to uid,
-      "authorName" to author.displayName.ifBlank { "Hello Member" }.take(80),
-      "authorAvatar" to author.photoUrl.take(1000),
+      "authorName" to author.displayName.trim().ifBlank { "Hello Member" }.take(80),
+      "authorAvatar" to author.photoUrl.trim().take(1000),
       "content" to content.trim().take(5000),
-      "mediaUri" to mediaUri.trim().take(2000),
-      "mediaType" to mediaType,
-      "privacy" to privacy,
-      "allowedViewerUids" to allowedViewerUids.distinct().take(200),
-      "groupId" to groupId,
-      "pageId" to pageId,
+      "mediaUri" to cleanMediaUri,
+      "mediaType" to safeMediaType,
+      "privacy" to safePrivacy,
+      "allowedViewerUids" to safeViewers,
+      "groupId" to groupId.trim().take(128),
+      "pageId" to pageId.trim().take(128),
       "likesCount" to 0L,
       "commentsCount" to 0L,
       "sharesCount" to 0L,
-      "sharedFromPostId" to sharedFromPostId,
+      "sharedFromPostId" to sharedFromPostId.trim().take(128),
       "createdAt" to FieldValue.serverTimestamp(),
       "updatedAt" to FieldValue.serverTimestamp()
     )
@@ -163,10 +227,11 @@ class SocialRepository(
 
   suspend fun updatePost(postId: String, content: String, privacy: String): Result<Unit> = runCatching {
     requireUserId()
+    val safePrivacy = if (privacy in ALLOWED_POST_PRIVACY) privacy else "public"
     db.collection("posts").document(postId).update(
       mapOf(
         "content" to content.trim().take(5000),
-        "privacy" to privacy,
+        "privacy" to safePrivacy,
         "updatedAt" to FieldValue.serverTimestamp()
       )
     ).await()
@@ -205,7 +270,7 @@ class SocialRepository(
       batch.update(
         postRef,
         mapOf(
-          "likesCount" to FieldValue.increment(-1L),
+          "likesCount" to if (post.likesCount > 0L) FieldValue.increment(-1L) else 0L,
           "updatedAt" to FieldValue.serverTimestamp()
         )
       )
@@ -316,11 +381,11 @@ class SocialRepository(
       newRef,
       mapOf(
         "authorId" to uid,
-        "authorName" to sharer.displayName.ifBlank { "Hello Member" }.take(80),
-        "authorAvatar" to sharer.photoUrl.take(1000),
+        "authorName" to sharer.displayName.trim().ifBlank { "Hello Member" }.take(80),
+        "authorAvatar" to sharer.photoUrl.trim().take(1000),
         "content" to combined.take(5000),
-        "mediaUri" to original.mediaUri,
-        "mediaType" to original.mediaType,
+        "mediaUri" to original.mediaUri.trim().take(2000),
+        "mediaType" to if (original.mediaType in ALLOWED_POST_MEDIA_TYPES) original.mediaType else "none",
         "privacy" to "public",
         "allowedViewerUids" to emptyList<String>(),
         "groupId" to "",
@@ -328,7 +393,7 @@ class SocialRepository(
         "likesCount" to 0L,
         "commentsCount" to 0L,
         "sharesCount" to 0L,
-        "sharedFromPostId" to original.id,
+        "sharedFromPostId" to original.id.take(128),
         "createdAt" to FieldValue.serverTimestamp(),
         "updatedAt" to FieldValue.serverTimestamp()
       )
@@ -427,14 +492,20 @@ class SocialRepository(
     backgroundHex: String = "#1E1B4B"
   ): Result<String> = runCatching {
     val uid = requireUserId()
+    val cleanMediaUri = mediaUri.trim().take(2000)
+    val safeMediaType = when {
+      cleanMediaUri.isBlank() -> "text"
+      mediaType in ALLOWED_STORY_MEDIA_TYPES -> mediaType
+      else -> "text"
+    }
     val ref = db.collection("stories").document()
     ref.set(
       mapOf(
         "authorId" to uid,
-        "authorName" to author.displayName.ifBlank { "Hello Member" }.take(80),
-        "authorAvatar" to author.photoUrl.take(1000),
-        "mediaUri" to mediaUri.take(2000),
-        "mediaType" to mediaType,
+        "authorName" to author.displayName.trim().ifBlank { "Hello Member" }.take(80),
+        "authorAvatar" to author.photoUrl.trim().take(1000),
+        "mediaUri" to cleanMediaUri,
+        "mediaType" to safeMediaType,
         "caption" to caption.trim().take(500),
         "backgroundHex" to backgroundHex.take(16),
         "privacy" to "public",
@@ -605,15 +676,25 @@ class SocialRepository(
         mapOf(
           "recipientId" to recipientId,
           "actorId" to actorId,
-          "actorName" to actorName.take(80),
+          "actorName" to actorName.trim().take(80),
           "type" to type,
-          "title" to title.take(120),
-          "body" to body.take(400),
-          "targetId" to targetId.take(128),
+          "title" to title.trim().ifBlank { "HELLO" }.take(120),
+          "body" to body.trim().ifBlank { "New activity" }.take(400),
+          "targetId" to targetId.trim().take(128),
           "isRead" to false,
           "createdAt" to FieldValue.serverTimestamp()
         )
       ).await()
     }
+  }
+
+  companion object {
+    private const val TAG = "SocialRepository"
+    private const val MAX_MEDIA_BYTES = 50L * 1024L * 1024L
+    @Volatile private var storageBucketMissing = false
+    private val ALLOWED_MEDIA_FOLDERS = setOf("posts", "stories", "reels", "messages", "marketplace", "profiles")
+    private val ALLOWED_POST_MEDIA_TYPES = setOf("none", "image", "video")
+    private val ALLOWED_POST_PRIVACY = setOf("public", "friends", "only_me")
+    private val ALLOWED_STORY_MEDIA_TYPES = setOf("text", "image", "video")
   }
 }

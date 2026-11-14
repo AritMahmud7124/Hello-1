@@ -249,8 +249,9 @@ fun SecretLoveScreen(
             Button(
               onClick = {
                 val target = selectedRecipient
-                if (me != null && target != null) {
-                  spacesVm.sendSecretLove(me, target, note, mood, revealNow)
+                val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+                if (target != null) {
+                  spacesVm.sendSecretLove(effectiveMe, target, note, mood, revealNow)
                   note = ""
                 }
               },
@@ -275,7 +276,10 @@ fun SecretLoveScreen(
                   if (sent.isRevealed) {
                     Text("Identity revealed ✓", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                   } else {
-                    OutlinedButton(onClick = { if (me != null) spacesVm.revealSecretLove(sent, me) }) {
+                    OutlinedButton(onClick = {
+                      val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+                      spacesVm.revealSecretLove(sent, effectiveMe)
+                    }) {
                       Icon(Icons.Filled.Visibility, null)
                       Spacer(Modifier.width(6.dp))
                       Text("Reveal My Identity")

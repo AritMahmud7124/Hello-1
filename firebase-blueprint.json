@@ -437,6 +437,32 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["blockedUid", "blockedName", "createdAt"]
+    },
+    "MediaBlob": {
+      "title": "MediaBlob",
+      "description": "Free Spark-compatible cloud media metadata stored in Firestore.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "mimeType": { "type": "string" },
+        "ext": { "type": "string" },
+        "chunkCount": { "type": "integer" },
+        "byteSize": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "mimeType", "ext", "chunkCount", "byteSize", "createdAt"]
+    },
+    "MediaChunk": {
+      "title": "MediaChunk",
+      "description": "Base64-encoded media payload chunk stored under media_blobs/{mediaId}/chunks.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "index": { "type": "integer" },
+        "data": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "index", "data", "createdAt"]
     }
   },
   "firestore": {
@@ -543,6 +569,14 @@
     "/app_config/{docId}": {
       "schema": { "$ref": "#/entities/OwnerConfig" },
       "description": "Platform owner profile and global settings."
+    },
+    "/media_blobs/{mediaId}": {
+      "schema": { "$ref": "#/entities/MediaBlob" },
+      "description": "Cloud media metadata for free Spark plan media storage."
+    },
+    "/media_blobs/{mediaId}/chunks/{chunkId}": {
+      "schema": { "$ref": "#/entities/MediaChunk" },
+      "description": "Base64 chunks for Firestore-hosted cloud media."
     }
   }
 }

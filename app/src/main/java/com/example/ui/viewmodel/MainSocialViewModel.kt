@@ -101,6 +101,27 @@ class MainSocialViewModel(
     _actionMessage.value = null
   }
 
+  fun bootstrapProfile() {
+    viewModelScope.launch {
+      authRepository.ensureProfileReady()
+        .onFailure { err ->
+          _actionMessage.value = err.unwrapFirestoreMessage("Could not initialize your profile in Firestore.")
+        }
+    }
+  }
+
+  private suspend fun resolveAuthorProfile(): PublicUser {
+    currentUser.value?.let { return it }
+    authRepository.ensureProfileReady()
+    currentUser.value?.let { return it }
+    val fbUser = authRepository.currentUser()
+    return PublicUser(
+      userId = currentUserId,
+      displayName = fbUser?.displayName?.trim()?.takeIf { it.isNotBlank() }?.take(80) ?: "Hello Member",
+      photoUrl = (fbUser?.photoUrl?.toString() ?: "").trim().take(1000)
+    )
+  }
+
   fun createPost(
     context: Context,
     content: String,
@@ -111,12 +132,12 @@ class MainSocialViewModel(
     groupId: String = "",
     pageId: String = ""
   ) {
-    val author = currentUser.value ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
     if (content.isBlank() && mediaUri.isBlank()) {
       _actionMessage.value = "Write something or attach media first."
       return
     }
     viewModelScope.launch {
+      val author = resolveAuthorProfile()
       val uploadedUrl = if (mediaUri.isNotBlank()) {
         _isUploadingMedia.value = true
         val uploadResult = socialRepository.uploadMedia(context, mediaUri, "posts")
@@ -141,7 +162,7 @@ class MainSocialViewModel(
       ).onSuccess {
         _actionMessage.value = "Post published!"
       }.onFailure {
-        _actionMessage.value = it.localizedMessage ?: "Failed to publish post"
+        _actionMessage.value = it.unwrapFirestoreMessage("Failed to publish post")
       }
     }
   }
@@ -151,7 +172,7 @@ class MainSocialViewModel(
     viewModelScope.launch {
       socialRepository.updatePost(postId, content, privacy)
         .onSuccess { _actionMessage.value = "Post updated" }
-        .onFailure { _actionMessage.value = it.localizedMessage ?: "Failed to update post" }
+        .onFailure { _actionMessage.value = it.unwrapFirestoreMessage("Failed to update post") }
     }
   }
 
@@ -159,15 +180,15 @@ class MainSocialViewModel(
     viewModelScope.launch {
       socialRepository.deletePost(postId)
         .onSuccess { _actionMessage.value = "Post deleted" }
-        .onFailure { _actionMessage.value = it.localizedMessage ?: "Failed to delete post" }
+        .onFailure { _actionMessage.value = it.unwrapFirestoreMessage("Failed to delete post") }
     }
   }
 
   fun reactToPost(post: Post, emoji: String) {
-    val actorName = currentUser.value?.displayName ?: "Member"
     viewModelScope.launch {
+      val actorName = resolveAuthorProfile().displayName
       socialRepository.togglePostReaction(post, actorName, emoji)
-        .onFailure { _actionMessage.value = it.localizedMessage ?: "Reaction failed" }
+        .onFailure { _actionMessage.value = it.unwrapFirestoreMessage("Reaction failed") }
     }
   }
 
@@ -179,19 +200,19 @@ class MainSocialViewModel(
 
   fun addComment(post: Post, text: String, parentCommentId: String = "") {
     if (text.isBlank()) return
-    val author = currentUser.value ?: PublicUser(userId = currentUserId, displayName = "Member")
     viewModelScope.launch {
+      val author = resolveAuthorProfile()
       socialRepository.addComment(post, author, text, parentCommentId)
-        .onFailure { _actionMessage.value = it.localizedMessage ?: "Failed to comment" }
+        .onFailure { _actionMessage.value = it.unwrapFirestoreMessage("Failed to comment") }
     }
   }
 
   fun sharePost(post: Post, note: String) {
-    val sharer = currentUser.value ?: PublicUser(userId = currentUserId, displayName = "Member")
     viewModelScope.launch {
+      val sharer = resolveAuthorProfile()
       socialRepository.sharePost(post, sharer, note)
         .onSuccess { _actionMessage.value = "Shared to your feed!" }
-        .onFailure { _actionMessage.value = it.localizedMessage ?: "Share failed" }
+        .onFailure { _actionMessage.value = it.unwrapFirestoreMessage("Share failed") }
     }
   }
 
@@ -215,12 +236,12 @@ class MainSocialViewModel(
   }
 
   fun createStory(context: Context, caption: String, mediaUri: String, mediaType: String, backgroundHex: String) {
-    val author = currentUser.value ?: PublicUser(userId = currentUserId, displayName = "Member")
     if (caption.isBlank() && mediaUri.isBlank()) {
       _actionMessage.value = "Add text or media for your story."
       return
     }
     viewModelScope.launch {
+      val author = resolveAuthorProfile()
       val uploadedUrl = if (mediaUri.isNotBlank()) {
         _isUploadingMedia.value = true
         val uploadResult = socialRepository.uploadMedia(context, mediaUri, "stories")
@@ -234,7 +255,7 @@ class MainSocialViewModel(
       }
       socialRepository.createStory(author, caption, uploadedUrl, mediaType, backgroundHex)
         .onSuccess { _actionMessage.value = "Story shared!" }
-        .onFailure { _actionMessage.value = it.localizedMessage ?: "Story creation failed" }
+        .onFailure { _actionMessage.value = it.unwrapFirestoreMessage("Story creation failed") }
     }
   }
 
@@ -246,23 +267,23 @@ class MainSocialViewModel(
     socialRepository.observeStoryReactions(storyId).catch { emit(emptyList()) }
 
   fun reactToStory(story: Story, emoji: String, replyText: String = "") {
-    val actor = currentUser.value ?: PublicUser(userId = currentUserId, displayName = "Member")
     viewModelScope.launch {
+      val actor = resolveAuthorProfile()
       socialRepository.reactToStory(story, actor, emoji, replyText)
         .onSuccess {
           if (replyText.isNotBlank()) _actionMessage.value = "Reply sent to ${story.authorName}"
         }
-        .onFailure { _actionMessage.value = it.localizedMessage ?: "Reaction failed" }
+        .onFailure { _actionMessage.value = it.unwrapFirestoreMessage("Reaction failed") }
     }
   }
 
   fun createReel(context: Context, caption: String, videoUri: String, audioTitle: String, coverHex: String) {
-    val author = currentUser.value ?: PublicUser(userId = currentUserId, displayName = "Member")
     if (caption.isBlank()) {
       _actionMessage.value = "Add a caption for your reel."
       return
     }
     viewModelScope.launch {
+      val author = resolveAuthorProfile()
       val uploadedUrl = if (videoUri.isNotBlank()) {
         _isUploadingMedia.value = true
         val uploadResult = socialRepository.uploadMedia(context, videoUri, "reels")
@@ -276,7 +297,7 @@ class MainSocialViewModel(
       }
       socialRepository.createReel(author, caption, uploadedUrl, audioTitle, coverHex)
         .onSuccess { _actionMessage.value = "Reel posted!" }
-        .onFailure { _actionMessage.value = it.localizedMessage ?: "Reel creation failed" }
+        .onFailure { _actionMessage.value = it.unwrapFirestoreMessage("Reel creation failed") }
     }
   }
 
@@ -296,8 +317,8 @@ class MainSocialViewModel(
 
   fun addReelComment(reelId: String, text: String) {
     if (text.isBlank()) return
-    val author = currentUser.value ?: PublicUser(userId = currentUserId, displayName = "Member")
     viewModelScope.launch {
+      val author = resolveAuthorProfile()
       socialRepository.addReelComment(reelId, author, text)
     }
   }
@@ -320,7 +341,7 @@ class MainSocialViewModel(
       var finalPhoto = photoUrl
       var finalCover = coverUrl
       if (context != null) {
-        if (photoUrl.isNotBlank() && !photoUrl.startsWith("http")) {
+        if (photoUrl.isNotBlank() && !photoUrl.startsWith("http") && !photoUrl.startsWith("firestore://")) {
           _isUploadingMedia.value = true
           val photoResult = socialRepository.uploadMedia(context, photoUrl, "profiles")
           _isUploadingMedia.value = false
@@ -329,7 +350,7 @@ class MainSocialViewModel(
             return@launch
           }
         }
-        if (coverUrl.isNotBlank() && !coverUrl.startsWith("http")) {
+        if (coverUrl.isNotBlank() && !coverUrl.startsWith("http") && !coverUrl.startsWith("firestore://")) {
           _isUploadingMedia.value = true
           val coverResult = socialRepository.uploadMedia(context, coverUrl, "profiles")
           _isUploadingMedia.value = false

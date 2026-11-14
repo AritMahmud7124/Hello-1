@@ -219,15 +219,6 @@ private fun AuthenticatedHelloShell(
     ActivityResultContracts.RequestPermission()
   ) { /* User decision respected; Firestore notifications remain accessible in-app */ }
 
-  LaunchedEffect(uid) {
-    runCatching { authRepository.ensureUserProfile() }
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-      ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-    ) {
-      notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-    }
-  }
-
   val socialVm: MainSocialViewModel = viewModel(
     key = "social_$uid",
     factory = object : ViewModelProvider.Factory {
@@ -252,6 +243,15 @@ private fun AuthenticatedHelloShell(
         SpacesGovernanceViewModel(SpacesRepository(db), GovernanceRepository(db), socialRepository, uid) as T
     }
   )
+
+  LaunchedEffect(uid) {
+    socialVm.bootstrapProfile()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+      ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    ) {
+      notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+  }
 
   val me by socialVm.currentUser.collectAsStateWithLifecycle()
   val friendships by communityVm.friendships.collectAsStateWithLifecycle()

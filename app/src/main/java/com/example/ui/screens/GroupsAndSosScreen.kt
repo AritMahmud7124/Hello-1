@@ -405,7 +405,8 @@ fun GroupDetailScreen(
               nonMembers.take(8).forEach { person ->
                 Row(
                   modifier = Modifier.fillMaxWidth().clickable {
-                    if (me != null) spacesVm.inviteMember(group, me!!, person.userId)
+                    val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+                    spacesVm.inviteMember(group, effectiveMe, person.userId)
                     showInviteDialog = false
                   }.padding(vertical = 6.dp),
                   horizontalArrangement = Arrangement.SpaceBetween
@@ -428,9 +429,8 @@ fun GroupDetailScreen(
         currentUserId = currentUserId,
         onDismiss = { showSosDialog = false },
         onSendSos = { message, recipients, shareLoc, lat, lon ->
-          if (me != null) {
-            spacesVm.sendSosAlert(group, me!!, message, recipients, shareLoc, lat, lon)
-          }
+          val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+          spacesVm.sendSosAlert(group, effectiveMe, message, recipients, shareLoc, lat, lon)
           showSosDialog = false
         }
       )

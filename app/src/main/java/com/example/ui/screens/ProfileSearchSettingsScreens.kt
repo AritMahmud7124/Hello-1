@@ -35,6 +35,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -84,6 +85,7 @@ fun ProfileScreen(
   val me by socialVm.currentUser.collectAsStateWithLifecycle()
   val myPosts by socialVm.myPosts.collectAsStateWithLifecycle()
   val savedPosts by socialVm.savedPosts.collectAsStateWithLifecycle()
+  val isUploading by socialVm.isUploadingMedia.collectAsStateWithLifecycle()
   val savedIds = remember(savedPosts) { savedPosts.map { it.postId }.toSet() }
   var tab by remember { mutableIntStateOf(0) }
   var showEditDialog by remember { mutableStateOf(false) }
@@ -94,6 +96,14 @@ fun ProfileScreen(
     contentPadding = PaddingValues(16.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)
   ) {
+    if (isUploading) {
+      item {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+          Text("Uploading profile media...", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+          LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+      }
+    }
     item {
       Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column {
@@ -217,8 +227,12 @@ fun ProfileScreen(
     }
   }
 
-  if (showEditDialog && me != null) {
-    val cur = me!!
+  if (showEditDialog) {
+    val cur = me ?: com.example.data.model.PublicUser(
+      userId = currentUserId,
+      displayName = "Hello Member",
+      bio = "Hey there! I'm on HELLO."
+    )
     var name by remember { mutableStateOf(cur.displayName) }
     var bio by remember { mutableStateOf(cur.bio) }
     var photo by remember { mutableStateOf(cur.photoUrl) }

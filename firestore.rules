@@ -425,7 +425,27 @@ service cloud.firestore {
              data.sosFeatureEnabled is bool &&
              data.secretLoveEnabled is bool &&
              data.allowNewRegistrations is bool &&
-             isValidTimestamp(data.updatedAt);
+      isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidMediaBlob(data) {
+      return data.keys().hasAll(['ownerId', 'mimeType', 'ext', 'chunkCount', 'byteSize', 'createdAt']) &&
+             data.keys().hasOnly(['ownerId', 'mimeType', 'ext', 'chunkCount', 'byteSize', 'createdAt']) &&
+             isValidId(data.ownerId) &&
+             isValidString(data.mimeType, 1, 100) &&
+             isValidString(data.ext, 1, 12) &&
+             data.chunkCount is int && data.chunkCount >= 1 && data.chunkCount <= 30 &&
+             data.byteSize is int && data.byteSize >= 1 && data.byteSize <= 10485760 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidMediaChunk(data) {
+      return data.keys().hasAll(['ownerId', 'index', 'data', 'createdAt']) &&
+             data.keys().hasOnly(['ownerId', 'index', 'data', 'createdAt']) &&
+             isValidId(data.ownerId) &&
+             data.index is int && data.index >= 0 && data.index < 30 &&
+             data.data is string && data.data.size() >= 1 && data.data.size() <= 750000 &&
+             isValidTimestamp(data.createdAt);
     }
 
     // --- COLLECTION RULES ---
@@ -742,6 +762,22 @@ service cloud.firestore {
       allow get, list: if isSignedIn();
       allow create, update: if isOwner() && isValidGlobalSettings(incoming());
       allow delete: if false;
+    }
+
+    // 12. Cloud Media Blobs (Spark-compatible Firestore media storage)
+    match /media_blobs/{mediaId} {
+      allow get: if isSignedIn() && isValidId(mediaId);
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isValidId(mediaId) && incoming().ownerId == request.auth.uid && isValidMediaBlob(incoming());
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(mediaId) && (existing().ownerId == request.auth.uid || isAdmin());
+
+      match /chunks/{chunkId} {
+        allow get, list: if isSignedIn() && isValidId(mediaId);
+        allow create: if isSignedIn() && isValidId(mediaId) && isValidId(chunkId) && incoming().ownerId == request.auth.uid && isValidMediaChunk(incoming());
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(mediaId) && (existing().ownerId == request.auth.uid || isAdmin());
+      }
     }
   }
 }

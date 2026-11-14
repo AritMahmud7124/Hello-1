@@ -59,6 +59,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,6 +76,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -82,11 +84,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.material3.CircularProgressIndicator
 import coil.compose.AsyncImage
 import com.example.R
+import com.example.data.media.FirestoreMediaStore
 import com.example.data.model.Comment
 import com.example.data.model.Post
 import com.example.data.model.PostReaction
+import com.google.firebase.firestore.FirebaseFirestore
 import com.example.ui.theme.HelloCoral
 import com.example.ui.theme.HelloEmerald
 import com.example.ui.theme.HelloRose
@@ -238,8 +243,27 @@ fun VideoPlayerBox(
   videoUri: String,
   modifier: Modifier = Modifier
 ) {
-  var isPlaying by remember { mutableStateOf(false) }
+  val context = LocalContext.current
+  var isPlaying by remember(videoUri) { mutableStateOf(false) }
+  var isLoading by remember(videoUri) { mutableStateOf(FirestoreMediaStore.isFirestoreMediaUri(videoUri)) }
+  var resolvedUri by remember(videoUri) {
+    mutableStateOf<Uri?>(if (FirestoreMediaStore.isFirestoreMediaUri(videoUri)) null else Uri.parse(videoUri))
+  }
   var videoViewRef by remember { mutableStateOf<VideoView?>(null) }
+
+  LaunchedEffect(videoUri) {
+    if (FirestoreMediaStore.isFirestoreMediaUri(videoUri)) {
+      isLoading = true
+      val db = FirebaseFirestore.getInstance(context.applicationContext.getString(R.string.firestore_database_id))
+      resolvedUri = runCatching {
+        Uri.fromFile(FirestoreMediaStore.resolveToLocalFile(context.applicationContext, db, videoUri))
+      }.getOrNull()
+      isLoading = false
+    } else {
+      resolvedUri = Uri.parse(videoUri)
+      isLoading = false
+    }
+  }
 
   Box(
     modifier = modifier
@@ -252,40 +276,54 @@ fun VideoPlayerBox(
     AndroidView(
       factory = { ctx ->
         VideoView(ctx).apply {
-          setVideoURI(Uri.parse(videoUri))
           val controller = MediaController(ctx)
           controller.setAnchorView(this)
           setMediaController(controller)
           setOnCompletionListener { isPlaying = false }
+          resolvedUri?.let {
+            tag = it.toString()
+            setVideoURI(it)
+          }
           videoViewRef = this
+        }
+      },
+      update = { vv ->
+        val next = resolvedUri
+        if (next != null && vv.tag != next.toString()) {
+          vv.tag = next.toString()
+          vv.setVideoURI(next)
         }
       },
       modifier = Modifier.fillMaxSize()
     )
-    Surface(
-      shape = CircleShape,
-      color = Color.Black.copy(alpha = 0.55f),
-      modifier = Modifier
-        .size(52.dp)
-        .clickable {
-          videoViewRef?.let { vv ->
-            if (isPlaying) {
-              vv.pause()
-              isPlaying = false
-            } else {
-              vv.start()
-              isPlaying = true
+    if (isLoading) {
+      CircularProgressIndicator(color = Color.White, modifier = Modifier.size(36.dp))
+    } else {
+      Surface(
+        shape = CircleShape,
+        color = Color.Black.copy(alpha = 0.55f),
+        modifier = Modifier
+          .size(52.dp)
+          .clickable {
+            videoViewRef?.let { vv ->
+              if (isPlaying) {
+                vv.pause()
+                isPlaying = false
+              } else {
+                vv.start()
+                isPlaying = true
+              }
             }
           }
+      ) {
+        Box(contentAlignment = Alignment.Center) {
+          Icon(
+            imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+            contentDescription = if (isPlaying) "Pause video" else "Play video",
+            tint = Color.White,
+            modifier = Modifier.size(28.dp)
+          )
         }
-    ) {
-      Box(contentAlignment = Alignment.Center) {
-        Icon(
-          imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-          contentDescription = if (isPlaying) "Pause video" else "Play video",
-          tint = Color.White,
-          modifier = Modifier.size(28.dp)
-        )
       }
     }
   }
