@@ -272,9 +272,16 @@ class CommunityRepository(
   fun observeMessages(conversationId: String): Flow<List<ChatMessage>> =
     db.collection("conversations").document(conversationId).collection("messages")
       .whereArrayContains("participantUids", requireUserId())
-      .orderBy("createdAt", Query.Direction.ASCENDING)
       .snapshots()
-      .map { snap -> snap.toObjects(ChatMessage::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) }
+      .map { snap ->
+        snap.toObjects(ChatMessage::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+          .sortedWith(
+            compareBy<ChatMessage>(
+              { it.createdAt?.seconds ?: Long.MAX_VALUE },
+              { it.createdAt?.nanoseconds ?: Int.MAX_VALUE }
+            )
+          )
+      }
       .catch { e ->
         handleFirestoreError(e, OperationType.LIST, "conversations/$conversationId/messages")
         throw e

@@ -23,7 +23,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -54,6 +56,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -440,24 +443,53 @@ fun GroupDetailScreen(
 
     if (showInviteDialog) {
       val nonMembers = allUsers.filter { it.userId != currentUserId && it.userId !in group.memberUids }
+      var inviteQuery by remember { mutableStateOf("") }
+      val filteredInvitees = remember(nonMembers, inviteQuery) {
+        if (inviteQuery.isBlank()) nonMembers else nonMembers.filter {
+          it.displayName.contains(inviteQuery, true) || it.handle.contains(inviteQuery, true)
+        }
+      }
       AlertDialog(
         onDismissRequest = { showInviteDialog = false },
         title = { Text("Add Group Member") },
         text = {
-          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (nonMembers.isEmpty()) {
-              Text("All visible users are already members.")
+          Column(
+            modifier = Modifier.verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            OutlinedTextField(
+              value = inviteQuery,
+              onValueChange = { inviteQuery = it },
+              label = { Text("Search people") },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth()
+            )
+            if (filteredInvitees.isEmpty()) {
+              Text(
+                if (nonMembers.isEmpty()) "All visible users are already members." else "No matching users found.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
             } else {
-              nonMembers.take(8).forEach { person ->
+              filteredInvitees.take(25).forEach { person ->
                 Row(
-                  modifier = Modifier.fillMaxWidth().clickable {
-                    val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
-                    spacesVm.inviteMember(group, effectiveMe, person.userId)
-                    showInviteDialog = false
-                  }.padding(vertical = 6.dp),
-                  horizontalArrangement = Arrangement.SpaceBetween
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                      val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+                      spacesVm.inviteMember(group, effectiveMe, person.userId)
+                      showInviteDialog = false
+                    }
+                    .padding(vertical = 8.dp),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically
                 ) {
-                  Text(person.displayName)
+                  Column(modifier = Modifier.weight(1f)) {
+                    Text(person.displayName, fontWeight = FontWeight.Medium)
+                    if (person.handle.isNotBlank()) {
+                      Text(person.handle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                  }
                   Text("Add", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
               }
@@ -474,6 +506,10 @@ fun GroupDetailScreen(
         allUsers = allUsers,
         currentUserId = currentUserId,
         onDismiss = { showSosDialog = false },
+        onQuickAddMember = { person ->
+          val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+          spacesVm.inviteMember(group, effectiveMe, person.userId)
+        },
         onSendSos = { message, recipients, shareLoc, lat, lon ->
           val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
           spacesVm.sendSosAlert(group, effectiveMe, message, recipients, shareLoc, lat, lon)
@@ -545,6 +581,7 @@ private fun EmergencySosDialog(
   allUsers: List<PublicUser>,
   currentUserId: String,
   onDismiss: () -> Unit,
+  onQuickAddMember: (PublicUser) -> Unit,
   onSendSos: (message: String, recipients: List<String>, shareLocation: Boolean, lat: Double, lon: Double) -> Unit
 ) {
   val context = LocalContext.current
@@ -553,9 +590,25 @@ private fun EmergencySosDialog(
       allUsers.firstOrNull { it.userId == uid } ?: PublicUser(userId = uid, displayName = "Member ${uid.take(6)}")
     }
   }
+  val nonMembers = remember(group.memberUids, allUsers, currentUserId) {
+    allUsers.filter { it.userId != currentUserId && it.userId !in group.memberUids }
+  }
   val selectedUids = remember { mutableStateListOf<String>() }
+  var hasInitializedSelection by remember { mutableStateOf(false) }
+  LaunchedEffect(candidateMembers) {
+    val validIds = candidateMembers.map { it.userId }.toSet()
+    selectedUids.removeAll { it !in validIds }
+    if (!hasInitializedSelection && candidateMembers.isNotEmpty()) {
+      selectedUids.addAll(candidateMembers.take(50).map { it.userId })
+      hasInitializedSelection = true
+    } else if (candidateMembers.size == 1 && candidateMembers.first().userId !in selectedUids) {
+      selectedUids.add(candidateMembers.first().userId)
+    }
+  }
+
   var message by remember { mutableStateOf("I need urgent assistance. Please check on me.") }
   var consentLocation by remember { mutableStateOf(false) }
+  var isFetchingGps by remember { mutableStateOf(false) }
   var lat by remember { mutableDoubleStateOf(0.0) }
   var lon by remember { mutableDoubleStateOf(0.0) }
   var gpsStatus by remember { mutableStateOf("Location sharing is OFF") }
@@ -572,10 +625,12 @@ private fun EmergencySosDialog(
   }
 
   fun fetchRealLocation() {
+    isFetchingGps = true
     gpsStatus = "Fetching GPS fix..."
     val client = LocationServices.getFusedLocationProviderClient(context)
     client.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
       .addOnSuccessListener { location ->
+        isFetchingGps = false
         if (location != null) {
           lat = location.latitude
           lon = location.longitude
@@ -590,10 +645,16 @@ private fun EmergencySosDialog(
               consentLocation = false
               gpsStatus = "Location unavailable on device; sending without GPS."
             }
+          }.addOnFailureListener {
+            if (!fallbackFromLocationManager()) {
+              consentLocation = false
+              gpsStatus = "Location unavailable on device; sending without GPS."
+            }
           }
         }
       }
       .addOnFailureListener {
+        isFetchingGps = false
         if (!fallbackFromLocationManager()) {
           consentLocation = false
           gpsStatus = "Unable to read GPS; sending alert without coordinates."
@@ -611,6 +672,7 @@ private fun EmergencySosDialog(
       fetchRealLocation()
     } else {
       consentLocation = false
+      isFetchingGps = false
       gpsStatus = "Location permission denied; alert can still be sent privately without location."
     }
   }
@@ -619,7 +681,10 @@ private fun EmergencySosDialog(
     onDismissRequest = onDismiss,
     title = { Text("Emergency SOS — ${group.name}") },
     text = {
-      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Column(
+        modifier = Modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+      ) {
         Surface(
           color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
           shape = RoundedCornerShape(10.dp),
@@ -640,7 +705,7 @@ private fun EmergencySosDialog(
           modifier = Modifier.fillMaxWidth()
         )
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-          Text("Select recipients (private only):", style = MaterialTheme.typography.labelLarge)
+          Text("Private recipients (${selectedUids.size}/${candidateMembers.size}):", style = MaterialTheme.typography.labelLarge)
           if (candidateMembers.isNotEmpty()) {
             TextButton(
               onClick = {
@@ -648,7 +713,7 @@ private fun EmergencySosDialog(
                   selectedUids.clear()
                 } else {
                   selectedUids.clear()
-                  selectedUids.addAll(candidateMembers.map { it.userId })
+                  selectedUids.addAll(candidateMembers.take(50).map { it.userId })
                 }
               },
               contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
@@ -658,21 +723,53 @@ private fun EmergencySosDialog(
           }
         }
         if (candidateMembers.isEmpty()) {
-          Text("Add another member to this group first before sending an SOS alert.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+          Text(
+            "Add at least one group member to send a private SOS alert:",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error
+          )
+          if (nonMembers.isEmpty()) {
+            Text(
+              "No other HELLO members discovered yet. Ask a friend to sign in first.",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          } else {
+            nonMembers.take(5).forEach { person ->
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clickable { onQuickAddMember(person) }
+                  .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Text(person.displayName, style = MaterialTheme.typography.bodyMedium)
+                Text("+ Add to Group", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+              }
+            }
+          }
         } else {
-          candidateMembers.take(6).forEach { member ->
+          candidateMembers.take(50).forEach { member ->
             val checked = member.userId in selectedUids
             Row(
               verticalAlignment = Alignment.CenterVertically,
               modifier = Modifier.fillMaxWidth().clickable {
-                if (checked) selectedUids.remove(member.userId) else selectedUids.add(member.userId)
+                if (checked) selectedUids.remove(member.userId) else if (selectedUids.size < 50) selectedUids.add(member.userId)
               }
             ) {
               Checkbox(checked = checked, onCheckedChange = {
-                if (checked) selectedUids.remove(member.userId) else selectedUids.add(member.userId)
+                if (checked) selectedUids.remove(member.userId) else if (selectedUids.size < 50) selectedUids.add(member.userId)
               })
               Text(member.displayName)
             }
+          }
+          if (selectedUids.isEmpty()) {
+            Text(
+              "Select at least 1 recipient above to enable Send Private SOS.",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.error
+            )
           }
         }
         Row(
@@ -689,6 +786,7 @@ private fun EmergencySosDialog(
             onCheckedChange = { wantShare ->
               if (!wantShare) {
                 consentLocation = false
+                isFetchingGps = false
                 lat = 0.0
                 lon = 0.0
                 gpsStatus = "Location sharing is OFF"
@@ -712,11 +810,27 @@ private fun EmergencySosDialog(
     },
     confirmButton = {
       Button(
-        onClick = { onSendSos(message, selectedUids.toList(), consentLocation, lat, lon) },
-        enabled = selectedUids.isNotEmpty(),
+        onClick = {
+          var finalShare = consentLocation
+          if (finalShare && lat == 0.0 && lon == 0.0) {
+            if (!fallbackFromLocationManager()) {
+              finalShare = false
+            }
+          }
+          onSendSos(
+            message.ifBlank { "I need urgent assistance. Please check on me." },
+            selectedUids.toList(),
+            finalShare,
+            if (finalShare) lat else 0.0,
+            if (finalShare) lon else 0.0
+          )
+        },
+        enabled = selectedUids.isNotEmpty() && !isFetchingGps,
         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
         modifier = Modifier.testTag("confirm_send_sos_button")
-      ) { Text("Send Private SOS") }
+      ) {
+        Text(if (isFetchingGps) "Getting GPS..." else "Send Private SOS")
+      }
     },
     dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
   )

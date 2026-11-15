@@ -44,6 +44,9 @@ class SpacesGovernanceViewModel(
   private val _isUploadingMedia = MutableStateFlow(false)
   val isUploadingMedia: StateFlow<Boolean> = _isUploadingMedia.asStateFlow()
 
+  private val _isSendingSecretLove = MutableStateFlow(false)
+  val isSendingSecretLove: StateFlow<Boolean> = _isSendingSecretLove.asStateFlow()
+
   val publicGroups: StateFlow<List<Group>> = spacesRepository.observePublicGroups()
     .catch { emit(emptyList()) }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
@@ -154,10 +157,10 @@ class SpacesGovernanceViewModel(
           _feedback.value = if (shareLiveLocation) {
             "SOS Alert & private live location sent to ${recipientUids.size} member(s)."
           } else {
-            "SOS Alert sent to ${recipientUids.size} member(s) without location."
+            "SOS Alert sent privately to ${recipientUids.size} member(s)."
           }
         }
-        .onFailure { _feedback.value = it.localizedMessage ?: "SOS dispatch failed" }
+        .onFailure { _feedback.value = it.unwrapFirestoreMessage("SOS dispatch failed") }
     }
   }
 
@@ -269,22 +272,27 @@ class SpacesGovernanceViewModel(
     recipient: PublicUser,
     message: String,
     moodEmoji: String,
-    revealNow: Boolean
+    revealNow: Boolean,
+    onResult: (Result<String>) -> Unit = {}
   ) {
     if (message.isBlank()) {
       _feedback.value = "Write a Secret Love message first."
       return
     }
     viewModelScope.launch {
-      governanceRepository.sendSecretLove(sender, recipient, message, moodEmoji, revealNow)
-        .onSuccess {
-          _feedback.value = if (revealNow) {
-            "Love note sent with your name!"
-          } else {
-            "Anonymous Secret Love sent ❤️"
-          }
+      _isSendingSecretLove.value = true
+      val res = governanceRepository.sendSecretLove(sender, recipient, message, moodEmoji, revealNow)
+      _isSendingSecretLove.value = false
+      res.onSuccess {
+        _feedback.value = if (revealNow) {
+          "Love note sent with your name!"
+        } else {
+          "Anonymous Secret Love sent ❤️"
         }
-        .onFailure { _feedback.value = it.localizedMessage ?: "Could not send Secret Love" }
+      }.onFailure {
+        _feedback.value = it.unwrapFirestoreMessage("Could not send Secret Love")
+      }
+      onResult(res)
     }
   }
 
@@ -292,7 +300,7 @@ class SpacesGovernanceViewModel(
     viewModelScope.launch {
       governanceRepository.revealSecretLoveIdentity(sent, sender)
         .onSuccess { _feedback.value = "Your identity has been revealed to ${sent.recipientName}." }
-        .onFailure { _feedback.value = it.localizedMessage ?: "Could not reveal identity" }
+        .onFailure { _feedback.value = it.unwrapFirestoreMessage("Could not reveal identity") }
     }
   }
 

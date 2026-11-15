@@ -115,13 +115,14 @@ class GovernanceRepository(
 
     // Send anonymous notification to recipient (never reveal sender unless revealIdentityNow == true)
     runCatching {
+      val safeSenderName = sender.displayName.ifBlank { "Admirer" }.take(80)
       db.collection("users").document(recipient.userId).collection("notifications").document().set(
         mapOf(
           "recipientId" to recipient.userId,
           "actorId" to uid,
-          "actorName" to if (revealIdentityNow) sender.displayName.take(80) else "Secret Admirer",
+          "actorName" to if (revealIdentityNow) safeSenderName else "Secret Admirer",
           "type" to "secret_love",
-          "title" to if (revealIdentityNow) "${sender.displayName} sent you Love $cleanEmoji" else "New Secret Love $cleanEmoji",
+          "title" to (if (revealIdentityNow) "$safeSenderName sent you Love $cleanEmoji" else "New Secret Love $cleanEmoji").take(120),
           "body" to "Tap to open your Secret Love inbox.",
           "targetId" to messageId,
           "isRead" to false,
@@ -137,9 +138,10 @@ class GovernanceRepository(
 
   suspend fun revealSecretLoveIdentity(sent: SentSecretLove, sender: PublicUser): Result<Unit> = runCatching {
     val uid = requireUserId()
+    val targetMessageId = sent.messageId.ifBlank { sent.id }
     val batch = db.batch()
     batch.update(
-      db.collection("secret_loves").document(sent.messageId),
+      db.collection("secret_loves").document(targetMessageId),
       mapOf(
         "isRevealed" to true,
         "revealedSenderId" to uid,
@@ -147,7 +149,7 @@ class GovernanceRepository(
       )
     )
     batch.update(
-      db.collection("users").document(uid).collection("sent_secret_loves").document(sent.messageId),
+      db.collection("users").document(uid).collection("sent_secret_loves").document(targetMessageId),
       "isRevealed", true
     )
     batch.commit().await()

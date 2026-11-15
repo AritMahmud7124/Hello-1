@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -32,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -74,6 +76,7 @@ fun SecretLoveScreen(
 ) {
   val inboxState by spacesVm.receivedSecretLoves.collectAsStateWithLifecycle()
   val sentList by spacesVm.sentSecretLoves.collectAsStateWithLifecycle()
+  val isSendingLove by spacesVm.isSendingSecretLove.collectAsStateWithLifecycle()
   val usersState by communityVm.discoverableUsers.collectAsStateWithLifecycle()
   val recipients = ((usersState as? UiState.Success)?.data ?: emptyList()).filter { it.userId != currentUserId && it.acceptSecretLove }
 
@@ -198,37 +201,80 @@ fun SecretLoveScreen(
         }
       }
       1 -> {
+        var recipientQuery by remember { mutableStateOf("") }
         var selectedRecipient by remember { mutableStateOf<PublicUser?>(null) }
         var note by remember { mutableStateOf("") }
         var mood by remember { mutableStateOf("❤️") }
         var revealNow by remember { mutableStateOf(false) }
+        var inlineStatus by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
+        val filteredRecipients = remember(recipients, recipientQuery) {
+          if (recipientQuery.isBlank()) recipients else recipients.filter {
+            it.displayName.contains(recipientQuery, true) || it.handle.contains(recipientQuery, true)
+          }
+        }
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
           item {
             Text("Choose Recipient", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(6.dp))
+            OutlinedTextField(
+              value = recipientQuery,
+              onValueChange = { recipientQuery = it },
+              placeholder = { Text("Search people by name or @handle...") },
+              leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth()
+            )
           }
-          if (recipients.isEmpty()) {
+          if (filteredRecipients.isEmpty()) {
             item {
-              EmptyStateCard(Icons.Filled.Lock, "No recipients available", "Other members who enable Secret Love will show up here.")
+              EmptyStateCard(
+                Icons.Filled.Lock,
+                if (recipients.isEmpty()) "No recipients available" else "No matching people",
+                if (recipients.isEmpty()) "Other members who enable Secret Love will show up here." else "Try another name or @handle."
+              )
             }
           } else {
-            items(recipients.take(8), key = { it.userId }) { person ->
+            items(filteredRecipients, key = { it.userId }) { person ->
               val isPicked = selectedRecipient?.userId == person.userId
               Card(
-                modifier = Modifier.fillMaxWidth().clickable { selectedRecipient = person },
+                modifier = Modifier.fillMaxWidth().clickable {
+                  selectedRecipient = person
+                  inlineStatus = null
+                },
                 colors = CardDefaults.cardColors(
                   containerColor = if (isPicked) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f) else MaterialTheme.colorScheme.surface
                 )
               ) {
                 Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                   UserAvatar(name = person.displayName, photoUrl = person.photoUrl, size = 38.dp)
-                  Text(person.displayName, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                  Column(modifier = Modifier.weight(1f)) {
+                    Text(person.displayName, fontWeight = FontWeight.SemiBold)
+                    if (person.handle.isNotBlank()) {
+                      Text(person.handle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                  }
                   if (isPicked) Text("Selected ✓", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                 }
               }
             }
           }
           item {
+            inlineStatus?.let { (isOk, msg) ->
+              Surface(
+                color = if (isOk) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                Text(
+                  text = msg,
+                  style = MaterialTheme.typography.bodySmall,
+                  color = if (isOk) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
+                  modifier = Modifier.padding(12.dp)
+                )
+              }
+              Spacer(Modifier.height(8.dp))
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
               listOf("❤️", "💌", "🌹", "✨", "🥰").forEach { emoji ->
                 FilterChip(selected = mood == emoji, onClick = { mood = emoji }, label = { Text(emoji) })
@@ -246,19 +292,40 @@ fun SecretLoveScreen(
               Text("Reveal my identity immediately", style = MaterialTheme.typography.bodyMedium)
               Switch(checked = revealNow, onCheckedChange = { revealNow = it })
             }
+            if (selectedRecipient == null && note.isNotBlank()) {
+              Text(
+                "Tap a recipient above before sending your private note.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error
+              )
+              Spacer(Modifier.height(4.dp))
+            }
             Button(
               onClick = {
                 val target = selectedRecipient
                 val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
-                if (target != null) {
-                  spacesVm.sendSecretLove(effectiveMe, target, note, mood, revealNow)
-                  note = ""
+                if (target != null && !isSendingLove) {
+                  inlineStatus = null
+                  spacesVm.sendSecretLove(effectiveMe, target, note, mood, revealNow) { res ->
+                    res.onSuccess {
+                      note = ""
+                      inlineStatus = true to (if (revealNow) "Private love note sent with your name!" else "Anonymous Secret Love sent privately ❤️")
+                    }.onFailure { err ->
+                      inlineStatus = false to (err.localizedMessage ?: "Failed to send Secret Love")
+                    }
+                  }
                 }
               },
-              enabled = selectedRecipient != null && note.isNotBlank(),
+              enabled = selectedRecipient != null && note.isNotBlank() && !isSendingLove,
               modifier = Modifier.fillMaxWidth().testTag("send_secret_love_button")
             ) {
-              Text(if (revealNow) "Send With My Name" else "Send Anonymously ❤️")
+              Text(
+                when {
+                  isSendingLove -> "Sending Privately..."
+                  revealNow -> "Send With My Name"
+                  else -> "Send Anonymously ❤️"
+                }
+              )
             }
           }
         }

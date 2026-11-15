@@ -193,9 +193,9 @@ class SpacesRepository(
           mapOf(
             "recipientId" to targetUid,
             "actorId" to uid,
-            "actorName" to sender.displayName.take(80),
+            "actorName" to sender.displayName.ifBlank { "Member" }.take(80),
             "type" to "sos_alert",
-            "title" to "SOS Alert in ${group.name}",
+            "title" to "SOS Alert in ${group.name}".take(120),
             "body" to message.trim().ifBlank { "Urgent help requested!" }.take(300),
             "targetId" to group.id,
             "isRead" to false,
