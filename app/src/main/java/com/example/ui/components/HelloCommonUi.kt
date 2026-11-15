@@ -408,7 +408,8 @@ fun PostCard(
   onDelete: () -> Unit,
   onReport: (String) -> Unit,
   modifier: Modifier = Modifier,
-  onShareClick: (() -> Unit)? = null
+  onShareClick: (() -> Unit)? = null,
+  onAuthorClick: (() -> Unit)? = null
 ) {
   var showMenu by remember { mutableStateOf(false) }
   var showReactionBar by remember { mutableStateOf(false) }
@@ -428,33 +429,42 @@ fun PostCard(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
       ) {
-        UserAvatar(name = post.authorName, photoUrl = post.authorAvatar, size = 44.dp)
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-          Text(
-            text = post.authorName.ifBlank { "Hello Member" },
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-          )
-          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+          modifier = Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(10.dp))
+            .then(if (onAuthorClick != null) Modifier.clickable(onClick = onAuthorClick) else Modifier)
+            .padding(vertical = 2.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          UserAvatar(name = post.authorName, photoUrl = post.authorAvatar, size = 44.dp)
+          Spacer(Modifier.width(12.dp))
+          Column(modifier = Modifier.weight(1f)) {
             Text(
-              text = formatTimestamp(post.createdAt),
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant
+              text = post.authorName.ifBlank { "Hello Member" },
+              style = MaterialTheme.typography.titleMedium,
+              fontWeight = FontWeight.SemiBold,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
             )
-            Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Icon(
-              imageVector = when (post.privacy) {
-                "friends" -> Icons.Filled.Group
-                "only_me" -> Icons.Filled.Lock
-                else -> Icons.Filled.Public
-              },
-              contentDescription = post.privacy,
-              modifier = Modifier.size(14.dp),
-              tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+              Text(
+                text = formatTimestamp(post.createdAt),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+              Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant)
+              Icon(
+                imageVector = when (post.privacy) {
+                  "friends" -> Icons.Filled.Group
+                  "only_me" -> Icons.Filled.Lock
+                  else -> Icons.Filled.Public
+                },
+                contentDescription = post.privacy,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
           }
         }
         IconButton(onClick = onToggleSave) {

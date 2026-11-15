@@ -210,7 +210,8 @@ fun GroupDetailScreen(
   globalSettings: GlobalSettings,
   currentUserId: String,
   friendUids: List<String>,
-  onBack: () -> Unit
+  onBack: () -> Unit,
+  onOpenProfile: (String) -> Unit = {}
 ) {
   val context = LocalContext.current
   val myGroups by spacesVm.myGroups.collectAsStateWithLifecycle()
@@ -425,7 +426,8 @@ fun GroupDetailScreen(
             onToggleSave = { socialVm.toggleSave(post.id, "post", post.authorName, post.content) },
             onEdit = { c, p -> socialVm.editPost(post.id, c, p) },
             onDelete = { socialVm.deletePost(post.id) },
-            onReport = { r -> socialVm.reportContent("post", post.id, r) }
+            onReport = { r -> socialVm.reportContent("post", post.id, r) },
+            onAuthorClick = { onOpenProfile(post.authorId) }
           )
         }
       }

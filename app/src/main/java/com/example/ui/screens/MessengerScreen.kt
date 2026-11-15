@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
@@ -645,7 +646,8 @@ fun ChatThreadScreen(
   viewModel: CommunityViewModel,
   me: PublicUser?,
   currentUserId: String,
-  onBack: () -> Unit
+  onBack: () -> Unit,
+  onOpenProfile: (String) -> Unit = {}
 ) {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
@@ -852,40 +854,58 @@ fun ChatThreadScreen(
           IconButton(onClick = onBack) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
           }
-          Box(
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier
-              .size(40.dp)
-              .then(
-                if (otherUser?.isOnline == true) Modifier.border(1.8.dp, IgStoryGradient, CircleShape).padding(2.dp)
-                else Modifier
-              )
+              .weight(1f)
+              .clip(RoundedCornerShape(10.dp))
+              .then(if (otherUid != null) Modifier.clickable { onOpenProfile(otherUid) } else Modifier)
+              .padding(vertical = 2.dp)
           ) {
-            UserAvatar(
-              name = headerTitle,
-              photoUrl = otherUser?.photoUrl ?: "",
-              size = 38.dp,
-              isOnline = otherUser?.isOnline == true
-            )
-          }
-          Column(modifier = Modifier.weight(1f)) {
-            Text(headerTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val subtitle = when {
-              typingOthers.isNotEmpty() -> {
-                val names = typingOthers.mapNotNull { conversation?.participantNames?.get(it) }.ifEmpty { listOf("Someone") }
-                "${names.joinToString(", ")} typing..."
-              }
-              otherUser?.isOnline == true -> "${otherUser.handle.ifBlank { "Active now" }} · Active now"
-              otherUser?.handle?.isNotBlank() == true -> otherUser.handle
-              conversation?.isGroup == true -> "${conversation.participantUids.size} members"
-              else -> "Instagram-style Direct"
+            Box(
+              modifier = Modifier
+                .size(40.dp)
+                .then(
+                  if (otherUser?.isOnline == true) Modifier.border(1.8.dp, IgStoryGradient, CircleShape).padding(2.dp)
+                  else Modifier
+                )
+            ) {
+              UserAvatar(
+                name = headerTitle,
+                photoUrl = otherUser?.photoUrl ?: "",
+                size = 38.dp,
+                isOnline = otherUser?.isOnline == true
+              )
             }
-            Text(
-              text = subtitle,
-              style = MaterialTheme.typography.labelSmall,
-              color = if (typingOthers.isNotEmpty()) IgMagenta else MaterialTheme.colorScheme.onSurfaceVariant,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis
-            )
+            Column(modifier = Modifier.weight(1f)) {
+              Text(headerTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+              val subtitle = when {
+                typingOthers.isNotEmpty() -> {
+                  val names = typingOthers.mapNotNull { conversation?.participantNames?.get(it) }.ifEmpty { listOf("Someone") }
+                  "${names.joinToString(", ")} typing..."
+                }
+                otherUser?.isOnline == true -> "${otherUser.handle.ifBlank { "Active now" }} · Active now"
+                otherUser?.handle?.isNotBlank() == true -> otherUser.handle
+                conversation?.isGroup == true -> "${conversation.participantUids.size} members"
+                else -> "Instagram-style Direct"
+              }
+              Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (typingOthers.isNotEmpty()) IgMagenta else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+            }
+          }
+          if (otherUid != null) {
+            IconButton(
+              onClick = { onOpenProfile(otherUid) },
+              modifier = Modifier.testTag("chat_view_profile_button")
+            ) {
+              Icon(Icons.Filled.Person, contentDescription = "View profile")
+            }
           }
           IconButton(onClick = { showThreadSearch = !showThreadSearch }) {
             Icon(Icons.Filled.Search, contentDescription = "Filter messages")

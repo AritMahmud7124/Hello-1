@@ -651,6 +651,7 @@ fun StoryViewerDialog(
   communityVm: CommunityViewModel? = null,
   me: PublicUser? = null,
   currentUserId: String = "",
+  onOpenProfile: ((String) -> Unit)? = null,
   onDismiss: () -> Unit
 ) {
   val context = LocalContext.current
@@ -835,23 +836,37 @@ fun StoryViewerDialog(
         }
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-          UserAvatar(name = activeStory.authorName, photoUrl = activeStory.authorAvatar, size = 38.dp)
-          Spacer(Modifier.width(10.dp))
-          Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-              Text(activeStory.authorName, color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-              Icon(
-                imageVector = if (activeStory.privacy == "friends") Icons.Filled.Group else Icons.Filled.Public,
-                contentDescription = activeStory.privacy,
-                tint = Color.White.copy(alpha = 0.8f),
-                modifier = Modifier.size(13.dp)
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+              .weight(1f)
+              .clip(RoundedCornerShape(10.dp))
+              .then(
+                if (onOpenProfile != null) Modifier.clickable {
+                  onDismiss()
+                  onOpenProfile(activeStory.authorId)
+                } else Modifier
+              )
+              .padding(vertical = 2.dp)
+          ) {
+            UserAvatar(name = activeStory.authorName, photoUrl = activeStory.authorAvatar, size = 38.dp)
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(activeStory.authorName, color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Icon(
+                  imageVector = if (activeStory.privacy == "friends") Icons.Filled.Group else Icons.Filled.Public,
+                  contentDescription = activeStory.privacy,
+                  tint = Color.White.copy(alpha = 0.8f),
+                  modifier = Modifier.size(13.dp)
+                )
+              }
+              Text(
+                text = "${formatTimestamp(activeStory.createdAt)} · ${activeStory.viewersCount} views" + if (shouldPauseTimer) " · Paused" else "",
+                color = Color.White.copy(alpha = 0.82f),
+                style = MaterialTheme.typography.labelSmall
               )
             }
-            Text(
-              text = "${formatTimestamp(activeStory.createdAt)} · ${activeStory.viewersCount} views" + if (shouldPauseTimer) " · Paused" else "",
-              color = Color.White.copy(alpha = 0.82f),
-              style = MaterialTheme.typography.labelSmall
-            )
           }
           IconButton(onClick = { isPaused = !isPaused }) {
             Icon(if (shouldPauseTimer) Icons.Filled.PlayArrow else Icons.Filled.Pause, contentDescription = "Pause story", tint = Color.White)
@@ -1115,7 +1130,8 @@ fun ReelsScreen(
   communityVm: CommunityViewModel? = null,
   me: PublicUser? = null,
   currentUserId: String = "",
-  onOpenStories: () -> Unit
+  onOpenStories: () -> Unit,
+  onOpenProfile: (String) -> Unit = {}
 ) {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
@@ -1312,7 +1328,14 @@ fun ReelsScreen(
                   .padding(start = 16.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
               ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(10.dp),
+                  modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { onOpenProfile(reel.authorId) }
+                    .padding(vertical = 2.dp, horizontal = 4.dp)
+                ) {
                   UserAvatar(name = reel.authorName, photoUrl = reel.authorAvatar, size = 40.dp)
                   Column {
                     Text(reel.authorName, color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)

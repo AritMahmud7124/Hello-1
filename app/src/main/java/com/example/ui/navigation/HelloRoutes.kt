@@ -14,6 +14,7 @@ object HelloRoutes {
   const val EVENTS = "events"
   const val MARKETPLACE = "marketplace"
   const val PROFILE = "profile"
+  const val USER_PROFILE = "user_profile/{userId}"
   const val SECRET_LOVE = "secret_love"
   const val SEARCH = "search"
   const val SETTINGS = "settings"
@@ -23,4 +24,5 @@ object HelloRoutes {
 
   fun chatThread(conversationId: String) = "chat_thread/$conversationId"
   fun groupDetail(groupId: String) = "group_detail/$groupId"
+  fun userProfile(userId: String) = "user_profile/$userId"
 }

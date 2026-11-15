@@ -90,7 +90,8 @@ fun HomeScreen(
   globalSettings: GlobalSettings,
   communityVm: CommunityViewModel? = null,
   onOpenStories: () -> Unit,
-  onOpenStoryViewer: (Story) -> Unit
+  onOpenStoryViewer: (Story) -> Unit,
+  onOpenProfile: (String) -> Unit = {}
 ) {
   val context = LocalContext.current
   val me by viewModel.currentUser.collectAsStateWithLifecycle()
@@ -336,7 +337,8 @@ fun HomeScreen(
               onToggleSave = { viewModel.toggleSave(post.id, "post", post.authorName, post.content) },
               onEdit = { content, privacy -> viewModel.editPost(post.id, content, privacy) },
               onDelete = { viewModel.deletePost(post.id) },
-              onReport = { reason -> viewModel.reportContent("post", post.id, reason) }
+              onReport = { reason -> viewModel.reportContent("post", post.id, reason) },
+              onAuthorClick = { onOpenProfile(post.authorId) }
             )
           }
           item {

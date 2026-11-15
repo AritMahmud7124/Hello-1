@@ -298,6 +298,31 @@ class HelloRepositoryRuleTest : FirestoreEmulatorTestBase() {
     assertTrue("Author Alice should be able to delete her story", aliceDelete.isSuccess)
   }
 
+  @Test
+  fun userProfile_observeUserPublicPosts_succeedsAndRespectsPrivacy() = runBlocking {
+    val aliceUid = signInTestUser(ALICE_EMAIL)
+    signInTestUser(BOB_EMAIL)
+
+    signInTestUser(ALICE_EMAIL)
+    val repo = SocialRepository(firestore, auth)
+    val alice = PublicUser(userId = aliceUid, displayName = "Alice Profile")
+
+    val publicPostId = withTimeout(DEFAULT_TIMEOUT_MS) {
+      repo.createPost(author = alice, content = "Public bio update ${UUID.randomUUID()}", privacy = "public").getOrThrow()
+    }
+    val privatePostId = withTimeout(DEFAULT_TIMEOUT_MS) {
+      repo.createPost(author = alice, content = "Secret diary ${UUID.randomUUID()}", privacy = "only_me").getOrThrow()
+    }
+
+    // Bob visits Alice's profile and queries her public posts cleanly
+    signInTestUser(BOB_EMAIL)
+    val visiblePosts = withTimeout(FLOW_TIMEOUT_MS) {
+      repo.observeUserPublicPosts(aliceUid).first { list -> list.any { it.id == publicPostId } }
+    }
+    assertTrue(visiblePosts.any { it.id == publicPostId })
+    assertTrue(visiblePosts.none { it.id == privatePostId })
+  }
+
   private companion object {
     const val ALICE_EMAIL = "alice.hello@test.com"
     const val BOB_EMAIL = "bob.hello@test.com"

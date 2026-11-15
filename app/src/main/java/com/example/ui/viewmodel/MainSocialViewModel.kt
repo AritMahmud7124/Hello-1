@@ -98,6 +98,23 @@ class MainSocialViewModel(
     .catch { err -> emit(UiState.Error(err.unwrapFirestoreMessage("Failed to load reels"))) }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), UiState.Loading)
 
+  fun observePublicUserProfile(userId: String): Flow<UiState<PublicUser?>> =
+    authRepository.observePublicUser(userId)
+      .map<PublicUser?, UiState<PublicUser?>> { UiState.Success(it) }
+      .catch { err -> emit(UiState.Error(err.unwrapFirestoreMessage("Profile is private or unavailable"))) }
+
+  fun observeProfilePosts(targetUserId: String): Flow<List<Post>> {
+    if (targetUserId == currentUserId) return myPosts
+    return combine(
+      socialRepository.observeUserPublicPosts(targetUserId).catch { emit(emptyList()) },
+      friendsSharedPosts.map { list -> list.filter { it.authorId == targetUserId } }
+    ) { publicList, friendList ->
+      (publicList + friendList)
+        .distinctBy { it.id }
+        .sortedByDescending { it.createdAt?.seconds ?: 0L }
+    }
+  }
+
   fun setSortMode(mode: FeedSortMode) {
     _sortMode.value = mode
   }

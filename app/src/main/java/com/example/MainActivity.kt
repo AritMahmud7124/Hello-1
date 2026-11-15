@@ -112,6 +112,7 @@ import com.example.ui.screens.SecretLoveScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.StoriesScreen
 import com.example.ui.screens.StoryViewerDialog
+import com.example.ui.screens.UserProfileScreen
 import com.example.ui.theme.HelloTheme
 import com.example.ui.viewmodel.CommunityViewModel
 import com.example.ui.viewmodel.MainSocialViewModel
@@ -440,6 +441,15 @@ private fun AuthenticatedHelloShell(
               .widthIn(max = 840.dp)
               .fillMaxSize()
           ) {
+            val openUserProfile: (String) -> Unit = { targetUid ->
+              if (targetUid.isNotBlank()) {
+                if (targetUid == uid) {
+                  navigateSingleTop(HelloRoutes.PROFILE)
+                } else {
+                  navController.navigate(HelloRoutes.userProfile(targetUid))
+                }
+              }
+            }
             composable(HelloRoutes.HOME) {
               HomeScreen(
                 viewModel = socialVm,
@@ -449,7 +459,8 @@ private fun AuthenticatedHelloShell(
                 globalSettings = globalSettings,
                 communityVm = communityVm,
                 onOpenStories = { navController.navigate(HelloRoutes.STORIES) },
-                onOpenStoryViewer = { story -> activeStory = story }
+                onOpenStoryViewer = { story -> activeStory = story },
+                onOpenProfile = openUserProfile
               )
             }
             composable(HelloRoutes.FRIENDS) {
@@ -457,7 +468,8 @@ private fun AuthenticatedHelloShell(
                 viewModel = communityVm,
                 me = me,
                 currentUserId = uid,
-                onOpenChat = { convId -> navController.navigate(HelloRoutes.chatThread(convId)) }
+                onOpenChat = { convId -> navController.navigate(HelloRoutes.chatThread(convId)) },
+                onOpenProfile = openUserProfile
               )
             }
             composable(HelloRoutes.REELS) {
@@ -466,7 +478,8 @@ private fun AuthenticatedHelloShell(
                 communityVm = communityVm,
                 me = me,
                 currentUserId = uid,
-                onOpenStories = { navController.navigate(HelloRoutes.STORIES) }
+                onOpenStories = { navController.navigate(HelloRoutes.STORIES) },
+                onOpenProfile = openUserProfile
               )
             }
             composable(HelloRoutes.STORIES) {
@@ -496,7 +509,8 @@ private fun AuthenticatedHelloShell(
                 viewModel = communityVm,
                 me = me,
                 currentUserId = uid,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onOpenProfile = openUserProfile
               )
             }
             composable(HelloRoutes.NOTIFICATIONS) {
@@ -533,7 +547,8 @@ private fun AuthenticatedHelloShell(
                 globalSettings = globalSettings,
                 currentUserId = uid,
                 friendUids = friendUids,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onOpenProfile = openUserProfile
               )
             }
             composable(HelloRoutes.PAGES) {
@@ -569,6 +584,24 @@ private fun AuthenticatedHelloShell(
                 onOpenSettings = { navController.navigate(HelloRoutes.SETTINGS) }
               )
             }
+            composable(
+              route = HelloRoutes.USER_PROFILE,
+              arguments = listOf(navArgument("userId") { type = NavType.StringType })
+            ) { entry ->
+              val targetUserId = entry.arguments?.getString("userId").orEmpty()
+              UserProfileScreen(
+                targetUserId = targetUserId,
+                socialVm = socialVm,
+                communityVm = communityVm,
+                currentUserId = uid,
+                friendUids = friendUids,
+                blockedUids = blockedUids,
+                onBack = { navController.popBackStack() },
+                onOpenChat = { convId -> navController.navigate(HelloRoutes.chatThread(convId)) },
+                onOpenStoryViewer = { story -> activeStory = story },
+                onOpenSettings = { navController.navigate(HelloRoutes.SETTINGS) }
+              )
+            }
             composable(HelloRoutes.SECRET_LOVE) {
               SecretLoveScreen(
                 spacesVm = spacesVm,
@@ -587,7 +620,8 @@ private fun AuthenticatedHelloShell(
                 onOpenPages = { navController.navigate(HelloRoutes.PAGES) },
                 onOpenEvents = { navController.navigate(HelloRoutes.EVENTS) },
                 onOpenMarketplace = { navController.navigate(HelloRoutes.MARKETPLACE) },
-                onOpenChat = { convId -> navController.navigate(HelloRoutes.chatThread(convId)) }
+                onOpenChat = { convId -> navController.navigate(HelloRoutes.chatThread(convId)) },
+                onOpenProfile = openUserProfile
               )
             }
             composable(HelloRoutes.SETTINGS) {
@@ -640,6 +674,15 @@ private fun AuthenticatedHelloShell(
         communityVm = communityVm,
         me = me,
         currentUserId = uid,
+        onOpenProfile = { targetUid ->
+          if (targetUid.isNotBlank()) {
+            if (targetUid == uid) {
+              navigateSingleTop(HelloRoutes.PROFILE)
+            } else {
+              navController.navigate(HelloRoutes.userProfile(targetUid))
+            }
+          }
+        },
         onDismiss = { activeStory = null }
       )
     }

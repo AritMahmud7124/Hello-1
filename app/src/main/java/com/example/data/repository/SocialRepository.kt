@@ -164,6 +164,21 @@ class SocialRepository(
         throw e
       }
 
+  // Another User's Public Posts (satisfies rule: existing().privacy == 'public')
+  fun observeUserPublicPosts(userId: String): Flow<List<Post>> =
+    db.collection("posts")
+      .whereEqualTo("authorId", userId)
+      .whereEqualTo("privacy", "public")
+      .snapshots()
+      .map { snap ->
+        snap.toObjects(Post::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+          .sortedByDescending { it.createdAt?.seconds ?: 0L }
+      }
+      .catch { e ->
+        handleFirestoreError(e, OperationType.LIST, "posts(authorId=$userId,public)")
+        throw e
+      }
+
   // Friends-only Posts shared with current user (matches rule: request.auth.uid in existing().allowedViewerUids)
   fun observeSharedFriendsPosts(currentUserId: String): Flow<List<Post>> =
     db.collection("posts")

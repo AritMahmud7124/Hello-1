@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,7 +54,8 @@ fun FriendsScreen(
   viewModel: CommunityViewModel,
   me: PublicUser?,
   currentUserId: String,
-  onOpenChat: (String) -> Unit
+  onOpenChat: (String) -> Unit,
+  onOpenProfile: (String) -> Unit = {}
 ) {
   val usersState by viewModel.discoverableUsers.collectAsStateWithLifecycle()
   val requests by viewModel.friendRequests.collectAsStateWithLifecycle()
@@ -97,14 +99,16 @@ fun FriendsScreen(
       items(incomingRequests, key = { it.id }) { req ->
         Card(modifier = Modifier.fillMaxWidth()) {
           Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier
+              .clickable { onOpenProfile(req.fromUid) }
+              .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
           ) {
             UserAvatar(name = req.fromName, photoUrl = req.fromAvatar, size = 44.dp)
             Column(modifier = Modifier.weight(1f)) {
               Text(req.fromName.ifBlank { "Member" }, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-              Text("Wants to connect", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              Text("Wants to connect · Tap to view profile", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Button(
               onClick = { viewModel.acceptFriendRequest(req) },
@@ -141,6 +145,7 @@ fun FriendsScreen(
           items(friendsList, key = { "f_${it.userId}" }) { user ->
             FriendPersonCard(
               user = user,
+              onClick = { onOpenProfile(user.userId) },
               statusContent = {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                   IconButton(onClick = {
@@ -175,6 +180,7 @@ fun FriendsScreen(
             val pendingOut = outgoingByUid[user.userId]
             FriendPersonCard(
               user = user,
+              onClick = { onOpenProfile(user.userId) },
               statusContent = {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                   if (pendingOut != null) {
@@ -207,10 +213,14 @@ fun FriendsScreen(
 @Composable
 private fun FriendPersonCard(
   user: PublicUser,
+  onClick: () -> Unit,
   statusContent: @Composable () -> Unit
 ) {
   Card(
-    modifier = Modifier.fillMaxWidth(),
+    modifier = Modifier
+      .fillMaxWidth()
+      .clickable(onClick = onClick)
+      .testTag("friend_card_${user.userId}"),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
   ) {
     Row(
