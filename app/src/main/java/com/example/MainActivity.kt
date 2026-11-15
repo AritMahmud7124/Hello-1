@@ -447,6 +447,7 @@ private fun AuthenticatedHelloShell(
                 friendUids = friendUids,
                 blockedUids = blockedUids,
                 globalSettings = globalSettings,
+                communityVm = communityVm,
                 onOpenStories = { navController.navigate(HelloRoutes.STORIES) },
                 onOpenStoryViewer = { story -> activeStory = story }
               )
@@ -462,6 +463,9 @@ private fun AuthenticatedHelloShell(
             composable(HelloRoutes.REELS) {
               ReelsScreen(
                 viewModel = socialVm,
+                communityVm = communityVm,
+                me = me,
+                currentUserId = uid,
                 onOpenStories = { navController.navigate(HelloRoutes.STORIES) }
               )
             }
@@ -530,7 +534,14 @@ private fun AuthenticatedHelloShell(
               )
             }
             composable(HelloRoutes.PAGES) {
-              PagesScreen(spacesVm = spacesVm, socialVm = socialVm, currentUserId = uid, friendUids = friendUids)
+              PagesScreen(
+                spacesVm = spacesVm,
+                socialVm = socialVm,
+                currentUserId = uid,
+                friendUids = friendUids,
+                communityVm = communityVm,
+                me = me
+              )
             }
             composable(HelloRoutes.EVENTS) {
               EventsScreen(spacesVm = spacesVm, communityVm = communityVm, me = me, currentUserId = uid)
@@ -551,6 +562,7 @@ private fun AuthenticatedHelloShell(
                 currentUserId = uid,
                 friendCount = friendUids.size,
                 isVerifiedOwner = isVerifiedOwner,
+                communityVm = communityVm,
                 onOpenSettings = { navController.navigate(HelloRoutes.SETTINGS) }
               )
             }
@@ -620,6 +632,9 @@ private fun AuthenticatedHelloShell(
         stories = allStories,
         initialStory = story,
         viewModel = socialVm,
+        communityVm = communityVm,
+        me = me,
+        currentUserId = uid,
         onDismiss = { activeStory = null }
       )
     }

@@ -2,7 +2,11 @@ package com.example.ui.screens
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.LocationManager
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -28,6 +32,9 @@ import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.LocationOff
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -70,6 +77,8 @@ import com.example.data.model.UiState
 import com.example.ui.components.CommentsBottomSheet
 import com.example.ui.components.EmptyStateCard
 import com.example.ui.components.PostCard
+import com.example.ui.components.ShareOptionsBottomSheet
+import com.example.ui.components.SharePayload
 import com.example.ui.components.formatTimestamp
 import com.example.ui.viewmodel.CommunityViewModel
 import com.example.ui.viewmodel.MainSocialViewModel
@@ -213,12 +222,16 @@ fun GroupDetailScreen(
   val myPosts by socialVm.myPosts.collectAsStateWithLifecycle()
   val savedPosts by socialVm.savedPosts.collectAsStateWithLifecycle()
   val savedIds = remember(savedPosts) { savedPosts.map { it.postId }.toSet() }
+  val conversationsState by communityVm.conversations.collectAsStateWithLifecycle()
+  val conversations = (conversationsState as? UiState.Success)?.data.orEmpty()
   val sosAlerts by spacesVm.observeGroupSosAlerts(groupId).collectAsStateWithLifecycle(initialValue = emptyList())
 
   var showPostDialog by remember { mutableStateOf(false) }
   var showInviteDialog by remember { mutableStateOf(false) }
   var showSosDialog by remember { mutableStateOf(false) }
   var activeCommentPost by remember { mutableStateOf<Post?>(null) }
+  var sharePostTarget by remember { mutableStateOf<Post?>(null) }
+  var shareGroupSheet by remember { mutableStateOf(false) }
 
   val groupPosts = remember(feedState, myPosts, groupId) {
     val pub = (feedState as? UiState.Success)?.data.orEmpty()
@@ -234,6 +247,11 @@ fun GroupDetailScreen(
         Column(modifier = Modifier.weight(1f)) {
           Text(group?.name ?: "Group", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
           Text("${group?.membersCount ?: 0} members · ${group?.privacy ?: "public"}", style = MaterialTheme.typography.labelSmall)
+        }
+        if (group != null) {
+          IconButton(onClick = { shareGroupSheet = true }) {
+            Icon(Icons.Filled.Share, contentDescription = "Share group")
+          }
         }
         if (group != null && currentUserId in group.memberUids) {
           IconButton(onClick = { showInviteDialog = true }) {
@@ -325,22 +343,49 @@ fun GroupDetailScreen(
 
       if (sosAlerts.isNotEmpty()) {
         item {
-          Text("Private SOS History (${sosAlerts.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(Icons.Filled.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+            Text("Private SOS History (${sosAlerts.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+          }
         }
         items(sosAlerts, key = { it.id }) { alert ->
+          val hasCoords = alert.shareLiveLocation && alert.status == "active" && (alert.latitude != 0.0 || alert.longitude != 0.0)
           Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-              Text("${alert.senderName} · ${alert.status.uppercase()}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.error)
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("${alert.senderName} · ${alert.status.uppercase()}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.error)
+                Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(10.dp)) {
+                  Text(
+                    text = "🔒 Private · ${alert.recipientUids.size} recipient(s)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                  )
+                }
+              }
               Text(alert.message, style = MaterialTheme.typography.bodyMedium)
               Text(
-                text = if (alert.shareLiveLocation && alert.status == "active") {
-                  "Live Location Shared privately: %.4f, %.4f".format(alert.latitude, alert.longitude)
+                text = if (hasCoords) {
+                  "Live Location (Private — never public): %.4f, %.4f".format(alert.latitude, alert.longitude)
                 } else {
-                  "Location sharing: OFF"
+                  "Location sharing: OFF (text alert only)"
                 },
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
+              if (hasCoords) {
+                OutlinedButton(
+                  onClick = {
+                    val geo = Uri.parse("geo:${alert.latitude},${alert.longitude}?q=${alert.latitude},${alert.longitude}(HELLO%20SOS)")
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, geo)) }
+                  },
+                  contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                  Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(16.dp))
+                  Spacer(Modifier.width(6.dp))
+                  Text("Open Private Map")
+                }
+              }
               Text(formatTimestamp(alert.createdAt), style = MaterialTheme.typography.labelSmall)
             }
           }
@@ -373,6 +418,7 @@ fun GroupDetailScreen(
             onReact = { emoji -> socialVm.reactToPost(post, emoji) },
             onCommentClick = { activeCommentPost = post },
             onShare = { note -> socialVm.sharePost(post, note) },
+            onShareClick = { sharePostTarget = post },
             onToggleSave = { socialVm.toggleSave(post.id, "post", post.authorName, post.content) },
             onEdit = { c, p -> socialVm.editPost(post.id, c, p) },
             onDelete = { socialVm.deletePost(post.id) },
@@ -444,6 +490,51 @@ fun GroupDetailScreen(
         onSendComment = { text, parentId -> socialVm.addComment(post, text, parentId) }
       )
     }
+
+    sharePostTarget?.let { post ->
+      ShareOptionsBottomSheet(
+        payload = SharePayload(
+          title = "Group Post by ${post.authorName}",
+          body = post.content.ifBlank { "Shared from ${group.name}" },
+          canRepostToFeed = true
+        ),
+        currentUserId = currentUserId,
+        conversations = conversations,
+        discoverableUsers = allUsers,
+        onDismiss = { sharePostTarget = null },
+        onRepostToFeed = { note -> socialVm.sharePost(post, note) },
+        onSendToConversation = { conv, msg ->
+          val sender = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+          communityVm.shareTextToConversation(conv, sender, msg)
+        },
+        onSendToPerson = { person, msg ->
+          val sender = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+          communityVm.shareTextToPerson(sender, person, msg)
+        }
+      )
+    }
+
+    if (shareGroupSheet) {
+      ShareOptionsBottomSheet(
+        payload = SharePayload(
+          title = "Join ${group.name} on HELLO",
+          body = "${group.category} · ${group.membersCount} members\n${group.description}",
+          canRepostToFeed = false
+        ),
+        currentUserId = currentUserId,
+        conversations = conversations,
+        discoverableUsers = allUsers,
+        onDismiss = { shareGroupSheet = false },
+        onSendToConversation = { conv, msg ->
+          val sender = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+          communityVm.shareTextToConversation(conv, sender, msg)
+        },
+        onSendToPerson = { person, msg ->
+          val sender = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+          communityVm.shareTextToPerson(sender, person, msg)
+        }
+      )
+    }
   }
 }
 
@@ -469,6 +560,17 @@ private fun EmergencySosDialog(
   var lon by remember { mutableDoubleStateOf(0.0) }
   var gpsStatus by remember { mutableStateOf("Location sharing is OFF") }
 
+  fun fallbackFromLocationManager(): Boolean {
+    val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return false
+    val gps = runCatching { lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) }.getOrNull()
+    val net = runCatching { lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) }.getOrNull()
+    val best = gps ?: net ?: return false
+    lat = best.latitude
+    lon = best.longitude
+    gpsStatus = "GPS ready: %.4f, %.4f (private)".format(lat, lon)
+    return true
+  }
+
   fun fetchRealLocation() {
     gpsStatus = "Fetching GPS fix..."
     val client = LocationServices.getFusedLocationProviderClient(context)
@@ -484,7 +586,7 @@ private fun EmergencySosDialog(
               lat = last.latitude
               lon = last.longitude
               gpsStatus = "Last GPS ready: %.4f, %.4f (private)".format(lat, lon)
-            } else {
+            } else if (!fallbackFromLocationManager()) {
               consentLocation = false
               gpsStatus = "Location unavailable on device; sending without GPS."
             }
@@ -492,8 +594,10 @@ private fun EmergencySosDialog(
         }
       }
       .addOnFailureListener {
-        consentLocation = false
-        gpsStatus = "Unable to read GPS; sending alert without coordinates."
+        if (!fallbackFromLocationManager()) {
+          consentLocation = false
+          gpsStatus = "Unable to read GPS; sending alert without coordinates."
+        }
       }
   }
 
@@ -516,13 +620,43 @@ private fun EmergencySosDialog(
     title = { Text("Emergency SOS — ${group.name}") },
     text = {
       Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Surface(
+          color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+          shape = RoundedCornerShape(10.dp),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
+            Text(
+              text = "Strictly Private: Your SOS location is visible ONLY to the selected recipients below — NEVER posted publicly.",
+              style = MaterialTheme.typography.labelSmall
+            )
+          }
+        }
         OutlinedTextField(
           value = message,
           onValueChange = { message = it },
           label = { Text("Urgent message") },
           modifier = Modifier.fillMaxWidth()
         )
-        Text("Select recipients (never public):", style = MaterialTheme.typography.labelLarge)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+          Text("Select recipients (private only):", style = MaterialTheme.typography.labelLarge)
+          if (candidateMembers.isNotEmpty()) {
+            TextButton(
+              onClick = {
+                if (selectedUids.size == candidateMembers.size) {
+                  selectedUids.clear()
+                } else {
+                  selectedUids.clear()
+                  selectedUids.addAll(candidateMembers.map { it.userId })
+                }
+              },
+              contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+              Text(if (selectedUids.size == candidateMembers.size) "Clear" else "Select All")
+            }
+          }
+        }
         if (candidateMembers.isEmpty()) {
           Text("Add another member to this group first before sending an SOS alert.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         } else {

@@ -123,6 +123,41 @@ class CommunityViewModel(
     }
   }
 
+  fun shareTextToConversation(conversation: Conversation, sender: PublicUser, text: String) {
+    if (text.isBlank()) return
+    viewModelScope.launch {
+      communityRepository.sendMessage(conversation, sender, text)
+        .onSuccess {
+          val label = if (conversation.isGroup) conversation.title else "Messenger"
+          _statusMessage.value = "Shared in $label"
+        }
+        .onFailure { _statusMessage.value = it.unwrapFirestoreMessage("Could not share in Messenger") }
+    }
+  }
+
+  fun shareTextToPerson(sender: PublicUser, recipient: PublicUser, text: String) {
+    if (text.isBlank()) return
+    viewModelScope.launch {
+      communityRepository.getOrCreateDirectConversation(sender, recipient)
+        .onSuccess { convId ->
+          val conv = Conversation(
+            id = convId,
+            isGroup = false,
+            title = recipient.displayName,
+            participantUids = listOf(currentUserId, recipient.userId).sorted(),
+            participantNames = mapOf(
+              currentUserId to sender.displayName.ifBlank { "Me" },
+              recipient.userId to recipient.displayName.ifBlank { "Friend" }
+            )
+          )
+          communityRepository.sendMessage(conv, sender, text)
+            .onSuccess { _statusMessage.value = "Sent to ${recipient.displayName} in Messenger" }
+            .onFailure { _statusMessage.value = it.unwrapFirestoreMessage("Failed to send message") }
+        }
+        .onFailure { _statusMessage.value = it.unwrapFirestoreMessage("Could not open Messenger chat") }
+    }
+  }
+
   fun createGroupChat(title: String, me: PublicUser, members: List<PublicUser>, onOpen: (String) -> Unit) {
     if (title.isBlank() || members.isEmpty()) {
       _statusMessage.value = "Add a group name and at least one member."

@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
@@ -62,12 +63,17 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.data.model.Post
+import com.example.data.model.PublicUser
 import com.example.data.model.UiState
 import com.example.data.preferences.AppLanguage
 import com.example.data.preferences.ThemeMode
 import com.example.ui.components.CommentsBottomSheet
+import com.example.ui.components.CropAspect
 import com.example.ui.components.EmptyStateCard
+import com.example.ui.components.ImageCropDialog
 import com.example.ui.components.PostCard
+import com.example.ui.components.ShareOptionsBottomSheet
+import com.example.ui.components.SharePayload
 import com.example.ui.components.UserAvatar
 import com.example.ui.viewmodel.CommunityViewModel
 import com.example.ui.viewmodel.MainSocialViewModel
@@ -79,6 +85,7 @@ fun ProfileScreen(
   currentUserId: String,
   friendCount: Int,
   isVerifiedOwner: Boolean,
+  communityVm: CommunityViewModel? = null,
   onOpenSettings: () -> Unit
 ) {
   val context = LocalContext.current
@@ -87,9 +94,14 @@ fun ProfileScreen(
   val savedPosts by socialVm.savedPosts.collectAsStateWithLifecycle()
   val isUploading by socialVm.isUploadingMedia.collectAsStateWithLifecycle()
   val savedIds = remember(savedPosts) { savedPosts.map { it.postId }.toSet() }
+  val conversationsState = communityVm?.conversations?.collectAsStateWithLifecycle()
+  val usersState = communityVm?.discoverableUsers?.collectAsStateWithLifecycle()
+  val conversations = (conversationsState?.value as? UiState.Success)?.data.orEmpty()
+  val discoverableUsers = (usersState?.value as? UiState.Success)?.data.orEmpty()
   var tab by remember { mutableIntStateOf(0) }
   var showEditDialog by remember { mutableStateOf(false) }
   var commentPost by remember { mutableStateOf<Post?>(null) }
+  var shareTargetPost by remember { mutableStateOf<Post?>(null) }
 
   LazyColumn(
     modifier = Modifier.fillMaxSize(),
@@ -182,6 +194,7 @@ fun ProfileScreen(
               onReact = { e -> socialVm.reactToPost(post, e) },
               onCommentClick = { commentPost = post },
               onShare = { n -> socialVm.sharePost(post, n) },
+              onShareClick = { shareTargetPost = post },
               onToggleSave = { socialVm.toggleSave(post.id, "post", post.authorName, post.content) },
               onEdit = { c, p -> socialVm.editPost(post.id, c, p) },
               onDelete = { socialVm.deletePost(post.id) },
@@ -240,12 +253,14 @@ fun ProfileScreen(
     var privacy by remember { mutableStateOf(cur.profilePrivacy) }
     var acceptLove by remember { mutableStateOf(cur.acceptSecretLove) }
     var online by remember { mutableStateOf(cur.isOnline) }
+    var cropAvatarUri by remember { mutableStateOf<String?>(null) }
+    var cropCoverUri by remember { mutableStateOf<String?>(null) }
 
     val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-      if (uri != null) photo = uri.toString()
+      if (uri != null) cropAvatarUri = uri.toString()
     }
     val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-      if (uri != null) cover = uri.toString()
+      if (uri != null) cropCoverUri = uri.toString()
     }
 
     AlertDialog(
@@ -256,8 +271,8 @@ fun ProfileScreen(
           OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Display name") }, modifier = Modifier.fillMaxWidth())
           OutlinedTextField(value = bio, onValueChange = { bio = it }, label = { Text("Bio") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
           Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { avatarPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.weight(1f)) { Text("Avatar") }
-            OutlinedButton(onClick = { coverPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.weight(1f)) { Text("Cover") }
+            OutlinedButton(onClick = { avatarPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.weight(1f)) { Text("Avatar (Crop)") }
+            OutlinedButton(onClick = { coverPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.weight(1f)) { Text("Cover (Crop)") }
           }
           Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("public", "friends", "private").forEach { p ->
@@ -278,11 +293,66 @@ fun ProfileScreen(
       },
       dismissButton = { TextButton(onClick = { showEditDialog = false }) { Text("Cancel") } }
     )
+
+    cropAvatarUri?.let { raw ->
+      ImageCropDialog(
+        imageUri = raw,
+        defaultAspect = CropAspect.SQUARE,
+        onDismiss = { cropAvatarUri = null },
+        onUseOriginal = {
+          photo = raw
+          cropAvatarUri = null
+        },
+        onCropped = { cropped ->
+          photo = cropped
+          cropAvatarUri = null
+        }
+      )
+    }
+
+    cropCoverUri?.let { raw ->
+      ImageCropDialog(
+        imageUri = raw,
+        defaultAspect = CropAspect.COVER,
+        onDismiss = { cropCoverUri = null },
+        onUseOriginal = {
+          cover = raw
+          cropCoverUri = null
+        },
+        onCropped = { cropped ->
+          cover = cropped
+          cropCoverUri = null
+        }
+      )
+    }
   }
 
   commentPost?.let { post ->
     val comments by socialVm.observePostComments(post.id).collectAsStateWithLifecycle(initialValue = emptyList())
     CommentsBottomSheet(comments = comments, onDismiss = { commentPost = null }, onSendComment = { t, p -> socialVm.addComment(post, t, p) })
+  }
+
+  shareTargetPost?.let { post ->
+    ShareOptionsBottomSheet(
+      payload = SharePayload(
+        title = "Post by ${post.authorName}",
+        body = post.content.ifBlank { "Shared post on HELLO" },
+        canRepostToFeed = true
+      ),
+      currentUserId = currentUserId,
+      conversations = conversations,
+      discoverableUsers = discoverableUsers,
+      onDismiss = { shareTargetPost = null },
+      onRepostToFeed = { note -> socialVm.sharePost(post, note) },
+      onSendToConversation = { conv, msg ->
+        val sender = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+        communityVm?.shareTextToConversation(conv, sender, msg)
+      },
+      onSendToPerson = { person, msg ->
+        val sender = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+        communityVm?.shareTextToPerson(sender, person, msg)
+      }
+    )
   }
 }
 

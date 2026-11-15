@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import android.content.Intent
 import android.net.Uri
 import android.widget.MediaController
 import android.widget.VideoView
@@ -241,7 +242,14 @@ fun EmptyStateCard(
 @Composable
 fun VideoPlayerBox(
   videoUri: String,
-  modifier: Modifier = Modifier
+  modifier: Modifier = Modifier,
+  autoPlay: Boolean = false,
+  isActive: Boolean = true,
+  looping: Boolean = false,
+  defaultHeight: Dp? = 230.dp,
+  cornerRadius: Dp = 16.dp,
+  showMediaController: Boolean = true,
+  onVideoEnded: (() -> Unit)? = null
 ) {
   val context = LocalContext.current
   var isPlaying by remember(videoUri) { mutableStateOf(false) }
@@ -250,8 +258,10 @@ fun VideoPlayerBox(
     mutableStateOf<Uri?>(if (FirestoreMediaStore.isFirestoreMediaUri(videoUri)) null else Uri.parse(videoUri))
   }
   var videoViewRef by remember { mutableStateOf<VideoView?>(null) }
+  var prepared by remember(videoUri) { mutableStateOf(false) }
 
   LaunchedEffect(videoUri) {
+    prepared = false
     if (FirestoreMediaStore.isFirestoreMediaUri(videoUri)) {
       isLoading = true
       val db = FirebaseFirestore.getInstance(context.applicationContext.getString(R.string.firestore_database_id))
@@ -265,21 +275,75 @@ fun VideoPlayerBox(
     }
   }
 
-  Box(
-    modifier = modifier
+  LaunchedEffect(isActive, autoPlay, resolvedUri, prepared, videoViewRef) {
+    val vv = videoViewRef ?: return@LaunchedEffect
+    if (isActive && autoPlay && resolvedUri != null && prepared) {
+      if (!vv.isPlaying) {
+        vv.start()
+        isPlaying = true
+      }
+    } else if (!isActive) {
+      if (vv.isPlaying) {
+        vv.pause()
+      }
+      isPlaying = false
+    }
+  }
+
+  val containerModifier = if (defaultHeight != null) {
+    modifier
       .fillMaxWidth()
-      .height(230.dp)
-      .clip(RoundedCornerShape(16.dp))
-      .background(Color.Black),
+      .height(defaultHeight)
+      .clip(RoundedCornerShape(cornerRadius))
+      .background(Color.Black)
+  } else {
+    modifier
+      .clip(RoundedCornerShape(cornerRadius))
+      .background(Color.Black)
+  }
+
+  Box(
+    modifier = containerModifier.clickable {
+      videoViewRef?.let { vv ->
+        if (isPlaying) {
+          vv.pause()
+          isPlaying = false
+        } else {
+          vv.start()
+          isPlaying = true
+        }
+      }
+    },
     contentAlignment = Alignment.Center
   ) {
     AndroidView(
       factory = { ctx ->
         VideoView(ctx).apply {
-          val controller = MediaController(ctx)
-          controller.setAnchorView(this)
-          setMediaController(controller)
-          setOnCompletionListener { isPlaying = false }
+          if (showMediaController) {
+            val controller = MediaController(ctx)
+            controller.setAnchorView(this)
+            setMediaController(controller)
+          }
+          setOnPreparedListener { mp ->
+            prepared = true
+            mp.isLooping = looping && onVideoEnded == null
+            if (isActive && autoPlay) {
+              start()
+              isPlaying = true
+            }
+          }
+          setOnCompletionListener {
+            if (onVideoEnded != null) {
+              isPlaying = false
+              onVideoEnded.invoke()
+            } else if (looping) {
+              seekTo(0)
+              start()
+              isPlaying = true
+            } else {
+              isPlaying = false
+            }
+          }
           resolvedUri?.let {
             tag = it.toString()
             setVideoURI(it)
@@ -298,12 +362,12 @@ fun VideoPlayerBox(
     )
     if (isLoading) {
       CircularProgressIndicator(color = Color.White, modifier = Modifier.size(36.dp))
-    } else {
+    } else if (!isPlaying || !autoPlay) {
       Surface(
         shape = CircleShape,
         color = Color.Black.copy(alpha = 0.55f),
         modifier = Modifier
-          .size(52.dp)
+          .size(56.dp)
           .clickable {
             videoViewRef?.let { vv ->
               if (isPlaying) {
@@ -321,7 +385,7 @@ fun VideoPlayerBox(
             imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
             contentDescription = if (isPlaying) "Pause video" else "Play video",
             tint = Color.White,
-            modifier = Modifier.size(28.dp)
+            modifier = Modifier.size(30.dp)
           )
         }
       }
@@ -343,7 +407,8 @@ fun PostCard(
   onEdit: (String, String) -> Unit,
   onDelete: () -> Unit,
   onReport: (String) -> Unit,
-  modifier: Modifier = Modifier
+  modifier: Modifier = Modifier,
+  onShareClick: (() -> Unit)? = null
 ) {
   var showMenu by remember { mutableStateOf(false) }
   var showReactionBar by remember { mutableStateOf(false) }
@@ -351,6 +416,7 @@ fun PostCard(
   var showShareDialog by remember { mutableStateOf(false) }
   var showReportDialog by remember { mutableStateOf(false) }
   val myReaction = reactions.firstOrNull { it.userId == currentUserId }
+  val cardContext = LocalContext.current
 
   Card(
     modifier = modifier.fillMaxWidth(),
@@ -530,8 +596,15 @@ fun PostCard(
         }
 
         TextButton(
-          onClick = { showShareDialog = true },
-          contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+          onClick = {
+            if (onShareClick != null) {
+              onShareClick()
+            } else {
+              showShareDialog = true
+            }
+          },
+          contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+          modifier = Modifier.testTag("post_share_button")
         ) {
           Icon(Icons.Filled.Share, contentDescription = "Share", modifier = Modifier.size(18.dp))
           Spacer(Modifier.width(4.dp))
@@ -585,20 +658,37 @@ fun PostCard(
     var shareNote by remember { mutableStateOf("") }
     AlertDialog(
       onDismissRequest = { showShareDialog = false },
-      title = { Text("Share to Your Feed") },
+      title = { Text("Share Post") },
       text = {
-        OutlinedTextField(
-          value = shareNote,
-          onValueChange = { shareNote = it },
-          label = { Text("Add a thought (optional)") },
-          modifier = Modifier.fillMaxWidth()
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          OutlinedTextField(
+            value = shareNote,
+            onValueChange = { shareNote = it },
+            label = { Text("Add a thought to repost on HELLO") },
+            modifier = Modifier.fillMaxWidth()
+          )
+          OutlinedButton(
+            onClick = {
+              val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, "${post.authorName} on HELLO:\n${post.content}")
+              }
+              cardContext.startActivity(Intent.createChooser(sendIntent, "Share via"))
+              showShareDialog = false
+            },
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Share to Other Apps")
+          }
+        }
       },
       confirmButton = {
         Button(onClick = {
           onShare(shareNote)
           showShareDialog = false
-        }) { Text("Share Now") }
+        }) { Text("Share to Feed") }
       },
       dismissButton = { TextButton(onClick = { showShareDialog = false }) { Text("Cancel") } }
     )

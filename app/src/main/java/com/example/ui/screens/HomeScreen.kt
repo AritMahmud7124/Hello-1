@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -69,9 +70,14 @@ import com.example.data.model.PublicUser
 import com.example.data.model.Story
 import com.example.data.model.UiState
 import com.example.ui.components.CommentsBottomSheet
+import com.example.ui.components.CropAspect
 import com.example.ui.components.EmptyStateCard
+import com.example.ui.components.ImageCropDialog
 import com.example.ui.components.PostCard
+import com.example.ui.components.ShareOptionsBottomSheet
+import com.example.ui.components.SharePayload
 import com.example.ui.components.UserAvatar
+import com.example.ui.viewmodel.CommunityViewModel
 import com.example.ui.viewmodel.FeedSortMode
 import com.example.ui.viewmodel.MainSocialViewModel
 
@@ -82,6 +88,7 @@ fun HomeScreen(
   friendUids: List<String>,
   blockedUids: Set<String>,
   globalSettings: GlobalSettings,
+  communityVm: CommunityViewModel? = null,
   onOpenStories: () -> Unit,
   onOpenStoryViewer: (Story) -> Unit
 ) {
@@ -95,8 +102,14 @@ fun HomeScreen(
   val sortMode by viewModel.sortMode.collectAsStateWithLifecycle()
   val isUploading by viewModel.isUploadingMedia.collectAsStateWithLifecycle()
 
+  val conversationsState = communityVm?.conversations?.collectAsStateWithLifecycle()
+  val usersState = communityVm?.discoverableUsers?.collectAsStateWithLifecycle()
+  val conversations = (conversationsState?.value as? UiState.Success)?.data.orEmpty()
+  val discoverableUsers = (usersState?.value as? UiState.Success)?.data.orEmpty()
+
   var showCreatePost by remember { mutableStateOf(false) }
   var activeCommentPost by remember { mutableStateOf<Post?>(null) }
+  var shareTargetPost by remember { mutableStateOf<Post?>(null) }
 
   val listState = rememberLazyListState()
   val shouldLoadMore by remember {
@@ -316,6 +329,7 @@ fun HomeScreen(
               onReact = { emoji -> viewModel.reactToPost(post, emoji) },
               onCommentClick = { activeCommentPost = post },
               onShare = { note -> viewModel.sharePost(post, note) },
+              onShareClick = { shareTargetPost = post },
               onToggleSave = { viewModel.toggleSave(post.id, "post", post.authorName, post.content) },
               onEdit = { content, privacy -> viewModel.editPost(post.id, content, privacy) },
               onDelete = { viewModel.deletePost(post.id) },
@@ -352,6 +366,29 @@ fun HomeScreen(
       onSendComment = { text, parentId -> viewModel.addComment(post, text, parentId) }
     )
   }
+
+  shareTargetPost?.let { post ->
+    ShareOptionsBottomSheet(
+      payload = SharePayload(
+        title = "Post by ${post.authorName}",
+        body = post.content.ifBlank { "Shared media post on HELLO" },
+        canRepostToFeed = true
+      ),
+      currentUserId = currentUserId,
+      conversations = conversations,
+      discoverableUsers = discoverableUsers,
+      onDismiss = { shareTargetPost = null },
+      onRepostToFeed = { note -> viewModel.sharePost(post, note) },
+      onSendToConversation = { conv, msg ->
+        val sender = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+        communityVm?.shareTextToConversation(conv, sender, msg)
+      },
+      onSendToPerson = { person, msg ->
+        val sender = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+        communityVm?.shareTextToPerson(sender, person, msg)
+      }
+    )
+  }
 }
 
 @Composable
@@ -363,11 +400,11 @@ fun CreatePostDialog(
   var mediaUri by remember { mutableStateOf("") }
   var mediaType by remember { mutableStateOf("none") }
   var privacy by remember { mutableStateOf("public") }
+  var pendingCropUri by remember { mutableStateOf<String?>(null) }
 
   val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
     if (uri != null) {
-      mediaUri = uri.toString()
-      mediaType = "image"
+      pendingCropUri = uri.toString()
     }
   }
   val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -415,17 +452,37 @@ fun CreatePostDialog(
               modifier = Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(12.dp)),
               contentScale = ContentScale.Crop
             )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+              OutlinedButton(
+                onClick = { pendingCropUri = mediaUri },
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                modifier = Modifier.testTag("crop_post_photo_button")
+              ) {
+                Icon(Icons.Filled.Crop, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Crop Photo")
+              }
+              TextButton(
+                onClick = {
+                  mediaUri = ""
+                  mediaType = "none"
+                },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+              ) {
+                Text("Remove", color = MaterialTheme.colorScheme.error)
+              }
+            }
           } else {
             Text("Video attached ✓", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-          }
-          TextButton(
-            onClick = {
-              mediaUri = ""
-              mediaType = "none"
-            },
-            contentPadding = PaddingValues(0.dp)
-          ) {
-            Text("Remove attachment", color = MaterialTheme.colorScheme.error)
+            TextButton(
+              onClick = {
+                mediaUri = ""
+                mediaType = "none"
+              },
+              contentPadding = PaddingValues(0.dp)
+            ) {
+              Text("Remove attachment", color = MaterialTheme.colorScheme.error)
+            }
           }
         }
         Text("Privacy", style = MaterialTheme.typography.labelMedium)
@@ -449,4 +506,22 @@ fun CreatePostDialog(
     },
     dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
   )
+
+  pendingCropUri?.let { rawUri ->
+    ImageCropDialog(
+      imageUri = rawUri,
+      defaultAspect = CropAspect.FREE,
+      onDismiss = { pendingCropUri = null },
+      onUseOriginal = {
+        mediaUri = rawUri
+        mediaType = "image"
+        pendingCropUri = null
+      },
+      onCropped = { cropped ->
+        mediaUri = cropped
+        mediaType = "image"
+        pendingCropUri = null
+      }
+    )
+  }
 }
