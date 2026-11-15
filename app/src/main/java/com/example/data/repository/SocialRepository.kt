@@ -484,12 +484,40 @@ class SocialRepository(
         throw e
       }
 
+  fun observeUserStories(userId: String): Flow<List<Story>> =
+    db.collection("stories")
+      .whereEqualTo("authorId", userId)
+      .snapshots()
+      .map { snap ->
+        snap.toObjects(Story::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+          .sortedByDescending { it.createdAt?.seconds ?: 0L }
+      }
+      .catch { e ->
+        handleFirestoreError(e, OperationType.LIST, "stories")
+        throw e
+      }
+
+  fun observeFriendsStories(userId: String): Flow<List<Story>> =
+    db.collection("stories")
+      .whereArrayContains("allowedViewerUids", userId)
+      .snapshots()
+      .map { snap ->
+        snap.toObjects(Story::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+          .sortedByDescending { it.createdAt?.seconds ?: 0L }
+      }
+      .catch { e ->
+        handleFirestoreError(e, OperationType.LIST, "stories")
+        throw e
+      }
+
   suspend fun createStory(
     author: PublicUser,
     caption: String,
     mediaUri: String = "",
     mediaType: String = "text",
-    backgroundHex: String = "#1E1B4B"
+    backgroundHex: String = "#1E1B4B",
+    privacy: String = "public",
+    allowedViewerUids: List<String> = emptyList()
   ): Result<String> = runCatching {
     val uid = requireUserId()
     val cleanMediaUri = mediaUri.trim().take(2000)
@@ -497,6 +525,12 @@ class SocialRepository(
       cleanMediaUri.isBlank() -> "text"
       mediaType in ALLOWED_STORY_MEDIA_TYPES -> mediaType
       else -> "text"
+    }
+    val safePrivacy = if (privacy in ALLOWED_STORY_PRIVACY) privacy else "public"
+    val safeViewers = if (safePrivacy == "friends") {
+      allowedViewerUids.filter { it.isNotBlank() && it != uid }.distinct().take(200)
+    } else {
+      emptyList()
     }
     val ref = db.collection("stories").document()
     ref.set(
@@ -507,9 +541,9 @@ class SocialRepository(
         "mediaUri" to cleanMediaUri,
         "mediaType" to safeMediaType,
         "caption" to caption.trim().take(500),
-        "backgroundHex" to backgroundHex.take(16),
-        "privacy" to "public",
-        "allowedViewerUids" to emptyList<String>(),
+        "backgroundHex" to backgroundHex.trim().ifBlank { "#1E1B4B" }.take(16),
+        "privacy" to safePrivacy,
+        "allowedViewerUids" to safeViewers,
         "viewersCount" to 0L,
         "createdAt" to FieldValue.serverTimestamp()
       )
@@ -518,6 +552,15 @@ class SocialRepository(
   }.onFailure { e ->
     if (e is CancellationException) throw e
     handleFirestoreError(e, OperationType.CREATE, "stories")
+  }
+
+  suspend fun deleteStory(storyId: String): Result<Unit> = runCatching {
+    requireUserId()
+    db.collection("stories").document(storyId).delete().await()
+    Unit
+  }.onFailure { e ->
+    if (e is CancellationException) throw e
+    handleFirestoreError(e, OperationType.DELETE, "stories/$storyId")
   }
 
   suspend fun incrementStoryView(storyId: String) {
@@ -696,5 +739,6 @@ class SocialRepository(
     private val ALLOWED_POST_MEDIA_TYPES = setOf("none", "image", "video")
     private val ALLOWED_POST_PRIVACY = setOf("public", "friends", "only_me")
     private val ALLOWED_STORY_MEDIA_TYPES = setOf("text", "image", "video")
+    private val ALLOWED_STORY_PRIVACY = setOf("public", "friends")
   }
 }

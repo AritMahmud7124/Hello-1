@@ -179,7 +179,9 @@ fun HomeScreen(
           Text("Stories", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
           TextButton(onClick = onOpenStories) { Text("See all") }
         }
-        val stories = (storiesState as? UiState.Success)?.data.orEmpty()
+        val stories = remember(storiesState, blockedUids) {
+          ((storiesState as? UiState.Success)?.data.orEmpty()).filter { it.authorId !in blockedUids }
+        }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
           item {
             Column(
@@ -203,6 +205,7 @@ fun HomeScreen(
             }
           }
           items(stories, key = { it.id }) { story ->
+            val ringColors = remember(story.backgroundHex) { storyGradientForHex(story.backgroundHex) }
             Column(
               horizontalAlignment = Alignment.CenterHorizontally,
               modifier = Modifier
@@ -214,7 +217,7 @@ fun HomeScreen(
                   .size(64.dp)
                   .border(
                     2.5.dp,
-                    Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)),
+                    Brush.linearGradient(ringColors),
                     CircleShape
                   )
                   .padding(3.dp)

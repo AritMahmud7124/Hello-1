@@ -242,6 +242,62 @@ class HelloRepositoryRuleTest : FirestoreEmulatorTestBase() {
     assertEquals("HELLO_SPARK_FREE_CLOUD_MEDIA_BYTES", resolvedFile.readText())
   }
 
+  @Test
+  fun storyLifecycle_friendsPrivacyCommentsAndDelete_enforcesRules() = runBlocking {
+    val aliceUid = signInTestUser(ALICE_EMAIL)
+    val bobUid = signInTestUser(BOB_EMAIL)
+    val charlieUid = signInTestUser(CHARLIE_EMAIL)
+
+    signInTestUser(ALICE_EMAIL)
+    val repo = SocialRepository(firestore, auth)
+    val alice = PublicUser(userId = aliceUid, displayName = "Alice Story")
+    val bob = PublicUser(userId = bobUid, displayName = "Bob Viewer")
+
+    val storyId = withTimeout(DEFAULT_TIMEOUT_MS) {
+      repo.createStory(
+        author = alice,
+        caption = "Friends only sunset ${UUID.randomUUID()}",
+        mediaType = "text",
+        backgroundHex = "#BE123C",
+        privacy = "friends",
+        allowedViewerUids = listOf(bobUid)
+      ).getOrThrow()
+    }
+
+    // Bob (allowed friend) receives story and posts a story comment
+    signInTestUser(BOB_EMAIL)
+    val bobStories = withTimeout(FLOW_TIMEOUT_MS) {
+      repo.observeFriendsStories(bobUid).first { list -> list.any { it.id == storyId } }
+    }
+    val bobStory = bobStories.first { it.id == storyId }
+    assertEquals("#BE123C", bobStory.backgroundHex)
+    val reactRes = withTimeout(DEFAULT_TIMEOUT_MS) {
+      repo.reactToStory(bobStory, bob, "🔥", "Looking amazing!")
+    }
+    assertTrue("Expected Bob to react/comment on Alice's friend story", reactRes.isSuccess)
+
+    // Charlie (not in allowedViewerUids) cannot see Alice's friends-only story
+    signInTestUser(CHARLIE_EMAIL)
+    val charlieStories = withTimeout(FLOW_TIMEOUT_MS) {
+      repo.observeFriendsStories(charlieUid).first()
+    }
+    assertTrue(charlieStories.none { it.id == storyId })
+
+    // Bob cannot delete Alice's story
+    signInTestUser(BOB_EMAIL)
+    val bobDelete = withTimeout(DEFAULT_TIMEOUT_MS) {
+      repo.deleteStory(storyId)
+    }
+    assertTrue("Non-author Bob must not delete Alice's story", bobDelete.isFailure)
+
+    // Alice (author) can delete her own story cleanly
+    signInTestUser(ALICE_EMAIL)
+    val aliceDelete = withTimeout(DEFAULT_TIMEOUT_MS) {
+      repo.deleteStory(storyId)
+    }
+    assertTrue("Author Alice should be able to delete her story", aliceDelete.isSuccess)
+  }
+
   private companion object {
     const val ALICE_EMAIL = "alice.hello@test.com"
     const val BOB_EMAIL = "bob.hello@test.com"

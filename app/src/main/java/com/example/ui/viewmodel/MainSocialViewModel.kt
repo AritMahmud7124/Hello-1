@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -79,8 +80,16 @@ class MainSocialViewModel(
     .catch { emit(emptyList()) }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
 
-  val stories: StateFlow<UiState<List<Story>>> = socialRepository.observePublicStories()
-    .map<List<Story>, UiState<List<Story>>> { UiState.Success(it) }
+  val stories: StateFlow<UiState<List<Story>>> = combine(
+    socialRepository.observePublicStories(),
+    socialRepository.observeUserStories(currentUserId).catch { emit(emptyList()) },
+    socialRepository.observeFriendsStories(currentUserId).catch { emit(emptyList()) }
+  ) { publicStories, myStories, friendStories ->
+    val merged = (myStories + friendStories + publicStories)
+      .distinctBy { it.id }
+      .sortedByDescending { it.createdAt?.seconds ?: 0L }
+    UiState.Success(merged) as UiState<List<Story>>
+  }
     .catch { err -> emit(UiState.Error(err.unwrapFirestoreMessage("Failed to load stories"))) }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), UiState.Loading)
 
@@ -235,7 +244,15 @@ class MainSocialViewModel(
     }
   }
 
-  fun createStory(context: Context, caption: String, mediaUri: String, mediaType: String, backgroundHex: String) {
+  fun createStory(
+    context: Context,
+    caption: String,
+    mediaUri: String,
+    mediaType: String,
+    backgroundHex: String,
+    privacy: String = "public",
+    friendUids: List<String> = emptyList()
+  ) {
     if (caption.isBlank() && mediaUri.isBlank()) {
       _actionMessage.value = "Add text or media for your story."
       return
@@ -253,9 +270,27 @@ class MainSocialViewModel(
       } else {
         ""
       }
-      socialRepository.createStory(author, caption, uploadedUrl, mediaType, backgroundHex)
+      val viewers = if (privacy == "friends") friendUids else emptyList()
+      socialRepository.createStory(
+        author = author,
+        caption = caption,
+        mediaUri = uploadedUrl,
+        mediaType = mediaType,
+        backgroundHex = backgroundHex,
+        privacy = privacy,
+        allowedViewerUids = viewers
+      )
         .onSuccess { _actionMessage.value = "Story shared!" }
         .onFailure { _actionMessage.value = it.unwrapFirestoreMessage("Story creation failed") }
+    }
+  }
+
+  fun deleteStory(storyId: String) {
+    if (storyId.isBlank()) return
+    viewModelScope.launch {
+      socialRepository.deleteStory(storyId)
+        .onSuccess { _actionMessage.value = "Story deleted" }
+        .onFailure { _actionMessage.value = it.unwrapFirestoreMessage("Failed to delete story") }
     }
   }
 

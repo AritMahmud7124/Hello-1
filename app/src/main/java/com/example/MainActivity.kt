@@ -472,6 +472,9 @@ private fun AuthenticatedHelloShell(
             composable(HelloRoutes.STORIES) {
               StoriesScreen(
                 viewModel = socialVm,
+                currentUserId = uid,
+                friendUids = friendUids,
+                blockedUids = blockedUids,
                 onOpenViewer = { story -> activeStory = story }
               )
             }
@@ -627,7 +630,9 @@ private fun AuthenticatedHelloShell(
     }
 
     activeStory?.let { story ->
-      val allStories = (storiesState as? UiState.Success)?.data ?: listOf(story)
+      val allStories = ((storiesState as? UiState.Success)?.data ?: listOf(story))
+        .filter { it.authorId !in blockedUids }
+        .ifEmpty { listOf(story) }
       StoryViewerDialog(
         stories = allStories,
         initialStory = story,
