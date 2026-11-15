@@ -417,3 +417,58 @@ test("Firestore cloud media_blobs enforce owner writes and authenticated get", a
   await assertFails(bobDb.collection("media_blobs").get());
   await assertFails(bobDb.collection("media_blobs").doc("media_1").delete());
 });
+
+test("Feed preferences enforce strict owner-only privacy and category fields on reels/stories", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+
+  // Alice writes her private curation preferences
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("feed_preferences").doc("curation").set({
+      userId: ALICE_UID,
+      categoryScores: { Tech: 18, Funny: 12, Young: 10 },
+      dislikedCategories: ["Politics"],
+      dismissedVideoIds: ["yt_abc123"],
+      totalViews: 5,
+      totalLikes: 2,
+      totalFullWatches: 1,
+      updatedAt: ts(),
+    })
+  );
+
+  // Bob cannot read or overwrite Alice's feed preferences
+  await assertFails(
+    bobDb.collection("users").doc(ALICE_UID).collection("feed_preferences").doc("curation").get()
+  );
+  await assertFails(
+    bobDb.collection("users").doc(ALICE_UID).collection("feed_preferences").doc("curation").set({
+      userId: ALICE_UID,
+      categoryScores: { Tech: 1 },
+      dislikedCategories: [],
+      dismissedVideoIds: [],
+      totalViews: 0,
+      totalLikes: 0,
+      totalFullWatches: 0,
+      updatedAt: ts(),
+    })
+  );
+
+  // Reels and Stories accept category & youtubeVideoId safely
+  await assertSucceeds(
+    aliceDb.collection("reels").doc("reel_yt_1").set({
+      authorId: ALICE_UID,
+      authorName: "Alice",
+      caption: "Cool Compose tip!",
+      videoUri: "",
+      coverHex: "#4F46E5",
+      audioTitle: "Tech Mix",
+      category: "Tech",
+      youtubeVideoId: "dQw4w9WgXcQ",
+      likesCount: 0,
+      commentsCount: 0,
+      sharesCount: 0,
+      createdAt: ts(),
+    })
+  );
+});
+

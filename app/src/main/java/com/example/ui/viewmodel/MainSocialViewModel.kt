@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.Comment
+import com.example.data.model.CuratedFeedItem
+import com.example.data.model.EngagementSignal
+import com.example.data.model.FeedPreferences
 import com.example.data.model.GlobalSettings
 import com.example.data.model.OwnerConfig
 import com.example.data.model.Post
@@ -15,8 +18,13 @@ import com.example.data.model.SavedPost
 import com.example.data.model.Story
 import com.example.data.model.StoryReaction
 import com.example.data.model.UiState
+import com.example.data.model.YouTubeShortVideo
 import com.example.data.model.unwrapFirestoreMessage
+import com.example.data.network.YouTubeFetchResult
+import com.example.data.network.YouTubeShortsClient
 import com.example.data.repository.AuthRepository
+import com.example.data.repository.FeedCurationRepository
+import com.example.data.repository.FeedCurator
 import com.example.data.repository.SocialRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +50,8 @@ class MainSocialViewModel(
   private val currentUserId: String
 ) : ViewModel() {
 
+  private val curationRepository: FeedCurationRepository = socialRepository.createFeedCurationRepository()
+
   private val _feedLimit = MutableStateFlow(20L)
   val feedLimit: StateFlow<Long> = _feedLimit.asStateFlow()
 
@@ -54,6 +64,20 @@ class MainSocialViewModel(
   private val _isUploadingMedia = MutableStateFlow(false)
   val isUploadingMedia: StateFlow<Boolean> = _isUploadingMedia.asStateFlow()
 
+  private val _optimisticPrefs = MutableStateFlow<FeedPreferences?>(null)
+  private val _selectedReelCategory = MutableStateFlow<String?>(null)
+  val selectedReelCategory: StateFlow<String?> = _selectedReelCategory.asStateFlow()
+
+  private val _youtubeShorts = MutableStateFlow<List<YouTubeShortVideo>>(emptyList())
+  private val _youtubeStatus = MutableStateFlow<YouTubeFetchResult?>(null)
+  val youtubeStatus: StateFlow<YouTubeFetchResult?> = _youtubeStatus.asStateFlow()
+
+  private val _isFetchingShorts = MutableStateFlow(false)
+  val isFetchingShorts: StateFlow<Boolean> = _isFetchingShorts.asStateFlow()
+
+  private val _localLikedItemIds = MutableStateFlow<Set<String>>(emptySet())
+  val localLikedItemIds: StateFlow<Set<String>> = _localLikedItemIds.asStateFlow()
+
   val currentUser: StateFlow<PublicUser?> = authRepository.observePublicUser(currentUserId)
     .catch { emit(null) }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), null)
@@ -61,6 +85,13 @@ class MainSocialViewModel(
   val privateUser: StateFlow<PrivateUser?> = authRepository.observePrivateUser(currentUserId)
     .catch { emit(null) }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), null)
+
+  val feedPreferences: StateFlow<FeedPreferences> = combine(
+    curationRepository.observePreferences(currentUserId).catch { emit(FeedPreferences(userId = currentUserId)) },
+    _optimisticPrefs
+  ) { remote, optimistic ->
+    optimistic ?: remote
+  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), FeedPreferences(userId = currentUserId))
 
   val publicFeed: StateFlow<UiState<List<Post>>> = _feedLimit
     .flatMapLatest { limit -> socialRepository.observePublicPosts(limit) }
@@ -80,7 +111,7 @@ class MainSocialViewModel(
     .catch { emit(emptyList()) }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
 
-  val stories: StateFlow<UiState<List<Story>>> = combine(
+  private val rawStories: StateFlow<UiState<List<Story>>> = combine(
     socialRepository.observePublicStories(),
     socialRepository.observeUserStories(currentUserId).catch { emit(emptyList()) },
     socialRepository.observeFriendsStories(currentUserId).catch { emit(emptyList()) }
@@ -93,10 +124,155 @@ class MainSocialViewModel(
     .catch { err -> emit(UiState.Error(err.unwrapFirestoreMessage("Failed to load stories"))) }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), UiState.Loading)
 
+  val stories: StateFlow<UiState<List<Story>>> = combine(rawStories, feedPreferences) { state, prefs ->
+    when (state) {
+      is UiState.Success -> UiState.Success(FeedCurator.rankCuratedStories(state.data, prefs, currentUserId))
+      else -> state
+    }
+  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), UiState.Loading)
+
   val reels: StateFlow<UiState<List<Reel>>> = socialRepository.observeReels()
     .map<List<Reel>, UiState<List<Reel>>> { UiState.Success(it) }
     .catch { err -> emit(UiState.Error(err.unwrapFirestoreMessage("Failed to load reels"))) }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), UiState.Loading)
+
+  val curatedReels: StateFlow<UiState<List<CuratedFeedItem>>> = combine(
+    reels,
+    _youtubeShorts,
+    feedPreferences,
+    _selectedReelCategory
+  ) { nativeState, ytList, prefs, selectedCat ->
+    when (nativeState) {
+      is UiState.Loading -> if (ytList.isNotEmpty()) {
+        UiState.Success(FeedCurator.rankCuratedReels(emptyList(), ytList, prefs, selectedCat))
+      } else {
+        UiState.Loading
+      }
+      is UiState.Error -> if (ytList.isNotEmpty()) {
+        UiState.Success(FeedCurator.rankCuratedReels(emptyList(), ytList, prefs, selectedCat))
+      } else {
+        nativeState
+      }
+      is UiState.Success -> {
+        UiState.Success(FeedCurator.rankCuratedReels(nativeState.data, ytList, prefs, selectedCat))
+      }
+    }
+  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), UiState.Loading)
+
+  private var lastFetchedCategoriesKey: String = ""
+
+  fun ensureYouTubeShortsLoaded(forceRefresh: Boolean = false) {
+    val selected = _selectedReelCategory.value
+    val targetCategories = if (!selected.isNullOrBlank()) {
+      listOf(selected)
+    } else {
+      FeedCurator.topActiveCategories(feedPreferences.value, limit = 3)
+    }
+    val key = targetCategories.joinToString(",")
+    if (!forceRefresh && key == lastFetchedCategoriesKey && _youtubeStatus.value != null) {
+      return
+    }
+    if (_isFetchingShorts.value) return
+    lastFetchedCategoriesKey = key
+    viewModelScope.launch {
+      _isFetchingShorts.value = true
+      when (val res = YouTubeShortsClient.fetchShortsForCategories(targetCategories)) {
+        is YouTubeFetchResult.Success -> {
+          _youtubeShorts.value = res.items
+          _youtubeStatus.value = res
+        }
+        is YouTubeFetchResult.MissingApiKey -> {
+          _youtubeStatus.value = res
+        }
+        is YouTubeFetchResult.Error -> {
+          _youtubeStatus.value = res
+        }
+      }
+      _isFetchingShorts.value = false
+    }
+  }
+
+  fun selectReelCategory(category: String?) {
+    val next = category?.takeIf { it.isNotBlank() && !it.equals("For You", ignoreCase = true) }
+    _selectedReelCategory.value = next
+    ensureYouTubeShortsLoaded(forceRefresh = true)
+  }
+
+  fun trackEngagement(itemKey: String, category: String, signal: EngagementSignal) {
+    val cleanCat = FeedCurator.normalizeCategory(category)
+    val current = feedPreferences.value
+    if (signal == EngagementSignal.LIKE && itemKey.isNotBlank()) {
+      _localLikedItemIds.value = _localLikedItemIds.value + itemKey
+    }
+    val updated = FeedCurator.applyEngagement(
+      current = current,
+      userId = currentUserId,
+      category = cleanCat,
+      signal = signal,
+      videoId = if (signal == EngagementSignal.NOT_INTERESTED) itemKey else ""
+    )
+    _optimisticPrefs.value = updated
+    viewModelScope.launch {
+      curationRepository.savePreferences(updated).onSuccess {
+        _optimisticPrefs.value = null
+      }
+    }
+  }
+
+  fun markNotInterested(itemKey: String, youtubeVideoId: String, category: String) {
+    val cleanCat = FeedCurator.normalizeCategory(category)
+    val prevDisliked = feedPreferences.value.dislikedCategories.toSet()
+    var updated = FeedCurator.applyEngagement(
+      current = feedPreferences.value,
+      userId = currentUserId,
+      category = cleanCat,
+      signal = EngagementSignal.NOT_INTERESTED,
+      videoId = itemKey
+    )
+    if (youtubeVideoId.isNotBlank()) {
+      updated = updated.copy(
+        dismissedVideoIds = (listOf(youtubeVideoId) + updated.dismissedVideoIds).distinct().take(200)
+      )
+    }
+    _optimisticPrefs.value = updated
+    viewModelScope.launch {
+      curationRepository.savePreferences(updated).onSuccess {
+        _optimisticPrefs.value = null
+      }
+    }
+    if (updated.dislikedCategories.toSet() != prevDisliked) {
+      _actionMessage.value = "Filtered out & muted $cleanCat category based on your feedback"
+      ensureYouTubeShortsLoaded(forceRefresh = true)
+    } else {
+      _actionMessage.value = "Video removed · adjusting $cleanCat score"
+    }
+  }
+
+  fun restoreCategoryPreference(category: String) {
+    val updated = FeedCurator.restoreCategory(feedPreferences.value, currentUserId, category)
+    _optimisticPrefs.value = updated
+    viewModelScope.launch {
+      curationRepository.savePreferences(updated).onSuccess {
+        _optimisticPrefs.value = null
+        ensureYouTubeShortsLoaded(forceRefresh = true)
+      }
+    }
+    _actionMessage.value = "$category restored to your personalized feed"
+  }
+
+  fun resetFeedPreferences() {
+    viewModelScope.launch {
+      curationRepository.resetPreferences()
+        .onSuccess { fresh ->
+          _optimisticPrefs.value = fresh
+          _actionMessage.value = "Feed recommendations reset to default interests"
+          ensureYouTubeShortsLoaded(forceRefresh = true)
+        }
+        .onFailure {
+          _actionMessage.value = it.unwrapFirestoreMessage("Could not reset preferences")
+        }
+    }
+  }
 
   fun observePublicUserProfile(userId: String): Flow<UiState<PublicUser?>> =
     authRepository.observePublicUser(userId)
@@ -268,10 +444,13 @@ class MainSocialViewModel(
     mediaType: String,
     backgroundHex: String,
     privacy: String = "public",
-    friendUids: List<String> = emptyList()
+    friendUids: List<String> = emptyList(),
+    category: String = "Young",
+    youtubeVideoId: String = ""
   ) {
-    if (caption.isBlank() && mediaUri.isBlank()) {
-      _actionMessage.value = "Add text or media for your story."
+    val cleanYtId = YouTubeShortsClient.extractVideoId(youtubeVideoId)
+    if (caption.isBlank() && mediaUri.isBlank() && cleanYtId.isBlank()) {
+      _actionMessage.value = "Add text, media, or a YouTube Short link for your story."
       return
     }
     viewModelScope.launch {
@@ -295,7 +474,9 @@ class MainSocialViewModel(
         mediaType = mediaType,
         backgroundHex = backgroundHex,
         privacy = privacy,
-        allowedViewerUids = viewers
+        allowedViewerUids = viewers,
+        category = category,
+        youtubeVideoId = cleanYtId
       )
         .onSuccess { _actionMessage.value = "Story shared!" }
         .onFailure { _actionMessage.value = it.unwrapFirestoreMessage("Story creation failed") }
@@ -311,8 +492,9 @@ class MainSocialViewModel(
     }
   }
 
-  fun markStoryViewed(storyId: String) {
+  fun markStoryViewed(storyId: String, category: String = "Young") {
     viewModelScope.launch { socialRepository.incrementStoryView(storyId) }
+    trackEngagement(storyId, category, EngagementSignal.VIEW)
   }
 
   fun observeStoryReactions(storyId: String): Flow<List<StoryReaction>> =
@@ -323,13 +505,23 @@ class MainSocialViewModel(
       val actor = resolveAuthorProfile()
       socialRepository.reactToStory(story, actor, emoji, replyText)
         .onSuccess {
+          trackEngagement(story.id, story.category, EngagementSignal.LIKE)
           if (replyText.isNotBlank()) _actionMessage.value = "Reply sent to ${story.authorName}"
         }
         .onFailure { _actionMessage.value = it.unwrapFirestoreMessage("Reaction failed") }
     }
   }
 
-  fun createReel(context: Context, caption: String, videoUri: String, audioTitle: String, coverHex: String) {
+  fun createReel(
+    context: Context,
+    caption: String,
+    videoUri: String,
+    audioTitle: String,
+    coverHex: String,
+    category: String = "Young",
+    youtubeUrlOrId: String = ""
+  ) {
+    val cleanYtId = YouTubeShortsClient.extractVideoId(youtubeUrlOrId)
     if (caption.isBlank()) {
       _actionMessage.value = "Add a caption for your reel."
       return
@@ -347,14 +539,23 @@ class MainSocialViewModel(
       } else {
         ""
       }
-      socialRepository.createReel(author, caption, uploadedUrl, audioTitle, coverHex)
+      socialRepository.createReel(
+        author = author,
+        caption = caption,
+        videoUri = uploadedUrl,
+        audioTitle = audioTitle,
+        coverHex = coverHex,
+        category = category,
+        youtubeVideoId = cleanYtId
+      )
         .onSuccess { _actionMessage.value = "Reel posted!" }
         .onFailure { _actionMessage.value = it.unwrapFirestoreMessage("Reel creation failed") }
     }
   }
 
-  fun likeReel(reelId: String) {
+  fun likeReel(reelId: String, category: String = "Young") {
     viewModelScope.launch { socialRepository.likeReel(reelId) }
+    trackEngagement("native_$reelId", category, EngagementSignal.LIKE)
   }
 
   fun shareReel(reelId: String) {

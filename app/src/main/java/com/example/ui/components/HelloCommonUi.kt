@@ -1,10 +1,19 @@
 package com.example.ui.components
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.MediaController
 import android.widget.VideoView
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -390,6 +399,133 @@ fun VideoPlayerBox(
         }
       }
     }
+  }
+}
+
+private class YouTubeBridge(
+  private val onEndedCallback: () -> Unit
+) {
+  private val mainHandler = Handler(Looper.getMainLooper())
+
+  @JavascriptInterface
+  fun onPlayerEnded() {
+    mainHandler.post { onEndedCallback() }
+  }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun YouTubeEmbedPlayerBox(
+  videoId: String,
+  isActive: Boolean,
+  modifier: Modifier = Modifier,
+  cornerRadius: Dp = 0.dp,
+  onVideoEnded: (() -> Unit)? = null
+) {
+  val safeId = remember(videoId) { videoId.trim().replace(Regex("[^a-zA-Z0-9_-]"), "") }
+  var webViewRef by remember { mutableStateOf<WebView?>(null) }
+
+  val embedHtml = remember(safeId) {
+    """
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <style>
+          html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000000; overflow: hidden; }
+          #player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+        </style>
+      </head>
+      <body>
+        <div id="player"></div>
+        <script src="https://www.youtube.com/iframe_api"></script>
+        <script>
+          var player;
+          function onYouTubeIframeAPIReady() {
+            player = new YT.Player('player', {
+              videoId: '$safeId',
+              playerVars: {
+                autoplay: ${if (isActive) 1 else 0},
+                playsinline: 1,
+                rel: 0,
+                modestbranding: 1,
+                controls: 1,
+                enablejsapi: 1
+              },
+              events: {
+                onReady: function(e) {
+                  if (${if (isActive) "true" else "false"}) {
+                    e.target.playVideo();
+                  }
+                },
+                onStateChange: function(e) {
+                  if (e.data === 0 && window.HelloYouTube) {
+                    window.HelloYouTube.onPlayerEnded();
+                  }
+                }
+              }
+            });
+          }
+          function setPlaybackActive(active) {
+            if (!player || !player.playVideo) return;
+            if (active) { player.playVideo(); } else { player.pauseVideo(); }
+          }
+        </script>
+      </body>
+      </html>
+    """.trimIndent()
+  }
+
+  LaunchedEffect(isActive, webViewRef) {
+    val wv = webViewRef ?: return@LaunchedEffect
+    wv.evaluateJavascript("if (typeof setPlaybackActive === 'function') { setPlaybackActive($isActive); }", null)
+  }
+
+  DisposableEffect(safeId) {
+    onDispose {
+      webViewRef?.apply {
+        stopLoading()
+        loadUrl("about:blank")
+        destroy()
+      }
+      webViewRef = null
+    }
+  }
+
+  Box(
+    modifier = modifier
+      .clip(RoundedCornerShape(cornerRadius))
+      .background(Color.Black)
+  ) {
+    AndroidView(
+      factory = { ctx ->
+        WebView(ctx).apply {
+          setBackgroundColor(android.graphics.Color.BLACK)
+          settings.javaScriptEnabled = true
+          settings.domStorageEnabled = true
+          settings.mediaPlaybackRequiresUserGesture = false
+          settings.loadWithOverviewMode = true
+          settings.useWideViewPort = true
+          settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+          webChromeClient = WebChromeClient()
+          webViewClient = WebViewClient()
+          addJavascriptInterface(
+            YouTubeBridge(onEndedCallback = { onVideoEnded?.invoke() }),
+            "HelloYouTube"
+          )
+          loadDataWithBaseURL("https://www.youtube.com", embedHtml, "text/html", "UTF-8", null)
+          tag = safeId
+          webViewRef = this
+        }
+      },
+      update = { wv ->
+        if (wv.tag != safeId) {
+          wv.tag = safeId
+          wv.loadDataWithBaseURL("https://www.youtube.com", embedHtml, "text/html", "UTF-8", null)
+        }
+      },
+      modifier = Modifier.fillMaxSize()
+    )
   }
 }
 

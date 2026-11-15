@@ -45,6 +45,8 @@ class SocialRepository(
     )
   )
 
+  fun createFeedCurationRepository(): FeedCurationRepository = FeedCurationRepository(db, auth)
+
   private fun requireUserId(): String =
     auth.currentUser?.uid
       ?: throw IllegalStateException("User must be signed in with Google before accessing Firestore.")
@@ -532,7 +534,9 @@ class SocialRepository(
     mediaType: String = "text",
     backgroundHex: String = "#1E1B4B",
     privacy: String = "public",
-    allowedViewerUids: List<String> = emptyList()
+    allowedViewerUids: List<String> = emptyList(),
+    category: String = "Young",
+    youtubeVideoId: String = ""
   ): Result<String> = runCatching {
     val uid = requireUserId()
     val cleanMediaUri = mediaUri.trim().take(2000)
@@ -557,6 +561,8 @@ class SocialRepository(
         "mediaType" to safeMediaType,
         "caption" to caption.trim().take(500),
         "backgroundHex" to backgroundHex.trim().ifBlank { "#1E1B4B" }.take(16),
+        "category" to category.trim().ifBlank { "Young" }.take(40),
+        "youtubeVideoId" to youtubeVideoId.trim().take(32),
         "privacy" to safePrivacy,
         "allowedViewerUids" to safeViewers,
         "viewersCount" to 0L,
@@ -639,7 +645,9 @@ class SocialRepository(
     caption: String,
     videoUri: String,
     audioTitle: String,
-    coverHex: String = "#FF5A5F"
+    coverHex: String = "#FF5A5F",
+    category: String = "Young",
+    youtubeVideoId: String = ""
   ): Result<String> = runCatching {
     val uid = requireUserId()
     val ref = db.collection("reels").document()
@@ -652,6 +660,8 @@ class SocialRepository(
         "videoUri" to videoUri.trim().take(2000),
         "coverHex" to coverHex.take(16),
         "audioTitle" to audioTitle.trim().ifBlank { "Original HELLO Audio" }.take(120),
+        "category" to category.trim().ifBlank { "Young" }.take(40),
+        "youtubeVideoId" to youtubeVideoId.trim().take(32),
         "likesCount" to 0L,
         "commentsCount" to 0L,
         "sharesCount" to 0L,

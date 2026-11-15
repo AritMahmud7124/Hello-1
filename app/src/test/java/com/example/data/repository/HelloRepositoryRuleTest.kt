@@ -1,7 +1,12 @@
 package com.example.data.repository
 
 import com.example.base.FirestoreEmulatorTestBase
+import com.example.data.model.EngagementSignal
+import com.example.data.model.FeedPreferences
 import com.example.data.model.PublicUser
+import com.example.data.model.Reel
+import com.example.data.model.YouTubeShortVideo
+import com.example.data.network.YouTubeShortsClient
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -321,6 +326,65 @@ class HelloRepositoryRuleTest : FirestoreEmulatorTestBase() {
     }
     assertTrue(visiblePosts.any { it.id == publicPostId })
     assertTrue(visiblePosts.none { it.id == privatePostId })
+  }
+
+  @Test
+  fun feedCuration_engagementScoresNotInterestedFilteringAndPrivacyIsolation_workEndToEnd() = runBlocking {
+    val aliceUid = signInTestUser(ALICE_EMAIL)
+    val curationRepo = FeedCurationRepository(firestore, auth)
+
+    // Initial preferences
+    var prefs = withTimeout(FLOW_TIMEOUT_MS) {
+      curationRepo.observePreferences(aliceUid).first()
+    }
+    assertEquals(10L, prefs.categoryScores["Tech"])
+
+    // Simulate Views (+1), Likes (+3), Full Watches (+5) on Tech
+    prefs = withTimeout(DEFAULT_TIMEOUT_MS) {
+      curationRepo.recordEngagement(prefs, "Tech", EngagementSignal.VIEW).getOrThrow()
+    }
+    prefs = withTimeout(DEFAULT_TIMEOUT_MS) {
+      curationRepo.recordEngagement(prefs, "Tech", EngagementSignal.LIKE).getOrThrow()
+    }
+    prefs = withTimeout(DEFAULT_TIMEOUT_MS) {
+      curationRepo.recordEngagement(prefs, "Tech", EngagementSignal.FULL_WATCH).getOrThrow()
+    }
+    assertEquals(19L, prefs.categoryScores["Tech"])
+
+    // Mark a Funny YouTube Short as "Not Interested" twice so Funny drops <= 0 and gets hidden
+    prefs = withTimeout(DEFAULT_TIMEOUT_MS) {
+      curationRepo.recordEngagement(prefs, "Funny", EngagementSignal.NOT_INTERESTED, videoId = "yt_bad123").getOrThrow()
+    }
+    prefs = withTimeout(DEFAULT_TIMEOUT_MS) {
+      curationRepo.recordEngagement(prefs, "Funny", EngagementSignal.NOT_INTERESTED, videoId = "yt_bad456").getOrThrow()
+    }
+    assertTrue("yt_bad123" in prefs.dismissedVideoIds)
+    assertTrue("Funny" in prefs.dislikedCategories)
+
+    // Verify dynamic ranking puts Tech above Young, and filters out yt_bad123 & Funny category
+    val sampleShorts = listOf(
+      YouTubeShortVideo("yt_bad123", "Filtered Short", "ChanA", "", "Tech"),
+      YouTubeShortVideo("yt_funny1", "Disliked Cat Short", "ChanB", "", "Funny"),
+      YouTubeShortVideo("yt_young1", "Youth Vlog", "ChanC", "", "Young"),
+      YouTubeShortVideo("yt_tech1", "Kotlin Compose Tips", "ChanD", "", "Tech")
+    )
+    val ranked = FeedCurator.rankCuratedReels(emptyList<Reel>(), sampleShorts, prefs)
+    assertEquals(listOf("yt_yt_tech1", "yt_yt_young1"), ranked.map { it.uniqueId })
+
+    // Verify YouTube ID extraction & embed URL generation
+    assertEquals("dQw4w9WgXcQ", YouTubeShortsClient.extractVideoId("https://www.youtube.com/shorts/dQw4w9WgXcQ"))
+    assertTrue(YouTubeShortsClient.buildEmbedUrl("dQw4w9WgXcQ").startsWith("https://www.youtube.com/embed/dQw4w9WgXcQ"))
+
+    // Cross-user isolation: Bob cannot read or overwrite Alice's feed_preferences
+    signInTestUser(BOB_EMAIL)
+    try {
+      withTimeout(FLOW_TIMEOUT_MS) {
+        curationRepo.observePreferences(aliceUid).first()
+      }
+      fail("Expected PERMISSION_DENIED when Bob reads Alice feed_preferences")
+    } catch (e: Exception) {
+      assertEquals(FirebaseFirestoreException.Code.PERMISSION_DENIED, e.unwrapFirestoreException()?.code)
+    }
   }
 
   private companion object {

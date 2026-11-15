@@ -59,12 +59,16 @@ import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.NotInterested
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
@@ -110,10 +114,15 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.example.data.model.CuratedFeedItem
+import com.example.data.model.EngagementSignal
+import com.example.data.model.FeedPreferences
 import com.example.data.model.PublicUser
 import com.example.data.model.Reel
 import com.example.data.model.Story
 import com.example.data.model.UiState
+import com.example.data.network.YouTubeFetchResult
+import com.example.data.network.YouTubeShortsClient
 import com.example.ui.components.CommentsBottomSheet
 import com.example.ui.components.CropAspect
 import com.example.ui.components.EmptyStateCard
@@ -122,6 +131,7 @@ import com.example.ui.components.ShareOptionsBottomSheet
 import com.example.ui.components.SharePayload
 import com.example.ui.components.UserAvatar
 import com.example.ui.components.VideoPlayerBox
+import com.example.ui.components.YouTubeEmbedPlayerBox
 import com.example.ui.components.formatTimestamp
 import com.example.ui.viewmodel.CommunityViewModel
 import com.example.ui.viewmodel.MainSocialViewModel
@@ -365,7 +375,7 @@ fun StoriesScreen(
     CreateStoryDialog(
       friendCount = friendUids.size,
       onDismiss = { showCreateStory = false },
-      onCreate = { caption, mediaUri, mediaType, bgHex, privacy ->
+      onCreate = { caption, mediaUri, mediaType, bgHex, privacy, category, ytInput ->
         viewModel.createStory(
           context = context,
           caption = caption,
@@ -373,7 +383,9 @@ fun StoriesScreen(
           mediaType = mediaType,
           backgroundHex = bgHex,
           privacy = privacy,
-          friendUids = friendUids
+          friendUids = friendUids,
+          category = category,
+          youtubeVideoId = ytInput
         )
         showCreateStory = false
       }
@@ -404,13 +416,15 @@ fun StoriesScreen(
 private fun CreateStoryDialog(
   friendCount: Int,
   onDismiss: () -> Unit,
-  onCreate: (caption: String, mediaUri: String, mediaType: String, bgHex: String, privacy: String) -> Unit
+  onCreate: (caption: String, mediaUri: String, mediaType: String, bgHex: String, privacy: String, category: String, ytInput: String) -> Unit
 ) {
   var caption by remember { mutableStateOf("") }
   var mediaUri by remember { mutableStateOf("") }
   var mediaType by remember { mutableStateOf("text") }
   var bgHex by remember { mutableStateOf(STORY_THEME_OPTIONS.first().hex) }
   var privacy by remember { mutableStateOf("public") }
+  var category by remember { mutableStateOf("Young") }
+  var ytInput by remember { mutableStateOf("") }
   var pendingCropUri by remember { mutableStateOf<String?>(null) }
 
   val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -425,7 +439,8 @@ private fun CreateStoryDialog(
     }
   }
 
-  val canShare = caption.isNotBlank() || mediaUri.isNotBlank()
+  val extractedYtId = remember(ytInput) { YouTubeShortsClient.extractVideoId(ytInput) }
+  val canShare = caption.isNotBlank() || mediaUri.isNotBlank() || extractedYtId.isNotBlank()
   val previewGradient = remember(bgHex) { storyGradientForHex(bgHex) }
 
   AlertDialog(
@@ -605,9 +620,35 @@ private fun CreateStoryDialog(
             Text("Adjust 9:16 Crop")
           }
         }
+        // Story Category Tag
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+          Text("Interest Category", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+          Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            FeedPreferences.CATEGORIES.forEach { cat ->
+              FilterChip(
+                selected = category == cat,
+                onClick = { category = cat },
+                label = { Text(cat, style = MaterialTheme.typography.labelSmall) }
+              )
+            }
+          }
+        }
+
+        OutlinedTextField(
+          value = ytInput,
+          onValueChange = { ytInput = it },
+          label = { Text("Optional YouTube Short Link") },
+          placeholder = { Text("https://youtube.com/shorts/...") },
+          singleLine = true,
+          modifier = Modifier.fillMaxWidth()
+        )
+
         if (!canShare) {
           Text(
-            "Add story text, a photo, or a video clip to share.",
+            "Add story text, a photo, a video clip, or a YouTube Short link.",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
@@ -616,7 +657,7 @@ private fun CreateStoryDialog(
     },
     confirmButton = {
       Button(
-        onClick = { onCreate(caption, mediaUri, mediaType, bgHex, privacy) },
+        onClick = { onCreate(caption, mediaUri, mediaType, bgHex, privacy, category, extractedYtId) },
         enabled = canShare,
         modifier = Modifier.testTag("submit_story_button")
       ) { Text("Share Story") }
@@ -698,17 +739,21 @@ fun StoryViewerDialog(
 
   LaunchedEffect(activeStory.id) {
     if (activeStory.authorId != currentUserId && currentUserId.isNotBlank()) {
-      viewModel.markStoryViewed(activeStory.id)
+      viewModel.markStoryViewed(activeStory.id, activeStory.category)
     }
     progress = 0f
     replyText = ""
     showCommentsList = false
-    val stepPerTick = if (activeStory.mediaType == "video" && activeStory.mediaUri.isNotBlank()) 0.004f else 0.0125f
+    val isVideoOrYt = (activeStory.mediaType == "video" && activeStory.mediaUri.isNotBlank()) || activeStory.youtubeVideoId.isNotBlank()
+    val stepPerTick = if (isVideoOrYt) 0.004f else 0.0125f
     while (progress < 1f) {
       delay(80)
       if (!shouldPauseTimer) {
         progress += stepPerTick
       }
+    }
+    if (activeStory.authorId != currentUserId) {
+      viewModel.trackEngagement(activeStory.id, activeStory.category, EngagementSignal.FULL_WATCH)
     }
     goToNextStory()
   }
@@ -747,7 +792,18 @@ fun StoryViewerDialog(
         .imePadding()
         .padding(12.dp)
     ) {
-      if (activeStory.mediaUri.isNotBlank() && activeStory.mediaType == "image") {
+      if (activeStory.youtubeVideoId.isNotBlank()) {
+        YouTubeEmbedPlayerBox(
+          videoId = activeStory.youtubeVideoId,
+          isActive = !shouldPauseTimer,
+          modifier = Modifier.fillMaxSize(),
+          cornerRadius = 24.dp,
+          onVideoEnded = {
+            viewModel.trackEngagement(activeStory.id, activeStory.category, EngagementSignal.FULL_WATCH)
+            goToNextStory()
+          }
+        )
+      } else if (activeStory.mediaUri.isNotBlank() && activeStory.mediaType == "image") {
         AsyncImage(
           model = activeStory.mediaUri,
           contentDescription = activeStory.caption.ifBlank { "Story photo" },
@@ -770,7 +826,10 @@ fun StoryViewerDialog(
             defaultHeight = null,
             cornerRadius = 24.dp,
             showMediaController = false,
-            onVideoEnded = { goToNextStory() }
+            onVideoEnded = {
+              viewModel.trackEngagement(activeStory.id, activeStory.category, EngagementSignal.FULL_WATCH)
+              goToNextStory()
+            }
           )
         }
       } else {
@@ -870,6 +929,17 @@ fun StoryViewerDialog(
           }
           IconButton(onClick = { isPaused = !isPaused }) {
             Icon(if (shouldPauseTimer) Icons.Filled.PlayArrow else Icons.Filled.Pause, contentDescription = "Pause story", tint = Color.White)
+          }
+          if (activeStory.authorId != currentUserId) {
+            IconButton(
+              onClick = {
+                viewModel.markNotInterested("story_${activeStory.id}", activeStory.youtubeVideoId, activeStory.category)
+                goToNextStory()
+              },
+              modifier = Modifier.testTag("story_not_interested_button")
+            ) {
+              Icon(Icons.Filled.ThumbDown, contentDescription = "Not interested in story", tint = Color.White)
+            }
           }
           if (activeStory.authorId == currentUserId && currentUserId.isNotBlank()) {
             IconButton(
@@ -1135,9 +1205,14 @@ fun ReelsScreen(
 ) {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
-  val reelsState by viewModel.reels.collectAsStateWithLifecycle()
+  val curatedState by viewModel.curatedReels.collectAsStateWithLifecycle()
+  val feedPrefs by viewModel.feedPreferences.collectAsStateWithLifecycle()
+  val selectedCategory by viewModel.selectedReelCategory.collectAsStateWithLifecycle()
+  val youtubeStatus by viewModel.youtubeStatus.collectAsStateWithLifecycle()
+  val isFetchingShorts by viewModel.isFetchingShorts.collectAsStateWithLifecycle()
   val isUploading by viewModel.isUploadingMedia.collectAsStateWithLifecycle()
   val savedPosts by viewModel.savedPosts.collectAsStateWithLifecycle()
+  val localLikedIds by viewModel.localLikedItemIds.collectAsStateWithLifecycle()
   val savedIds = remember(savedPosts) { savedPosts.map { it.postId }.toSet() }
 
   val conversationsState = communityVm?.conversations?.collectAsStateWithLifecycle()
@@ -1146,12 +1221,17 @@ fun ReelsScreen(
   val discoverableUsers = (usersState?.value as? UiState.Success)?.data.orEmpty()
 
   var showCreateReel by remember { mutableStateOf(false) }
+  var showTuningDialog by remember { mutableStateOf(false) }
   var commentReel by remember { mutableStateOf<Reel?>(null) }
-  var shareReelTarget by remember { mutableStateOf<Reel?>(null) }
+  var shareItemTarget by remember { mutableStateOf<CuratedFeedItem?>(null) }
   var autoAdvanceEnabled by remember { mutableStateOf(true) }
 
+  LaunchedEffect(Unit) {
+    viewModel.ensureYouTubeShortsLoaded()
+  }
+
   Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0C10))) {
-    when (val state = reelsState) {
+    when (val state = curatedState) {
       is UiState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         CircularProgressIndicator(color = Color.White)
       }
@@ -1159,65 +1239,101 @@ fun ReelsScreen(
         EmptyStateCard(Icons.Filled.PlayCircle, "Reels unavailable", state.message)
       }
       is UiState.Success -> {
-        val reels = state.data
-        if (reels.isEmpty()) {
+        val items = state.data
+        if (items.isEmpty()) {
           Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+            val missingKey = youtubeStatus is YouTubeFetchResult.MissingApiKey
             EmptyStateCard(
               icon = Icons.Filled.PlayCircle,
-              title = "No Reels yet",
-              subtitle = "Upload a short clip or create a visual reel — they will play continuously one after another.",
+              title = if (missingKey) "Add YOUTUBE_API_KEY or Post a Reel" else "No matching Reels right now",
+              subtitle = when (val yt = youtubeStatus) {
+                is YouTubeFetchResult.MissingApiKey ->
+                  "Configure YOUTUBE_API_KEY in AI Studio Secrets for automatic YouTube Shorts discovery, or post your own Reel or YouTube link."
+                is YouTubeFetchResult.Error ->
+                  "YouTube discovery note: ${yt.message}. You can refresh or post your own Reel."
+                else ->
+                  "All clips in this category were filtered or none uploaded yet. Refresh or reset your feed preferences."
+              },
               actionLabel = "Post a Reel",
               onAction = { showCreateReel = true }
             )
           }
         } else {
-          val pagerState = rememberPagerState(pageCount = { reels.size })
+          val pagerState = rememberPagerState(pageCount = { items.size })
 
           VerticalPager(
             state = pagerState,
+            key = { idx -> items.getOrNull(idx)?.uniqueId ?: idx },
             modifier = Modifier.fillMaxSize().testTag("reels_vertical_pager"),
             beyondViewportPageCount = 1
           ) { page ->
-            val reel = reels[page]
+            val item = items[page]
             val isCurrentPage = pagerState.currentPage == page
-            val isSaved = reel.id in savedIds
+            val bookmarkKey = item.nativeReel?.id ?: item.uniqueId
+            val isSaved = bookmarkKey in savedIds
+            val isLiked = item.uniqueId in localLikedIds
 
             fun advanceToNextReel() {
-              if (autoAdvanceEnabled && reels.size > 1) {
-                val next = (page + 1) % reels.size
+              if (autoAdvanceEnabled && items.size > 1) {
+                val next = (page + 1) % items.size
                 scope.launch {
                   pagerState.animateScrollToPage(next)
                 }
               }
             }
 
-            // Auto-advance timer for cover/text-only reels so the continuous feed never gets stuck
-            var textReelProgress by remember(reel.id, isCurrentPage) { mutableFloatStateOf(0f) }
-            LaunchedEffect(reel.id, isCurrentPage, autoAdvanceEnabled, commentReel, shareReelTarget) {
-              if (isCurrentPage && reel.videoUri.isBlank() && autoAdvanceEnabled && reels.size > 1) {
+            // Record engagement impression automatically after watching for 2s
+            LaunchedEffect(item.uniqueId, isCurrentPage) {
+              if (isCurrentPage) {
+                delay(2000)
+                viewModel.trackEngagement(item.uniqueId, item.category, EngagementSignal.VIEW)
+              }
+            }
+
+            // Auto-advance timer for cover/text-only reels
+            var textReelProgress by remember(item.uniqueId, isCurrentPage) { mutableFloatStateOf(0f) }
+            LaunchedEffect(item.uniqueId, isCurrentPage, autoAdvanceEnabled, commentReel, shareItemTarget) {
+              if (isCurrentPage && item.youtubeVideoId.isBlank() && item.videoUri.isBlank() && autoAdvanceEnabled && items.size > 1) {
                 textReelProgress = 0f
                 while (textReelProgress < 1f) {
                   delay(70)
-                  if (commentReel == null && shareReelTarget == null && !showCreateReel) {
-                    textReelProgress += 0.01f // ~7 seconds per card reel
+                  if (commentReel == null && shareItemTarget == null && !showCreateReel && !showTuningDialog) {
+                    textReelProgress += 0.01f
                   }
                 }
+                viewModel.trackEngagement(item.uniqueId, item.category, EngagementSignal.FULL_WATCH)
                 advanceToNextReel()
               }
             }
 
+            val playerIsActive = isCurrentPage && commentReel == null && shareItemTarget == null && !showCreateReel && !showTuningDialog
+
             Box(modifier = Modifier.fillMaxSize()) {
-              if (reel.videoUri.isNotBlank()) {
+              if (item.youtubeVideoId.isNotBlank()) {
+                YouTubeEmbedPlayerBox(
+                  videoId = item.youtubeVideoId,
+                  isActive = playerIsActive,
+                  modifier = Modifier.fillMaxSize(),
+                  cornerRadius = 0.dp,
+                  onVideoEnded = {
+                    viewModel.trackEngagement(item.uniqueId, item.category, EngagementSignal.FULL_WATCH)
+                    advanceToNextReel()
+                  }
+                )
+              } else if (item.videoUri.isNotBlank()) {
                 VideoPlayerBox(
-                  videoUri = reel.videoUri,
+                  videoUri = item.videoUri,
                   modifier = Modifier.fillMaxSize(),
                   autoPlay = true,
-                  isActive = isCurrentPage && commentReel == null && shareReelTarget == null && !showCreateReel,
-                  looping = !autoAdvanceEnabled || reels.size <= 1,
+                  isActive = playerIsActive,
+                  looping = !autoAdvanceEnabled || items.size <= 1,
                   defaultHeight = null,
                   cornerRadius = 0.dp,
                   showMediaController = false,
-                  onVideoEnded = { advanceToNextReel() }
+                  onVideoEnded = {
+                    viewModel.trackEngagement(item.uniqueId, item.category, EngagementSignal.FULL_WATCH)
+                    advanceToNextReel()
+                  }
                 )
               } else {
                 Box(
@@ -1238,7 +1354,7 @@ fun ReelsScreen(
                     Icon(Icons.Filled.PlayCircle, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(64.dp))
                     Spacer(Modifier.height(14.dp))
                     Text(
-                      text = reel.caption,
+                      text = item.caption,
                       color = Color.White,
                       style = MaterialTheme.typography.headlineSmall,
                       fontWeight = FontWeight.Bold
@@ -1252,54 +1368,79 @@ fun ReelsScreen(
                 modifier = Modifier
                   .align(Alignment.BottomCenter)
                   .fillMaxWidth()
-                  .height(220.dp)
-                  .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.86f))))
+                  .height(235.dp)
+                  .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.88f))))
               )
 
-              // Right-side vertical FB Reels Actions
+              // Right-side vertical FB/Shorts Actions
               Column(
                 modifier = Modifier
                   .align(Alignment.BottomEnd)
                   .padding(end = 12.dp, bottom = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
               ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                   IconButton(
-                    onClick = { viewModel.likeReel(reel.id) },
-                    modifier = Modifier.size(48.dp).background(Color.Black.copy(alpha = 0.4f), CircleShape)
-                  ) {
-                    Icon(Icons.Filled.Favorite, contentDescription = "Like reel", tint = Color(0xFFFF4D6D))
-                  }
-                  Text("${reel.likesCount}", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-                }
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                  IconButton(
-                    onClick = { commentReel = reel },
-                    modifier = Modifier.size(48.dp).background(Color.Black.copy(alpha = 0.4f), CircleShape)
-                  ) {
-                    Icon(Icons.AutoMirrored.Filled.Comment, contentDescription = "Comment on reel", tint = Color.White)
-                  }
-                  Text("${reel.commentsCount}", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-                }
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                  IconButton(
-                    onClick = { shareReelTarget = reel },
+                    onClick = {
+                      if (item.nativeReel != null) {
+                        viewModel.likeReel(item.nativeReel.id, item.category)
+                      } else {
+                        viewModel.trackEngagement(item.uniqueId, item.category, EngagementSignal.LIKE)
+                      }
+                    },
                     modifier = Modifier
                       .size(48.dp)
-                      .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                      .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                      .testTag("reel_like_button")
+                  ) {
+                    Icon(
+                      Icons.Filled.Favorite,
+                      contentDescription = "Like reel",
+                      tint = if (isLiked) Color(0xFFFF2D55) else Color(0xFFFF758F)
+                    )
+                  }
+                  Text(
+                    text = if (item.nativeReel != null) "${item.likesCount}" else if (isLiked) "Liked" else "Like",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold
+                  )
+                }
+
+                if (item.nativeReel != null) {
+                  Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    IconButton(
+                      onClick = { commentReel = item.nativeReel },
+                      modifier = Modifier.size(48.dp).background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                    ) {
+                      Icon(Icons.AutoMirrored.Filled.Comment, contentDescription = "Comment on reel", tint = Color.White)
+                    }
+                    Text("${item.commentsCount}", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                  }
+                }
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                  IconButton(
+                    onClick = { shareItemTarget = item },
+                    modifier = Modifier
+                      .size(48.dp)
+                      .background(Color.Black.copy(alpha = 0.45f), CircleShape)
                       .testTag("reel_share_button")
                   ) {
                     Icon(Icons.Filled.Share, contentDescription = "Share reel", tint = Color.White)
                   }
-                  Text("${reel.sharesCount}", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                  Text(
+                    text = if (item.nativeReel != null) "${item.sharesCount}" else "Share",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold
+                  )
                 }
 
                 IconButton(
-                  onClick = { viewModel.toggleSave(reel.id, "reel", reel.authorName, reel.caption) },
-                  modifier = Modifier.size(48.dp).background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                  onClick = { viewModel.toggleSave(bookmarkKey, "reel", item.authorName, item.caption) },
+                  modifier = Modifier.size(48.dp).background(Color.Black.copy(alpha = 0.45f), CircleShape)
                 ) {
                   Icon(
                     if (isSaved) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
@@ -1308,10 +1449,29 @@ fun ReelsScreen(
                   )
                 }
 
-                if (reels.size > 1) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                   IconButton(
                     onClick = {
-                      scope.launch { pagerState.animateScrollToPage((page + 1) % reels.size) }
+                      viewModel.markNotInterested(item.uniqueId, item.youtubeVideoId, item.category)
+                    },
+                    modifier = Modifier
+                      .size(48.dp)
+                      .background(Color.Black.copy(alpha = 0.55f), CircleShape)
+                      .testTag("reel_not_interested_button")
+                  ) {
+                    Icon(
+                      Icons.Filled.ThumbDown,
+                      contentDescription = "Not Interested",
+                      tint = Color(0xFFFCA5A5)
+                    )
+                  }
+                  Text("Hide", color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.labelSmall)
+                }
+
+                if (items.size > 1) {
+                  IconButton(
+                    onClick = {
+                      scope.launch { pagerState.animateScrollToPage((page + 1) % items.size) }
                     },
                     modifier = Modifier.size(44.dp).background(Color.White.copy(alpha = 0.16f), CircleShape)
                   ) {
@@ -1320,7 +1480,7 @@ fun ReelsScreen(
                 }
               }
 
-              // Bottom-left Author, Caption & Audio pill
+              // Bottom-left Author, Category Tag, Caption & Source pill
               Column(
                 modifier = Modifier
                   .align(Alignment.BottomStart)
@@ -1330,24 +1490,58 @@ fun ReelsScreen(
               ) {
                 Row(
                   verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                  Surface(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.88f),
+                    shape = RoundedCornerShape(12.dp)
+                  ) {
+                    Text(
+                      text = "${item.category} · Score ${(feedPrefs.categoryScores[item.category] ?: 10L)}",
+                      color = Color.White,
+                      style = MaterialTheme.typography.labelSmall,
+                      fontWeight = FontWeight.Bold,
+                      modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                  }
+                  if (item.source == "youtube" || item.youtubeVideoId.isNotBlank()) {
+                    Surface(
+                      color = Color(0xFFDC2626).copy(alpha = 0.9f),
+                      shape = RoundedCornerShape(12.dp)
+                    ) {
+                      Text(
+                        text = "YouTube Embed",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                      )
+                    }
+                  }
+                }
+
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
                   horizontalArrangement = Arrangement.spacedBy(10.dp),
                   modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
-                    .clickable { onOpenProfile(reel.authorId) }
+                    .then(
+                      if (item.authorId.isNotBlank()) Modifier.clickable { onOpenProfile(item.authorId) } else Modifier
+                    )
                     .padding(vertical = 2.dp, horizontal = 4.dp)
                 ) {
-                  UserAvatar(name = reel.authorName, photoUrl = reel.authorAvatar, size = 40.dp)
+                  UserAvatar(name = item.authorName, photoUrl = item.authorAvatar, size = 40.dp)
                   Column {
-                    Text(reel.authorName, color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text(item.authorName, color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Text(
-                      text = "Reel ${page + 1} of ${reels.size}",
+                      text = "Clip ${page + 1} of ${items.size}",
                       color = Color.White.copy(alpha = 0.72f),
                       style = MaterialTheme.typography.labelSmall
                     )
                   }
                 }
                 Text(
-                  text = reel.caption,
+                  text = item.caption,
                   color = Color.White,
                   style = MaterialTheme.typography.bodyMedium,
                   maxLines = 3,
@@ -1364,7 +1558,7 @@ fun ReelsScreen(
                   ) {
                     Icon(Icons.Filled.MusicNote, null, modifier = Modifier.size(14.dp), tint = Color.White)
                     Text(
-                      text = reel.audioTitle,
+                      text = item.audioTitle,
                       color = Color.White,
                       style = MaterialTheme.typography.labelSmall,
                       maxLines = 1,
@@ -1374,7 +1568,7 @@ fun ReelsScreen(
                 }
               }
 
-              if (reel.videoUri.isBlank() && autoAdvanceEnabled && reels.size > 1) {
+              if (item.youtubeVideoId.isBlank() && item.videoUri.isBlank() && autoAdvanceEnabled && items.size > 1) {
                 LinearProgressIndicator(
                   progress = { textReelProgress.coerceIn(0f, 1f) },
                   modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
@@ -1388,14 +1582,14 @@ fun ReelsScreen(
       }
     }
 
-    // Floating Top Controls Bar over Reels
+    // Floating Top Controls + Dynamic Interest Category Bar over Reels
     Column(
       modifier = Modifier
         .align(Alignment.TopCenter)
         .fillMaxWidth()
-        .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.72f), Color.Transparent)))
+        .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.82f), Color.Transparent)))
         .padding(horizontal = 14.dp, vertical = 10.dp),
-      verticalArrangement = Arrangement.spacedBy(6.dp)
+      verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
       Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1403,19 +1597,37 @@ fun ReelsScreen(
         verticalAlignment = Alignment.CenterVertically
       ) {
         Text("Reels", color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+          IconButton(
+            onClick = { showTuningDialog = true },
+            modifier = Modifier
+              .size(34.dp)
+              .background(Color.White.copy(alpha = 0.18f), CircleShape)
+              .testTag("tune_feed_button")
+          ) {
+            Icon(Icons.Filled.Tune, contentDescription = "Feed preference scores", tint = Color.White, modifier = Modifier.size(18.dp))
+          }
+          IconButton(
+            onClick = { viewModel.ensureYouTubeShortsLoaded(forceRefresh = true) },
+            modifier = Modifier
+              .size(34.dp)
+              .background(Color.White.copy(alpha = 0.18f), CircleShape)
+              .testTag("refresh_youtube_shorts_button")
+          ) {
+            Icon(Icons.Filled.Refresh, contentDescription = "Refresh YouTube Shorts", tint = Color.White, modifier = Modifier.size(18.dp))
+          }
           Surface(
             color = if (autoAdvanceEnabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f),
             shape = RoundedCornerShape(20.dp),
             modifier = Modifier.clickable { autoAdvanceEnabled = !autoAdvanceEnabled }
           ) {
             Row(
-              modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
               verticalAlignment = Alignment.CenterVertically,
               horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-              Icon(Icons.Filled.Repeat, null, tint = Color.White, modifier = Modifier.size(14.dp))
-              Text(if (autoAdvanceEnabled) "Auto-Next" else "Loop", color = Color.White, style = MaterialTheme.typography.labelSmall)
+              Icon(Icons.Filled.Repeat, null, tint = Color.White, modifier = Modifier.size(13.dp))
+              Text(if (autoAdvanceEnabled) "Auto" else "Loop", color = Color.White, style = MaterialTheme.typography.labelSmall)
             }
           }
           Surface(
@@ -1423,33 +1635,138 @@ fun ReelsScreen(
             shape = RoundedCornerShape(20.dp),
             modifier = Modifier.clickable(onClick = onOpenStories)
           ) {
-            Text("Stories", color = Color.White, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+            Text("Stories", color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
           }
           Surface(
             color = Color.White,
             shape = RoundedCornerShape(20.dp),
             modifier = Modifier.clickable { showCreateReel = true }.testTag("create_reel_button")
           ) {
-            Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-              Icon(Icons.Filled.Add, null, tint = Color.Black, modifier = Modifier.size(16.dp))
+            Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+              Icon(Icons.Filled.Add, null, tint = Color.Black, modifier = Modifier.size(15.dp))
               Spacer(Modifier.width(2.dp))
-              Text("Create", color = Color.Black, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+              Text("Post", color = Color.Black, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
           }
         }
       }
-      if (isUploading) {
+
+      // Dynamic Interest Filter Pills (hides muted/disliked categories automatically in For You)
+      Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+      ) {
+        val activeCats = remember(feedPrefs) {
+          FeedPreferences.CATEGORIES.filter { cat ->
+            feedPrefs.dislikedCategories.none { it.equals(cat, ignoreCase = true) }
+          }.sortedByDescending { feedPrefs.categoryScores[it] ?: 6L }
+        }
+        Surface(
+          color = if (selectedCategory == null) Color.White else Color.White.copy(alpha = 0.16f),
+          shape = RoundedCornerShape(16.dp),
+          modifier = Modifier.clickable { viewModel.selectReelCategory(null) }
+        ) {
+          Text(
+            text = "✨ For You",
+            color = if (selectedCategory == null) Color.Black else Color.White,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+          )
+        }
+        activeCats.forEach { cat ->
+          val isSel = selectedCategory.equals(cat, ignoreCase = true)
+          val score = feedPrefs.categoryScores[cat] ?: 10L
+          Surface(
+            color = if (isSel) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.16f),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.clickable { viewModel.selectReelCategory(cat) }
+          ) {
+            Text(
+              text = "$cat ($score)",
+              color = Color.White,
+              style = MaterialTheme.typography.labelSmall,
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+            )
+          }
+        }
+      }
+
+      if (isUploading || isFetchingShorts) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-          Text("Uploading reel video to cloud...", style = MaterialTheme.typography.labelSmall, color = Color.White)
+          Text(
+            text = if (isUploading) "Uploading reel video to cloud..." else "Fetching fresh YouTube Shorts for your interests...",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White
+          )
           LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
       }
     }
   }
 
+  if (showTuningDialog) {
+    AlertDialog(
+      onDismissRequest = { showTuningDialog = false },
+      title = { Text("Smart Feed Preferences", fontWeight = FontWeight.Bold) },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
+          Text(
+            text = "Private auto-curation tracks views (+1), likes (+3), full watches (+5), and Not Interested (-6) securely under your account.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+          Text(
+            text = "Signals: ${feedPrefs.totalViews} views · ${feedPrefs.totalLikes} likes · ${feedPrefs.totalFullWatches} full watches",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold
+          )
+          FeedPreferences.CATEGORIES.forEach { cat ->
+            val score = feedPrefs.categoryScores[cat] ?: 10L
+            val isMuted = feedPrefs.dislikedCategories.any { it.equals(cat, ignoreCase = true) }
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(
+                text = if (isMuted) "$cat (Hidden · $score)" else "$cat · Score $score",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isMuted) FontWeight.Normal else FontWeight.SemiBold
+              )
+              if (isMuted) {
+                TextButton(onClick = { viewModel.restoreCategoryPreference(cat) }) {
+                  Text("Restore")
+                }
+              }
+            }
+          }
+          if (youtubeStatus is YouTubeFetchResult.MissingApiKey) {
+            Text(
+              text = "Note: Add YOUTUBE_API_KEY in AI Studio Secrets to stream fresh category YouTube Shorts.",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.error
+            )
+          }
+        }
+      },
+      confirmButton = {
+        Button(onClick = { showTuningDialog = false }) { Text("Done") }
+      },
+      dismissButton = {
+        TextButton(onClick = {
+          viewModel.resetFeedPreferences()
+          showTuningDialog = false
+        }) { Text("Reset Weights") }
+      }
+    )
+  }
+
   if (showCreateReel) {
     var caption by remember { mutableStateOf("") }
     var audioTitle by remember { mutableStateOf("Original HELLO Mix") }
+    var category by remember { mutableStateOf("Young") }
+    var ytLinkInput by remember { mutableStateOf("") }
     var videoUri by remember { mutableStateOf("") }
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
       if (uri != null) videoUri = uri.toString()
@@ -1458,22 +1775,40 @@ fun ReelsScreen(
       onDismissRequest = { showCreateReel = false },
       title = { Text("Create Reel") },
       text = {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
           OutlinedTextField(value = caption, onValueChange = { caption = it }, label = { Text("Reel caption") }, modifier = Modifier.fillMaxWidth())
           OutlinedTextField(value = audioTitle, onValueChange = { audioTitle = it }, label = { Text("Audio track") }, modifier = Modifier.fillMaxWidth())
+          Text("Category", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+          Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FeedPreferences.CATEGORIES.forEach { cat ->
+              FilterChip(
+                selected = category == cat,
+                onClick = { category = cat },
+                label = { Text(cat, style = MaterialTheme.typography.labelSmall) }
+              )
+            }
+          }
+          OutlinedTextField(
+            value = ytLinkInput,
+            onValueChange = { ytLinkInput = it },
+            label = { Text("YouTube Shorts Link (optional)") },
+            placeholder = { Text("https://youtube.com/shorts/...") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+          )
           OutlinedButton(
             onClick = { videoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
             modifier = Modifier.fillMaxWidth()
           ) {
             Icon(Icons.Filled.VideoLibrary, null, Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text(if (videoUri.isBlank()) "Pick Video (Photo Picker)" else "Video Selected ✓")
+            Text(if (videoUri.isBlank()) "Pick Device Video (Photo Picker)" else "Video Selected ✓")
           }
         }
       },
       confirmButton = {
         Button(onClick = {
-          viewModel.createReel(context, caption, videoUri, audioTitle, "#FF5A5F")
+          viewModel.createReel(context, caption, videoUri, audioTitle, "#FF5A5F", category, ytLinkInput)
           showCreateReel = false
         }) { Text("Post Reel") }
       },
@@ -1490,37 +1825,38 @@ fun ReelsScreen(
     )
   }
 
-  shareReelTarget?.let { reel ->
+  shareItemTarget?.let { item ->
+    val shareLink = if (item.youtubeVideoId.isNotBlank()) "\nhttps://youtube.com/shorts/${item.youtubeVideoId}" else ""
     ShareOptionsBottomSheet(
       payload = SharePayload(
-        title = "Reel by ${reel.authorName} · 🎵 ${reel.audioTitle}",
-        body = reel.caption,
+        title = "${item.category} Reel by ${item.authorName}",
+        body = "${item.caption}$shareLink",
         canRepostToFeed = true
       ),
       currentUserId = currentUserId,
       conversations = conversations,
       discoverableUsers = discoverableUsers,
-      onDismiss = { shareReelTarget = null },
+      onDismiss = { shareItemTarget = null },
       onRepostToFeed = { note ->
         val composed = if (note.isBlank()) {
-          "Shared Reel by ${reel.authorName}: ${reel.caption}"
+          "Shared ${item.category} Reel by ${item.authorName}: ${item.caption}$shareLink"
         } else {
-          "$note\n\n— Reel by ${reel.authorName}: ${reel.caption}"
+          "$note\n\n— ${item.category} Reel by ${item.authorName}: ${item.caption}$shareLink"
         }
-        viewModel.createPost(context, composed, reel.videoUri, if (reel.videoUri.isNotBlank()) "video" else "none", "public", emptyList())
-        viewModel.shareReel(reel.id)
+        viewModel.createPost(context, composed, item.videoUri, if (item.videoUri.isNotBlank()) "video" else "none", "public", emptyList())
+        item.nativeReel?.let { viewModel.shareReel(it.id) }
       },
       onSendToConversation = { conv, msg ->
         val sender = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
         communityVm?.shareTextToConversation(conv, sender, msg)
-        viewModel.shareReel(reel.id)
+        item.nativeReel?.let { viewModel.shareReel(it.id) }
       },
       onSendToPerson = { person, msg ->
         val sender = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
         communityVm?.shareTextToPerson(sender, person, msg)
-        viewModel.shareReel(reel.id)
+        item.nativeReel?.let { viewModel.shareReel(it.id) }
       },
-      onExternalShareLaunched = { viewModel.shareReel(reel.id) }
+      onExternalShareLaunched = { item.nativeReel?.let { viewModel.shareReel(it.id) } }
     )
   }
 }

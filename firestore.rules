@@ -186,7 +186,7 @@ service cloud.firestore {
 
     function isValidStory(data) {
       return data.keys().hasAll(['authorId', 'authorName', 'mediaType', 'privacy', 'allowedViewerUids', 'viewersCount', 'createdAt']) &&
-             data.keys().hasOnly(['authorId', 'authorName', 'authorAvatar', 'mediaUri', 'mediaType', 'caption', 'backgroundHex', 'privacy', 'allowedViewerUids', 'viewersCount', 'createdAt']) &&
+             data.keys().hasOnly(['authorId', 'authorName', 'authorAvatar', 'mediaUri', 'mediaType', 'caption', 'backgroundHex', 'category', 'youtubeVideoId', 'privacy', 'allowedViewerUids', 'viewersCount', 'createdAt']) &&
              isValidId(data.authorId) &&
              isValidString(data.authorName, 1, 80) &&
              isValidOptionalString(data, 'authorAvatar', 1000) &&
@@ -194,6 +194,8 @@ service cloud.firestore {
              data.mediaType in ['text', 'image', 'video'] &&
              isValidOptionalString(data, 'caption', 500) &&
              isValidOptionalString(data, 'backgroundHex', 16) &&
+             isValidOptionalString(data, 'category', 40) &&
+             isValidOptionalString(data, 'youtubeVideoId', 32) &&
              data.privacy in ['public', 'friends'] &&
              isValidUidList(data.allowedViewerUids, 200) &&
              data.viewersCount is int && data.viewersCount >= 0 &&
@@ -212,7 +214,7 @@ service cloud.firestore {
 
     function isValidReel(data) {
       return data.keys().hasAll(['authorId', 'authorName', 'caption', 'likesCount', 'commentsCount', 'sharesCount', 'createdAt']) &&
-             data.keys().hasOnly(['authorId', 'authorName', 'authorAvatar', 'caption', 'videoUri', 'coverHex', 'audioTitle', 'likesCount', 'commentsCount', 'sharesCount', 'createdAt']) &&
+             data.keys().hasOnly(['authorId', 'authorName', 'authorAvatar', 'caption', 'videoUri', 'coverHex', 'audioTitle', 'category', 'youtubeVideoId', 'likesCount', 'commentsCount', 'sharesCount', 'createdAt']) &&
              isValidId(data.authorId) &&
              isValidString(data.authorName, 1, 80) &&
              isValidOptionalString(data, 'authorAvatar', 1000) &&
@@ -220,10 +222,28 @@ service cloud.firestore {
              isValidOptionalString(data, 'videoUri', 2000) &&
              isValidOptionalString(data, 'coverHex', 16) &&
              isValidOptionalString(data, 'audioTitle', 120) &&
+             isValidOptionalString(data, 'category', 40) &&
+             isValidOptionalString(data, 'youtubeVideoId', 32) &&
              data.likesCount is int && data.likesCount >= 0 &&
              data.commentsCount is int && data.commentsCount >= 0 &&
              data.sharesCount is int && data.sharesCount >= 0 &&
              isValidTimestamp(data.createdAt);
+    }
+
+    function isValidFeedPreference(data) {
+      return data.keys().hasAll(['userId', 'categoryScores', 'dislikedCategories', 'dismissedVideoIds', 'totalViews', 'totalLikes', 'totalFullWatches', 'updatedAt']) &&
+             data.keys().hasOnly(['userId', 'categoryScores', 'dislikedCategories', 'dismissedVideoIds', 'totalViews', 'totalLikes', 'totalFullWatches', 'updatedAt']) &&
+             isValidId(data.userId) &&
+             data.categoryScores is map &&
+             data.categoryScores.size() <= 20 &&
+             data.dislikedCategories is list &&
+             data.dislikedCategories.size() <= 20 &&
+             data.dismissedVideoIds is list &&
+             data.dismissedVideoIds.size() <= 200 &&
+             data.totalViews is int && data.totalViews >= 0 &&
+             data.totalLikes is int && data.totalLikes >= 0 &&
+             data.totalFullWatches is int && data.totalFullWatches >= 0 &&
+             isValidTimestamp(data.updatedAt);
     }
 
     function isValidFriendRequest(data) {
@@ -514,6 +534,13 @@ service cloud.firestore {
         allow create: if isSignedIn() && isValidId(userId) && isValidId(messageId) && request.auth.uid == userId && incoming().messageId == messageId && isValidSentSecretLove(incoming());
         allow update: if isSignedIn() && isValidId(userId) && isValidId(messageId) && request.auth.uid == userId && isValidSentSecretLove(incoming()) && incoming().diff(existing()).affectedKeys().hasOnly(['isRevealed']);
         allow delete: if isSignedIn() && isValidId(userId) && isValidId(messageId) && request.auth.uid == userId;
+      }
+
+      match /feed_preferences/{prefId} {
+        allow get, list: if isSignedIn() && request.auth.uid == userId;
+        allow create: if isSignedIn() && isValidId(userId) && isValidId(prefId) && request.auth.uid == userId && incoming().userId == request.auth.uid && isValidFeedPreference(incoming());
+        allow update: if isSignedIn() && isValidId(userId) && isValidId(prefId) && request.auth.uid == userId && incoming().userId == existing().userId && isValidFeedPreference(incoming());
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(prefId) && request.auth.uid == userId;
       }
     }
 

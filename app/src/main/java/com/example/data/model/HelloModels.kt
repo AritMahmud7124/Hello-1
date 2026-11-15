@@ -93,6 +93,8 @@ data class Story(
   val mediaType: String = "text",
   val caption: String = "",
   val backgroundHex: String = "#1E1B4B",
+  val category: String = "Young",
+  val youtubeVideoId: String = "",
   val privacy: String = "public",
   val allowedViewerUids: List<String> = emptyList(),
   val viewersCount: Long = 0L,
@@ -119,6 +121,8 @@ data class Reel(
   val videoUri: String = "",
   val coverHex: String = "#FF5A5F",
   val audioTitle: String = "Original Audio",
+  val category: String = "Young",
+  val youtubeVideoId: String = "",
   val likesCount: Long = 0L,
   val commentsCount: Long = 0L,
   val sharesCount: Long = 0L,
@@ -365,3 +369,65 @@ data class BlockedUser(
   val blockedName: String = "",
   @ServerTimestamp val createdAt: Timestamp? = null
 )
+
+enum class EngagementSignal(val weightDelta: Long) {
+  VIEW(1L),
+  LIKE(3L),
+  FULL_WATCH(5L),
+  NOT_INTERESTED(-6L)
+}
+
+@IgnoreExtraProperties
+data class FeedPreferences(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val categoryScores: Map<String, Long> = DEFAULT_SCORES,
+  val dislikedCategories: List<String> = emptyList(),
+  val dismissedVideoIds: List<String> = emptyList(),
+  val totalViews: Long = 0L,
+  val totalLikes: Long = 0L,
+  val totalFullWatches: Long = 0L,
+  @ServerTimestamp val updatedAt: Timestamp? = null
+) {
+  companion object {
+    val CATEGORIES = listOf("Young", "Tech", "Funny", "Music", "Lifestyle", "Sports")
+    val DEFAULT_SCORES = mapOf(
+      "Young" to 10L,
+      "Tech" to 10L,
+      "Funny" to 10L,
+      "Music" to 6L,
+      "Lifestyle" to 6L,
+      "Sports" to 6L
+    )
+  }
+}
+
+data class YouTubeShortVideo(
+  val videoId: String,
+  val title: String,
+  val channelTitle: String,
+  val thumbnailUrl: String,
+  val category: String,
+  val publishedAtEpochSec: Long = 0L
+)
+
+data class CuratedFeedItem(
+  val uniqueId: String,
+  val source: String, // "youtube" or "native"
+  val category: String,
+  val score: Double,
+  val authorId: String,
+  val authorName: String,
+  val authorAvatar: String,
+  val caption: String,
+  val audioTitle: String,
+  val videoUri: String = "",
+  val youtubeVideoId: String = "",
+  val thumbnailUrl: String = "",
+  val coverHex: String = "#FF5A5F",
+  val likesCount: Long = 0L,
+  val commentsCount: Long = 0L,
+  val sharesCount: Long = 0L,
+  val nativeReel: Reel? = null
+)
+

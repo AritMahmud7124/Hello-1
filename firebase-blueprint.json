@@ -104,6 +104,8 @@
         "mediaType": { "type": "string", "enum": ["text", "image", "video"] },
         "caption": { "type": "string" },
         "backgroundHex": { "type": "string" },
+        "category": { "type": "string" },
+        "youtubeVideoId": { "type": "string" },
         "privacy": { "type": "string", "enum": ["public", "friends"] },
         "allowedViewerUids": { "type": "array" },
         "viewersCount": { "type": "integer" },
@@ -136,6 +138,8 @@
         "videoUri": { "type": "string" },
         "coverHex": { "type": "string" },
         "audioTitle": { "type": "string" },
+        "category": { "type": "string" },
+        "youtubeVideoId": { "type": "string" },
         "likesCount": { "type": "integer" },
         "commentsCount": { "type": "integer" },
         "sharesCount": { "type": "integer" },
@@ -463,6 +467,22 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["ownerId", "index", "data", "createdAt"]
+    },
+    "FeedPreferences": {
+      "title": "FeedPreferences",
+      "description": "Privacy-isolated per-user preference weights and dismissed video IDs for dynamic Reels/Stories curation.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "categoryScores": { "type": "object" },
+        "dislikedCategories": { "type": "array" },
+        "dismissedVideoIds": { "type": "array" },
+        "totalViews": { "type": "integer" },
+        "totalLikes": { "type": "integer" },
+        "totalFullWatches": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "categoryScores", "dislikedCategories", "dismissedVideoIds", "totalViews", "totalLikes", "totalFullWatches", "updatedAt"]
     }
   },
   "firestore": {
@@ -489,6 +509,10 @@
     "/users/{userId}/sent_secret_loves/{messageId}": {
       "schema": { "$ref": "#/entities/SentSecretLove" },
       "description": "Sender-private receipts for Secret Love."
+    },
+    "/users/{userId}/feed_preferences/{prefId}": {
+      "schema": { "$ref": "#/entities/FeedPreferences" },
+      "description": "Per-user dynamic curation scores and Not Interested filters."
     },
     "/posts/{postId}": {
       "schema": { "$ref": "#/entities/Post" },
