@@ -33,11 +33,11 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ExitToApp
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Article
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
@@ -1124,7 +1124,7 @@ fun UserProfileScreen(
             if (activeUserStories.isEmpty()) {
               item {
                 EmptyStateCard(
-                  icon = Icons.Rounded.AutoAwesome,
+                  icon = Icons.Rounded.Collections,
                   title = "No active stories",
                   subtitle = "${targetUser.displayName} has no visible 24h stories right now."
                 )
@@ -2124,7 +2124,7 @@ fun SettingsScreen(
 
           Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-              Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+              Icon(Icons.Rounded.Tune, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
               Text("Feed Category Focus", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
             }
             val activeCategories = remember(feedPrefs) {

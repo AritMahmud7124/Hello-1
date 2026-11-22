@@ -56,11 +56,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Comment
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.ContentCut
 import androidx.compose.material.icons.rounded.Crop
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -80,7 +80,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.ThumbDown
-import androidx.compose.material.icons.rounded.VideoLibrary
+import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -254,7 +254,7 @@ fun StoriesScreen(
 
     when (val state = storiesState) {
       is UiState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-      is UiState.Error -> EmptyStateCard(Icons.Rounded.AutoAwesome, "Stories unavailable", state.message)
+      is UiState.Error -> EmptyStateCard(Icons.Rounded.Collections, "Stories unavailable", state.message)
       is UiState.Success -> {
         val visibleStories = remember(state.data, selectedTab, currentUserId, friendUids, blockedUids) {
           val unblocked = state.data.filter { it.authorId !in blockedUids }
@@ -268,9 +268,9 @@ fun StoriesScreen(
         }
         if (visibleStories.isEmpty()) {
           EmptyStateCard(
-            icon = Icons.Rounded.AutoAwesome,
+            icon = Icons.Rounded.Collections,
             title = if (selectedTab == StoryFilterTab.ALL) "No active stories yet" else "No ${selectedTab.label.lowercase()} yet",
-            subtitle = "Create a photo, video, or gradient mood story for friends or everyone.",
+            subtitle = "Create a photo, video, or text story for friends or everyone.",
             actionLabel = "Create Story",
             onAction = { showCreateStory = true }
           )
@@ -407,7 +407,7 @@ fun StoriesScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                           ) {
-                            Icon(Icons.Rounded.MusicNote, null, tint = Color(0xFFF472B6), modifier = Modifier.size(11.dp))
+                            Icon(Icons.Rounded.MusicNote, null, tint = Color.White, modifier = Modifier.size(11.dp))
                             Text(
                               text = story.musicTitle,
                               color = Color.White,
@@ -544,7 +544,7 @@ private fun CreateStoryDialog(
     properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
   ) {
     Surface(
-      color = Color(0xFF0A0D16),
+      color = Color(0xFF121316),
       modifier = Modifier.fillMaxSize()
     ) {
       Column(
@@ -554,37 +554,37 @@ private fun CreateStoryDialog(
           .navigationBarsPadding()
           .imePadding()
       ) {
-        // Modern Story Studio Top Bar
+        // Clean Story Creator Top Bar
         Row(
           modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.SpaceBetween
         ) {
-          IconButton(onClick = onDismiss) {
-            Icon(Icons.Rounded.Close, contentDescription = "Close Story Studio", tint = Color.White)
+          IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
+            Icon(Icons.Rounded.Close, contentDescription = "Close story creator", tint = Color.White, modifier = Modifier.size(22.dp))
           }
           Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Story Studio", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Create Story", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
-              text = if (isSavedHighlight) "Profile Highlight ★ + 24h" else "Auto-outs in 24 hours",
-              color = Color(0xFFF472B6),
+              text = if (isSavedHighlight) "Profile Highlight + 24h" else "Visible for 24 hours",
+              color = Color.White.copy(alpha = 0.65f),
               style = MaterialTheme.typography.labelSmall
             )
           }
           Button(
             onClick = { onCreate(caption, mediaUri, mediaType, bgHex, privacy, category, extractedYtId, isSavedHighlight, selectedSong) },
             enabled = canShare,
-            shape = CircleShape,
+            shape = RoundedCornerShape(18.dp),
             colors = ButtonDefaults.buttonColors(
-              containerColor = Color(0xFFEC4899),
+              containerColor = MaterialTheme.colorScheme.primary,
               disabledContainerColor = Color.White.copy(alpha = 0.14f)
             ),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
             modifier = Modifier.testTag("submit_story_button")
           ) {
-            Text("Share Story", color = Color.White, fontWeight = FontWeight.Bold)
+            Text("Share", color = Color.White, fontWeight = FontWeight.SemiBold)
           }
         }
         HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
@@ -595,16 +595,16 @@ private fun CreateStoryDialog(
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp),
-          verticalArrangement = Arrangement.spacedBy(14.dp)
+          verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-          // Immersive Live Story Canvas
+          // Story Preview Canvas
           Box(
             modifier = Modifier
               .fillMaxWidth()
-              .height(260.dp)
-              .clip(RoundedCornerShape(24.dp))
+              .height(250.dp)
+              .clip(RoundedCornerShape(16.dp))
               .background(Brush.linearGradient(previewGradient))
-              .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(24.dp)),
+              .border(0.8.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center
           ) {
             if (mediaUri.isNotBlank() && mediaType == "image") {
@@ -614,47 +614,72 @@ private fun CreateStoryDialog(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit
               )
-              Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.14f)))
+              Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.12f)))
             }
             if (mediaUri.isNotBlank() && mediaType == "video") {
               Surface(
-                color = Color.Black.copy(alpha = 0.58f),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.align(Alignment.TopStart).padding(10.dp)
+                color = Color.Black.copy(alpha = 0.56f),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
               ) {
                 Row(
-                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                  modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
                   verticalAlignment = Alignment.CenterVertically,
                   horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                  Icon(Icons.Rounded.PlayCircle, null, tint = Color.White, modifier = Modifier.size(16.dp))
-                  Text("Video attached", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                  Icon(Icons.Rounded.PlayCircle, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                  Text("Video", color = Color.White, style = MaterialTheme.typography.labelSmall)
                 }
               }
             }
             if (mediaUri.isNotBlank()) {
-              Surface(
-                color = Color.Black.copy(alpha = 0.68f),
-                shape = CircleShape,
+              Row(
                 modifier = Modifier
                   .align(Alignment.TopEnd)
-                  .padding(10.dp)
-                  .size(34.dp)
-                  .clip(CircleShape)
-                  .clickable {
-                    mediaUri = ""
-                    mediaType = "text"
-                  }
-                  .testTag("clear_story_media_button")
+                  .padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
               ) {
-                Box(contentAlignment = Alignment.Center) {
-                  Icon(Icons.Rounded.Close, contentDescription = "Remove media", tint = Color.White, modifier = Modifier.size(18.dp))
+                if (mediaType == "image") {
+                  Surface(
+                    color = Color.Black.copy(alpha = 0.62f),
+                    shape = CircleShape,
+                    modifier = Modifier
+                      .clip(CircleShape)
+                      .clickable { pendingCropUri = mediaUri }
+                      .testTag("story_crop_studio_button")
+                  ) {
+                    Row(
+                      modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                      Icon(Icons.Rounded.Crop, contentDescription = "Edit photo", tint = Color.White, modifier = Modifier.size(14.dp))
+                      Text("Edit", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
+                    }
+                  }
+                }
+                Surface(
+                  color = Color.Black.copy(alpha = 0.62f),
+                  shape = CircleShape,
+                  modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .clickable {
+                      mediaUri = ""
+                      mediaType = "text"
+                    }
+                    .testTag("clear_story_media_button")
+                ) {
+                  Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Remove media", tint = Color.White, modifier = Modifier.size(15.dp))
+                  }
                 }
               }
             }
             Text(
-              text = caption.ifBlank { if (mediaUri.isBlank()) "Your live story canvas..." else "" },
-              color = Color.White.copy(alpha = if (caption.isBlank()) 0.65f else 1f),
+              text = caption.ifBlank { if (mediaUri.isBlank()) "Start typing..." else "" },
+              color = Color.White.copy(alpha = if (caption.isBlank()) 0.6f else 1f),
               style = MaterialTheme.typography.titleLarge,
               fontWeight = FontWeight.Bold,
               textAlign = TextAlign.Center,
@@ -663,29 +688,29 @@ private fun CreateStoryDialog(
               modifier = Modifier.padding(horizontal = 20.dp)
             )
 
-            // Floating Live Music Sticker Pill on Canvas
+            // Clean Frosted Music Sticker Pill on Canvas
             selectedSong?.let { song ->
               val clipLen = (song.endSec - song.startSec).coerceAtLeast(1L)
               Surface(
-                shape = CircleShape,
-                color = Color.Black.copy(alpha = 0.72f),
+                shape = RoundedCornerShape(10.dp),
+                color = Color.Black.copy(alpha = 0.56f),
                 modifier = Modifier
                   .align(Alignment.BottomCenter)
-                  .padding(12.dp)
-                  .border(1.dp, Color(0xFFEC4899).copy(alpha = 0.75f), CircleShape)
+                  .padding(10.dp)
+                  .border(0.6.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
                   .clickable { showSongPicker = true }
               ) {
                 Row(
-                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                   verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(8.dp)
+                  horizontalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
-                  Icon(Icons.Rounded.MusicNote, null, tint = Color(0xFFF472B6), modifier = Modifier.size(16.dp))
+                  Icon(Icons.Rounded.MusicNote, null, tint = Color.White, modifier = Modifier.size(15.dp))
                   Text(
                     text = "${song.title} · ${formatSongSec(song.startSec.toInt())}-${formatSongSec(song.endSec.toInt())} (${clipLen}s)",
                     color = Color.White,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
@@ -695,7 +720,7 @@ private fun CreateStoryDialog(
                     contentDescription = "Remove song",
                     tint = Color.White.copy(alpha = 0.75f),
                     modifier = Modifier
-                      .size(16.dp)
+                      .size(15.dp)
                       .clickable { selectedSong = null }
                   )
                 }
@@ -703,76 +728,57 @@ private fun CreateStoryDialog(
             }
           }
 
-          // Modern Layered Media, Music Studio & Video Tool Medallions
+          // Compact Real Action Pills (Photo, Music, Video)
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
           ) {
             Surface(
-              shape = RoundedCornerShape(18.dp),
-              color = Color.White.copy(alpha = 0.08f),
-              border = BorderStroke(1.dp, Color(0xFF4ADE80).copy(alpha = 0.35f)),
+              shape = RoundedCornerShape(10.dp),
+              color = Color.White.copy(alpha = 0.09f),
               modifier = Modifier
                 .weight(1f)
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .clickable { imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                 .testTag("pick_story_photo_button")
             ) {
-              Column(
-                modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+              Row(
+                modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
               ) {
-                Box(
-                  modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(Color(0xFF10B981), Color(0xFF34D399)))),
-                  contentAlignment = Alignment.Center
-                ) {
-                  Icon(Icons.Rounded.Image, contentDescription = strings.photo, tint = Color.White, modifier = Modifier.size(18.dp))
-                }
-                Text(strings.photo, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Icon(Icons.Rounded.Image, contentDescription = strings.photo, tint = Color(0xFF4ADE80), modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(strings.photo, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
               }
             }
 
             Surface(
-              shape = RoundedCornerShape(18.dp),
-              color = Color(0xFFEC4899).copy(alpha = 0.16f),
-              border = BorderStroke(
-                1.2.dp,
-                Brush.linearGradient(listOf(Color(0xFFF472B6), Color(0xFF818CF8)))
-              ),
+              shape = RoundedCornerShape(10.dp),
+              color = if (selectedSong != null) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.09f),
               modifier = Modifier
-                .weight(1.25f)
-                .clip(RoundedCornerShape(18.dp))
+                .weight(1f)
+                .clip(RoundedCornerShape(10.dp))
                 .clickable { showSongPicker = true }
                 .testTag("story_add_song_button")
             ) {
-              Column(
-                modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+              Row(
+                modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
               ) {
-                Box(
-                  modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(Color(0xFFEC4899), Color(0xFF8B5CF6)))),
-                  contentAlignment = Alignment.Center
-                ) {
-                  Icon(
-                    imageVector = if (selectedSong == null) Icons.Rounded.MusicNote else Icons.Rounded.ContentCut,
-                    contentDescription = strings.song,
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                  )
-                }
+                Icon(
+                  imageVector = if (selectedSong == null) Icons.Rounded.MusicNote else Icons.Rounded.ContentCut,
+                  contentDescription = strings.song,
+                  tint = Color.White,
+                  modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(6.dp))
                 Text(
-                  text = if (selectedSong == null) "Music & Cut" else "Trim Track ♪",
+                  text = if (selectedSong == null) strings.song else "Trim",
                   color = Color.White,
                   style = MaterialTheme.typography.labelMedium,
-                  fontWeight = FontWeight.Bold,
+                  fontWeight = FontWeight.Medium,
                   maxLines = 1,
                   overflow = TextOverflow.Ellipsis
                 )
@@ -780,35 +786,27 @@ private fun CreateStoryDialog(
             }
 
             Surface(
-              shape = RoundedCornerShape(18.dp),
-              color = Color.White.copy(alpha = 0.08f),
-              border = BorderStroke(1.dp, Color(0xFF60A5FA).copy(alpha = 0.35f)),
+              shape = RoundedCornerShape(10.dp),
+              color = Color.White.copy(alpha = 0.09f),
               modifier = Modifier
                 .weight(1f)
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .clickable { videoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }
                 .testTag("pick_story_video_button")
             ) {
-              Column(
-                modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+              Row(
+                modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
               ) {
-                Box(
-                  modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(Color(0xFF3B82F6), Color(0xFF06B6D4)))),
-                  contentAlignment = Alignment.Center
-                ) {
-                  Icon(Icons.Rounded.VideoLibrary, contentDescription = strings.video, tint = Color.White, modifier = Modifier.size(18.dp))
-                }
-                Text(strings.video, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Icon(Icons.Rounded.Videocam, contentDescription = strings.video, tint = Color(0xFFFB7185), modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(strings.video, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
               }
             }
           }
 
-          // Smart Quick-Pick Story Soundtrack Bar (1-tap attach + open cutter)
+          // Compact Quick Soundtrack Bar
           if (studioTracks.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
               Row(
@@ -817,16 +815,16 @@ private fun CreateStoryDialog(
                 verticalAlignment = Alignment.CenterVertically
               ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                  Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = Color(0xFFF472B6), modifier = Modifier.size(15.dp))
-                  Text("Quick Soundtrack Vibes", color = Color.White.copy(alpha = 0.9f), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                  Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = Color.White.copy(alpha = 0.78f), modifier = Modifier.size(15.dp))
+                  Text("Quick Soundtracks", color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                 }
                 Text(
-                  text = if (selectedSong == null) "Open Audio Studio →" else "Trim / Device File →",
-                  color = Color(0xFF38BDF8),
+                  text = if (selectedSong == null) "Browse all" else "Change / Device",
+                  color = Color.White.copy(alpha = 0.75f),
                   style = MaterialTheme.typography.labelSmall,
-                  fontWeight = FontWeight.Bold,
+                  fontWeight = FontWeight.Medium,
                   modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(6.dp))
                     .clickable { showSongPicker = true }
                     .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
@@ -838,14 +836,14 @@ private fun CreateStoryDialog(
                 studioTracks.forEach { track ->
                   val isPicked = selectedSong?.title == track.title
                   Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = if (isPicked) Color(0xFFEC4899).copy(alpha = 0.34f) else Color.White.copy(alpha = 0.08f),
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isPicked) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.08f),
                     border = BorderStroke(
-                      1.dp,
-                      if (isPicked) Color(0xFFF472B6) else Color.White.copy(alpha = 0.14f)
+                      0.8.dp,
+                      if (isPicked) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.14f)
                     ),
                     modifier = Modifier
-                      .clip(RoundedCornerShape(14.dp))
+                      .clip(RoundedCornerShape(10.dp))
                       .clickable {
                         val maxSec = (track.durationMs / 1000L).coerceAtLeast(3L)
                         selectedSong = MusicAttachment(
@@ -861,30 +859,17 @@ private fun CreateStoryDialog(
                     Row(
                       modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                       verticalAlignment = Alignment.CenterVertically,
-                      horizontalArrangement = Arrangement.spacedBy(6.dp)
+                      horizontalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
-                      Box(
-                        modifier = Modifier
-                          .size(22.dp)
-                          .clip(CircleShape)
-                          .background(
-                            Brush.linearGradient(
-                              if (isPicked) listOf(Color(0xFFEC4899), Color(0xFF8B5CF6))
-                              else listOf(Color(0xFF334155), Color(0xFF475569))
-                            )
-                          ),
-                        contentAlignment = Alignment.Center
-                      ) {
-                        Icon(
-                          imageVector = if (isPicked) Icons.Rounded.Check else Icons.Rounded.MusicNote,
-                          contentDescription = null,
-                          tint = Color.White,
-                          modifier = Modifier.size(13.dp)
-                        )
-                      }
+                      Icon(
+                        imageVector = if (isPicked) Icons.Rounded.Check else Icons.Rounded.MusicNote,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(15.dp)
+                      )
                       Column {
-                        Text(track.title, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1)
-                        Text("${track.moodTag} · ${track.artist}", color = Color.White.copy(alpha = 0.68f), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                        Text(track.title, color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Text(track.artist, color = Color.White.copy(alpha = 0.65f), style = MaterialTheme.typography.labelSmall, maxLines = 1)
                       }
                     }
                   }
@@ -893,54 +878,23 @@ private fun CreateStoryDialog(
             }
           }
 
-          if (mediaUri.isNotBlank() && mediaType == "image") {
-            Surface(
-              shape = RoundedCornerShape(16.dp),
-              color = Color(0xFF0EA5E9).copy(alpha = 0.16f),
-              border = BorderStroke(1.dp, Brush.linearGradient(listOf(Color(0xFF38BDF8), Color(0xFF6366F1)))),
-              modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .clickable { pendingCropUri = mediaUri }
-                .testTag("story_crop_studio_button")
-            ) {
-              Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-              ) {
-                Box(
-                  modifier = Modifier
-                    .size(30.dp)
-                    .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(Color(0xFF38BDF8), Color(0xFF6366F1)))),
-                  contentAlignment = Alignment.Center
-                ) {
-                  Icon(Icons.Rounded.Crop, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                }
-                Spacer(Modifier.width(10.dp))
-                Text("Open Photo Filter & Crop Studio", color = Color(0xFF7DD3FC), fontWeight = FontWeight.Bold)
-              }
-            }
-          }
-
-          // Background Gradient Swatches
-          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Background Gradient", color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+          // Background Theme Swatches
+          Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Background", color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
             Row(
               modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-              horizontalArrangement = Arrangement.spacedBy(10.dp)
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
               STORY_THEME_OPTIONS.forEach { option ->
                 val selected = bgHex.equals(option.hex, ignoreCase = true)
                 Box(
                   modifier = Modifier
-                    .size(38.dp)
+                    .size(34.dp)
                     .clip(CircleShape)
                     .background(Brush.linearGradient(option.colors))
                     .border(
-                      width = if (selected) 2.5.dp else 1.dp,
-                      color = if (selected) Color(0xFFEC4899) else Color.White.copy(alpha = 0.35f),
+                      width = if (selected) 2.dp else 0.8.dp,
+                      color = if (selected) Color.White else Color.White.copy(alpha = 0.3f),
                       shape = CircleShape
                     )
                     .clickable { bgHex = option.hex }
@@ -948,7 +902,7 @@ private fun CreateStoryDialog(
                   contentAlignment = Alignment.Center
                 ) {
                   if (selected) {
-                    Icon(Icons.Rounded.Check, contentDescription = option.label, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Rounded.Check, contentDescription = option.label, tint = Color.White, modifier = Modifier.size(16.dp))
                   }
                 }
               }
@@ -958,86 +912,68 @@ private fun CreateStoryDialog(
           OutlinedTextField(
             value = caption,
             onValueChange = { caption = it.take(500) },
-            label = { Text("Story text or caption", color = Color.White.copy(alpha = 0.7f)) },
-            placeholder = { Text("Share a moment, lyric, or mood...", color = Color.White.copy(alpha = 0.4f)) },
+            label = { Text("Story caption", color = Color.White.copy(alpha = 0.7f)) },
+            placeholder = { Text("Add text...", color = Color.White.copy(alpha = 0.4f)) },
             modifier = Modifier.fillMaxWidth().testTag("story_caption_input"),
             minLines = 2,
             maxLines = 4,
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(
               focusedTextColor = Color.White,
               unfocusedTextColor = Color.White,
-              focusedBorderColor = Color(0xFFEC4899),
+              focusedBorderColor = Color.White.copy(alpha = 0.55f),
               unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-              cursorColor = Color(0xFFEC4899)
+              cursorColor = Color.White
             )
           )
-
-          // Quick Mood Chips
-          Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-          ) {
-            listOf("✨ Feeling blessed", "🔥 Big mood", "☕ Coffee break", "🎵 Vibing").forEach { mood ->
-              Surface(
-                shape = CircleShape,
-                color = Color.White.copy(alpha = 0.1f),
-                modifier = Modifier.clip(CircleShape).clickable {
-                  caption = if (caption.isBlank()) mood else "$caption $mood"
-                }
-              ) {
-                Text(mood, color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
-              }
-            }
-          }
 
           // Privacy Selector
           Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             Surface(
-              shape = RoundedCornerShape(14.dp),
-              color = if (privacy == "public") Color(0xFF6366F1).copy(alpha = 0.28f) else Color.White.copy(alpha = 0.08f),
+              shape = RoundedCornerShape(10.dp),
+              color = if (privacy == "public") MaterialTheme.colorScheme.primary.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.08f),
               modifier = Modifier
                 .weight(1f)
-                .clip(RoundedCornerShape(14.dp))
-                .border(1.dp, if (privacy == "public") Color(0xFF818CF8) else Color.Transparent, RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(10.dp))
+                .border(0.8.dp, if (privacy == "public") MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(10.dp))
                 .clickable { privacy = "public" }
                 .testTag("story_privacy_public")
             ) {
               Row(
-                modifier = Modifier.padding(vertical = 10.dp),
+                modifier = Modifier.padding(vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
               ) {
-                Icon(Icons.Rounded.Public, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.Public, null, tint = Color.White, modifier = Modifier.size(15.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Public", color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                Text("Public", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
               }
             }
             Surface(
-              shape = RoundedCornerShape(14.dp),
-              color = if (privacy == "friends") Color(0xFF6366F1).copy(alpha = 0.28f) else Color.White.copy(alpha = 0.08f),
+              shape = RoundedCornerShape(10.dp),
+              color = if (privacy == "friends") MaterialTheme.colorScheme.primary.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.08f),
               modifier = Modifier
                 .weight(1f)
-                .clip(RoundedCornerShape(14.dp))
-                .border(1.dp, if (privacy == "friends") Color(0xFF818CF8) else Color.Transparent, RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(10.dp))
+                .border(0.8.dp, if (privacy == "friends") MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(10.dp))
                 .clickable { privacy = "friends" }
                 .testTag("story_privacy_friends")
             ) {
               Row(
-                modifier = Modifier.padding(vertical = 10.dp),
+                modifier = Modifier.padding(vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
               ) {
-                Icon(Icons.Rounded.Group, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.Group, null, tint = Color.White, modifier = Modifier.size(15.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Friends ($friendCount)", color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                Text("Friends ($friendCount)", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
               }
             }
           }
 
           // Story Category Tag
           Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Interest Category", color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            Text("Category", color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
             Row(
               modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
               horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1046,15 +982,15 @@ private fun CreateStoryDialog(
                 val selected = category == cat
                 Surface(
                   shape = CircleShape,
-                  color = if (selected) Color(0xFFEC4899) else Color.White.copy(alpha = 0.1f),
+                  color = if (selected) Color.White else Color.White.copy(alpha = 0.1f),
                   modifier = Modifier.clip(CircleShape).clickable { category = cat }
                 ) {
                   Text(
                     cat,
-                    color = Color.White,
+                    color = if (selected) Color(0xFF121316) else Color.White,
                     style = MaterialTheme.typography.labelSmall,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp)
                   )
                 }
               }
@@ -1067,19 +1003,19 @@ private fun CreateStoryDialog(
             label = { Text("Optional YouTube Short Link", color = Color.White.copy(alpha = 0.7f)) },
             placeholder = { Text("https://youtube.com/shorts/...", color = Color.White.copy(alpha = 0.4f)) },
             singleLine = true,
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(
               focusedTextColor = Color.White,
               unfocusedTextColor = Color.White,
-              focusedBorderColor = Color(0xFFEC4899),
+              focusedBorderColor = Color.White.copy(alpha = 0.55f),
               unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-              cursorColor = Color(0xFFEC4899)
+              cursorColor = Color.White
             ),
             modifier = Modifier.fillMaxWidth()
           )
 
           Surface(
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(12.dp),
             color = Color.White.copy(alpha = 0.08f),
             modifier = Modifier.fillMaxWidth()
           ) {
@@ -1087,21 +1023,21 @@ private fun CreateStoryDialog(
               modifier = Modifier
                 .fillMaxWidth()
                 .clickable { isSavedHighlight = !isSavedHighlight }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 14.dp, vertical = 10.dp),
               verticalAlignment = Alignment.CenterVertically,
               horizontalArrangement = Arrangement.SpaceBetween
             ) {
               Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
                 Text(
-                  "Save to Profile Highlights ★",
+                  "Save to Profile Highlights",
                   color = Color.White,
                   style = MaterialTheme.typography.labelLarge,
                   fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                  "Saved on your Profile only · Home Story auto-outs after 24h",
+                  "Keep on Profile after 24h",
                   style = MaterialTheme.typography.labelSmall,
-                  color = Color.White.copy(alpha = 0.7f)
+                  color = Color.White.copy(alpha = 0.65f)
                 )
               }
               Switch(
@@ -2343,7 +2279,7 @@ fun ReelsScreen(
                     )
                     DropdownMenuItem(
                       text = { Text("View Stories") },
-                      leadingIcon = { Icon(Icons.Rounded.AutoAwesome, contentDescription = null) },
+                      leadingIcon = { Icon(Icons.Rounded.Collections, contentDescription = null) },
                       onClick = {
                         showMoreMenu = false
                         onOpenStories()
@@ -2740,7 +2676,7 @@ fun ReelsScreen(
             onClick = { videoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
             modifier = Modifier.fillMaxWidth()
           ) {
-            Icon(Icons.Rounded.VideoLibrary, null, Modifier.size(18.dp))
+            Icon(Icons.Rounded.Videocam, null, Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
             Text(if (videoUri.isBlank()) "Pick Device Video (Photo Picker)" else "Video Selected ✓")
           }

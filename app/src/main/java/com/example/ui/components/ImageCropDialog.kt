@@ -36,7 +36,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.RotateRight
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Crop
@@ -69,7 +68,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -96,18 +94,18 @@ import kotlinx.coroutines.withContext
 
 enum class CropAspect(val label: String, val ratio: Float?) {
   FREE("Original", null),
-  SQUARE("1:1 Square", 1f),
-  PORTRAIT("4:5 Portrait", 4f / 5f),
-  STORY("9:16 Story", 9f / 16f),
-  COVER("16:9 Wide", 16f / 9f)
+  SQUARE("1:1", 1f),
+  PORTRAIT("4:5", 4f / 5f),
+  STORY("9:16", 9f / 16f),
+  COVER("16:9", 16f / 9f)
 }
 
 enum class PhotoFilterPreset(val label: String, val accent: Color) {
   ORIGINAL("Original", Color(0xFF94A3B8)),
-  VIVID("Vivid", Color(0xFFEC4899)),
-  WARM("Warm", Color(0xFFF59E0B)),
-  NOIR("Noir", Color(0xFF64748B)),
-  FILM("Film", Color(0xFF10B981))
+  VIVID("Vivid", Color(0xFFE11D48)),
+  WARM("Warm", Color(0xFFD97706)),
+  NOIR("B&W", Color(0xFF64748B)),
+  FILM("Film", Color(0xFF059669))
 }
 
 private fun buildAndroidColorMatrix(preset: PhotoFilterPreset): AndroidColorMatrix? = when (preset) {
@@ -220,69 +218,62 @@ fun ImageCropDialog(
     Column(
       modifier = Modifier
         .fillMaxSize()
-        .background(
-          Brush.verticalGradient(listOf(Color(0xFF07090F), Color(0xFF0D111C), Color(0xFF080A10)))
-        )
+        .background(Color(0xFF0E0F12))
         .statusBarsPadding()
         .navigationBarsPadding()
     ) {
-      // Sleek Top Studio Bar
+      // Clean Photo Editor Top Bar
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 12.dp, vertical = 10.dp),
+          .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
       ) {
         IconButton(
           onClick = onDismiss,
-          modifier = Modifier
-            .size(44.dp)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.08f))
+          modifier = Modifier.size(40.dp)
         ) {
-          Icon(Icons.Rounded.Close, contentDescription = "Cancel crop", tint = Color.White)
+          Icon(Icons.Rounded.Close, contentDescription = "Cancel crop", tint = Color.White, modifier = Modifier.size(22.dp))
         }
 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-          Icon(Icons.Rounded.Crop, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(18.dp))
+          Icon(Icons.Rounded.Crop, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
           Text(
-            text = "Photo Studio",
+            text = "Edit Photo",
             color = Color.White,
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.SemiBold
           )
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
           if (onUseOriginal != null) {
             Surface(
               shape = CircleShape,
-              color = Color(0xFF38BDF8).copy(alpha = 0.16f),
+              color = Color.White.copy(alpha = 0.1f),
               modifier = Modifier
-                .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.45f), CircleShape)
                 .clip(CircleShape)
                 .clickable(onClick = onUseOriginal)
                 .testTag("use_full_original_button")
             ) {
-              Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-              ) {
-                Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(14.dp))
-                Text("Full Original", color = Color(0xFF38BDF8), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-              }
+              Text(
+                text = "Original",
+                color = Color.White,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+              )
             }
           }
           IconButton(
             onClick = { flipHorizontal = !flipHorizontal },
             modifier = Modifier
-              .size(40.dp)
+              .size(36.dp)
               .clip(CircleShape)
-              .background(if (flipHorizontal) Color(0xFF38BDF8).copy(alpha = 0.25f) else Color.White.copy(alpha = 0.08f))
+              .background(if (flipHorizontal) Color.White.copy(alpha = 0.22f) else Color.Transparent)
           ) {
-            Icon(Icons.Rounded.Flip, contentDescription = "Flip photo horizontally", tint = Color.White, modifier = Modifier.size(19.dp))
+            Icon(Icons.Rounded.Flip, contentDescription = "Flip photo horizontally", tint = Color.White, modifier = Modifier.size(18.dp))
           }
           IconButton(
             onClick = {
@@ -291,12 +282,9 @@ fun ImageCropDialog(
               offsetX = 0f
               offsetY = 0f
             },
-            modifier = Modifier
-              .size(40.dp)
-              .clip(CircleShape)
-              .background(Color.White.copy(alpha = 0.08f))
+            modifier = Modifier.size(36.dp)
           ) {
-            Icon(Icons.AutoMirrored.Rounded.RotateRight, contentDescription = "Rotate 90 degrees", tint = Color.White, modifier = Modifier.size(19.dp))
+            Icon(Icons.AutoMirrored.Rounded.RotateRight, contentDescription = "Rotate 90 degrees", tint = Color.White, modifier = Modifier.size(18.dp))
           }
         }
       }
@@ -306,7 +294,7 @@ fun ImageCropDialog(
         modifier = Modifier
           .weight(1f)
           .fillMaxWidth()
-          .padding(horizontal = 18.dp, vertical = 10.dp),
+          .padding(horizontal = 16.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
       ) {
         val maxW = with(density) { maxWidth.toPx() }
@@ -314,7 +302,7 @@ fun ImageCropDialog(
         val bmp = transformedBitmap
 
         if (isLoading) {
-          CircularProgressIndicator(color = Color(0xFF38BDF8))
+          CircularProgressIndicator(color = Color.White, strokeWidth = 2.5.dp)
         } else if (loadError != null || bmp == null) {
           Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(loadError ?: "Image error", color = Color.White)
@@ -350,23 +338,16 @@ fun ImageCropDialog(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
           ) {
-            // Live dimension & aspect badge
-            Surface(
-              shape = CircleShape,
-              color = Color.White.copy(alpha = 0.08f)
-            ) {
-              Text(
-                text = "${selectedAspect.label} · ${outPxW} × ${outPxH}px · ${"%.1f".format(userScale)}x",
-                color = Color.White.copy(alpha = 0.85f),
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-              )
-            }
+            Text(
+              text = "${selectedAspect.label} · ${outPxW} × ${outPxH}",
+              color = Color.White.copy(alpha = 0.7f),
+              style = MaterialTheme.typography.labelSmall
+            )
 
             Box(
               modifier = Modifier
                 .size(frameWdp, frameHdp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .clipToBounds()
                 .background(Color.Black)
                 .pointerInput(bmp, selectedAspect) {
@@ -380,7 +361,7 @@ fun ImageCropDialog(
                     offsetY = (offsetY + pan.y).coerceIn(-nyMax, nyMax)
                   }
                 }
-                .border(1.5.dp, Color.White.copy(alpha = 0.55f), RoundedCornerShape(12.dp)),
+                .border(0.8.dp, Color.White.copy(alpha = 0.45f), RoundedCornerShape(8.dp)),
               contentAlignment = Alignment.Center
             ) {
               val previewColorFilter = remember(selectedFilter) {
@@ -402,31 +383,27 @@ fun ImageCropDialog(
                     translationY = offsetY
                   )
               )
-              // Modern Rule-of-Thirds + Bold Corner L-Brackets Overlay
+              // Clean white rule-of-thirds + minimal white corner brackets
               Canvas(modifier = Modifier.fillMaxSize()) {
-                val gridColor = Color.White.copy(alpha = 0.25f)
+                val gridColor = Color.White.copy(alpha = 0.22f)
                 val w = size.width
                 val h = size.height
-                drawLine(gridColor, Offset(w / 3f, 0f), Offset(w / 3f, h), strokeWidth = 1.dp.toPx())
-                drawLine(gridColor, Offset(w * 2f / 3f, 0f), Offset(w * 2f / 3f, h), strokeWidth = 1.dp.toPx())
-                drawLine(gridColor, Offset(0f, h / 3f), Offset(w, h / 3f), strokeWidth = 1.dp.toPx())
-                drawLine(gridColor, Offset(0f, h * 2f / 3f), Offset(w, h * 2f / 3f), strokeWidth = 1.dp.toPx())
+                drawLine(gridColor, Offset(w / 3f, 0f), Offset(w / 3f, h), strokeWidth = 0.8.dp.toPx())
+                drawLine(gridColor, Offset(w * 2f / 3f, 0f), Offset(w * 2f / 3f, h), strokeWidth = 0.8.dp.toPx())
+                drawLine(gridColor, Offset(0f, h / 3f), Offset(w, h / 3f), strokeWidth = 0.8.dp.toPx())
+                drawLine(gridColor, Offset(0f, h * 2f / 3f), Offset(w, h * 2f / 3f), strokeWidth = 0.8.dp.toPx())
 
-                val cornerLen = min(w, h) * 0.11f
-                val cornerStroke = 3.5.dp.toPx()
-                val bracketColor = Color(0xFF38BDF8)
-                // Top-Left
-                drawLine(bracketColor, Offset(0f, 0f), Offset(cornerLen, 0f), strokeWidth = cornerStroke, cap = StrokeCap.Round)
-                drawLine(bracketColor, Offset(0f, 0f), Offset(0f, cornerLen), strokeWidth = cornerStroke, cap = StrokeCap.Round)
-                // Top-Right
-                drawLine(bracketColor, Offset(w - cornerLen, 0f), Offset(w, 0f), strokeWidth = cornerStroke, cap = StrokeCap.Round)
-                drawLine(bracketColor, Offset(w, 0f), Offset(w, cornerLen), strokeWidth = cornerStroke, cap = StrokeCap.Round)
-                // Bottom-Left
-                drawLine(bracketColor, Offset(0f, h - cornerLen), Offset(0f, h), strokeWidth = cornerStroke, cap = StrokeCap.Round)
-                drawLine(bracketColor, Offset(0f, h), Offset(cornerLen, h), strokeWidth = cornerStroke, cap = StrokeCap.Round)
-                // Bottom-Right
-                drawLine(bracketColor, Offset(w, h - cornerLen), Offset(w, h), strokeWidth = cornerStroke, cap = StrokeCap.Round)
-                drawLine(bracketColor, Offset(w - cornerLen, h), Offset(w, h), strokeWidth = cornerStroke, cap = StrokeCap.Round)
+                val cornerLen = min(w, h) * 0.09f
+                val cornerStroke = 2.dp.toPx()
+                val bracketColor = Color.White
+                drawLine(bracketColor, Offset(0f, 0f), Offset(cornerLen, 0f), strokeWidth = cornerStroke, cap = StrokeCap.Square)
+                drawLine(bracketColor, Offset(0f, 0f), Offset(0f, cornerLen), strokeWidth = cornerStroke, cap = StrokeCap.Square)
+                drawLine(bracketColor, Offset(w - cornerLen, 0f), Offset(w, 0f), strokeWidth = cornerStroke, cap = StrokeCap.Square)
+                drawLine(bracketColor, Offset(w, 0f), Offset(w, cornerLen), strokeWidth = cornerStroke, cap = StrokeCap.Square)
+                drawLine(bracketColor, Offset(0f, h - cornerLen), Offset(0f, h), strokeWidth = cornerStroke, cap = StrokeCap.Square)
+                drawLine(bracketColor, Offset(0f, h), Offset(cornerLen, h), strokeWidth = cornerStroke, cap = StrokeCap.Square)
+                drawLine(bracketColor, Offset(w, h - cornerLen), Offset(w, h), strokeWidth = cornerStroke, cap = StrokeCap.Square)
+                drawLine(bracketColor, Offset(w - cornerLen, h), Offset(w, h), strokeWidth = cornerStroke, cap = StrokeCap.Square)
               }
             }
           }
@@ -461,31 +438,28 @@ fun ImageCropDialog(
         }
       }
 
-      // Bottom Glassy Control Deck
+      // Clean Dark Editor Controls Deck
       Surface(
-        shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
-        color = Color(0xFF141925),
-        modifier = Modifier
-          .fillMaxWidth()
-          .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        color = Color(0xFF16181D),
+        modifier = Modifier.fillMaxWidth()
       ) {
         Column(
           modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 14.dp),
-          verticalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-          // Zoom Slider + Reset Row
           Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
           ) {
             IconButton(
               onClick = { userScale = (userScale - 0.3f).coerceAtLeast(1f) },
-              modifier = Modifier.size(34.dp)
+              modifier = Modifier.size(32.dp)
             ) {
-              Icon(Icons.Rounded.ZoomOut, contentDescription = "Zoom out", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
+              Icon(Icons.Rounded.ZoomOut, contentDescription = "Zoom out", tint = Color.White.copy(alpha = 0.78f), modifier = Modifier.size(17.dp))
             }
             Slider(
               value = userScale,
@@ -493,16 +467,16 @@ fun ImageCropDialog(
               valueRange = 1f..5f,
               colors = SliderDefaults.colors(
                 thumbColor = Color.White,
-                activeTrackColor = Color(0xFF38BDF8),
-                inactiveTrackColor = Color.White.copy(alpha = 0.18f)
+                activeTrackColor = Color.White,
+                inactiveTrackColor = Color.White.copy(alpha = 0.22f)
               ),
               modifier = Modifier.weight(1f)
             )
             IconButton(
               onClick = { userScale = (userScale + 0.3f).coerceAtMost(5f) },
-              modifier = Modifier.size(34.dp)
+              modifier = Modifier.size(32.dp)
             ) {
-              Icon(Icons.Rounded.ZoomIn, contentDescription = "Zoom in", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
+              Icon(Icons.Rounded.ZoomIn, contentDescription = "Zoom in", tint = Color.White.copy(alpha = 0.78f), modifier = Modifier.size(17.dp))
             }
             IconButton(
               onClick = {
@@ -513,76 +487,66 @@ fun ImageCropDialog(
                 flipHorizontal = false
               },
               modifier = Modifier
-                .size(36.dp)
+                .size(34.dp)
                 .clip(CircleShape)
                 .background(Color.White.copy(alpha = 0.08f))
             ) {
-              Icon(Icons.Rounded.Refresh, contentDescription = "Reset crop", tint = Color.White, modifier = Modifier.size(18.dp))
+              Icon(Icons.Rounded.Refresh, contentDescription = "Reset crop", tint = Color.White, modifier = Modifier.size(17.dp))
             }
           }
 
-          // Studio Color Filters Strip
+          // Compact Filter Pills
           Row(
             modifier = Modifier
               .fillMaxWidth()
               .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
           ) {
             PhotoFilterPreset.entries.forEach { preset ->
               val selected = selectedFilter == preset
               Surface(
                 shape = CircleShape,
-                color = if (selected) preset.accent.copy(alpha = 0.24f) else Color.White.copy(alpha = 0.06f),
+                color = if (selected) Color.White else Color.White.copy(alpha = 0.08f),
                 modifier = Modifier
-                  .border(
-                    width = 1.dp,
-                    color = if (selected) preset.accent else Color.White.copy(alpha = 0.12f),
-                    shape = CircleShape
-                  )
                   .clip(CircleShape)
                   .clickable { selectedFilter = preset }
               ) {
                 Row(
-                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                  modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
                   verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(6.dp)
+                  horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                   Box(
                     modifier = Modifier
-                      .size(9.dp)
+                      .size(7.dp)
                       .clip(CircleShape)
                       .background(preset.accent)
                   )
                   Text(
                     text = preset.label,
-                    color = if (selected) Color.White else Color.White.copy(alpha = 0.78f),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                    color = if (selected) Color(0xFF0E0F12) else Color.White.copy(alpha = 0.85f),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold
                   )
                 }
               }
             }
           }
 
-          // Aspect Ratio Pills
+          // Compact Aspect Ratio Pills
           Row(
             modifier = Modifier
               .fillMaxWidth()
               .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
           ) {
             CropAspect.entries.forEach { aspect ->
               val selected = selectedAspect == aspect
               Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = if (selected) Color(0xFF38BDF8).copy(alpha = 0.2f) else Color.White.copy(alpha = 0.06f),
+                shape = RoundedCornerShape(10.dp),
+                color = if (selected) Color.White else Color.White.copy(alpha = 0.08f),
                 modifier = Modifier
-                  .border(
-                    width = 1.dp,
-                    color = if (selected) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(14.dp)
-                  )
-                  .clip(RoundedCornerShape(14.dp))
+                  .clip(RoundedCornerShape(10.dp))
                   .clickable {
                     selectedAspect = aspect
                     userScale = 1f
@@ -592,34 +556,33 @@ fun ImageCropDialog(
               ) {
                 Text(
                   text = aspect.label,
-                  color = if (selected) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.85f),
-                  style = MaterialTheme.typography.labelMedium,
-                  fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                  modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                  color = if (selected) Color(0xFF0E0F12) else Color.White.copy(alpha = 0.85f),
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.SemiBold,
+                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
                 )
               }
             }
           }
 
-          // Gradient Apply Button
           Button(
             onClick = { CropApplyHolder.currentSave?.invoke() },
             enabled = !isLoading && !isSaving && transformedBitmap != null,
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
             modifier = Modifier
               .fillMaxWidth()
-              .height(50.dp)
+              .height(46.dp)
               .testTag("confirm_crop_button")
           ) {
             if (isSaving) {
-              CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+              CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
               Spacer(Modifier.width(8.dp))
-              Text("Saving Crop...", fontWeight = FontWeight.Bold, color = Color.White)
+              Text("Saving...", fontWeight = FontWeight.SemiBold)
             } else {
-              Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.White)
+              Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
               Spacer(Modifier.width(6.dp))
-              Text("Apply Crop", fontWeight = FontWeight.Bold, color = Color.White)
+              Text("Done", fontWeight = FontWeight.SemiBold)
             }
           }
         }

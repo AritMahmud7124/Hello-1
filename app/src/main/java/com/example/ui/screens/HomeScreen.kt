@@ -32,7 +32,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Campaign
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCut
@@ -44,8 +43,7 @@ import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Public
-import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.VideoLibrary
+import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -488,59 +486,45 @@ fun CreatePostDialog(
           .imePadding()
       ) {
         val strings = com.example.ui.i18n.LocalAppStrings.current
-        // Modern Top Studio Header
+        // Clean Top Composer Header
         Row(
           modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.SpaceBetween
         ) {
           IconButton(
             onClick = onDismiss,
-            modifier = Modifier
-              .size(42.dp)
-              .clip(CircleShape)
-              .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+            modifier = Modifier.size(40.dp)
           ) {
-            Icon(Icons.Rounded.Close, contentDescription = "Close post studio")
+            Icon(Icons.Rounded.Close, contentDescription = "Close post studio", modifier = Modifier.size(22.dp))
           }
-          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(
-              modifier = Modifier
-                .size(30.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Brush.linearGradient(listOf(Color(0xFF6366F1), Color(0xFFEC4899)))),
-              contentAlignment = Alignment.Center
-            ) {
-              Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
-            }
-            Text(
-              text = strings.createPost,
-              style = MaterialTheme.typography.titleMedium,
-              fontWeight = FontWeight.Bold
-            )
-          }
+          Text(
+            text = strings.createPost,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+          )
           Button(
             onClick = { onPublish(content, mediaUri, mediaType, privacy, selectedSong) },
             enabled = canPublish,
-            shape = CircleShape,
-            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
+            shape = RoundedCornerShape(18.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
             modifier = Modifier.testTag("publish_post_button")
           ) {
-            Text(strings.publish, fontWeight = FontWeight.Bold)
+            Text(strings.publish, fontWeight = FontWeight.SemiBold)
           }
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
-        // Scrollable Studio Canvas
+        // Scrollable Composer Canvas
         Column(
           modifier = Modifier
             .weight(1f)
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp),
-          verticalArrangement = Arrangement.spacedBy(14.dp)
+          verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
           // Author + Privacy Pills Row
           Row(
@@ -551,7 +535,7 @@ fun CreatePostDialog(
             UserAvatar(
               name = authorName,
               photoUrl = authorAvatar,
-              size = 46.dp,
+              size = 44.dp,
               isOnline = authorOnline
             )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -568,14 +552,15 @@ fun CreatePostDialog(
                 privacyOptions.forEach { (key, label) ->
                   val selected = privacy == key
                   Surface(
-                    shape = CircleShape,
-                    color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (selected) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                     modifier = Modifier
-                      .clip(CircleShape)
+                      .clip(RoundedCornerShape(8.dp))
                       .clickable { privacy = key }
                   ) {
                     Row(
-                      modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                      modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
                       verticalAlignment = Alignment.CenterVertically,
                       horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
@@ -586,13 +571,13 @@ fun CreatePostDialog(
                           else -> Icons.Rounded.Public
                         },
                         contentDescription = null,
-                        modifier = Modifier.size(13.dp),
+                        modifier = Modifier.size(12.dp),
                         tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                       )
                       Text(
                         text = label,
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                         color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                       )
                     }
@@ -606,51 +591,63 @@ fun CreatePostDialog(
           OutlinedTextField(
             value = content,
             onValueChange = { content = it },
-            placeholder = { Text("What's on your mind? Add photos & music...") },
+            placeholder = { Text("What's on your mind?") },
             modifier = Modifier.fillMaxWidth().testTag("post_content_input"),
             minLines = if (mediaUri.isBlank()) 4 else 2,
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(14.dp),
             colors = OutlinedTextFieldDefaults.colors(
-              focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-              unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+              focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+              unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             )
           )
 
-          // Attached Song Preview Card
+          // Clean Attached Song Card (tonal bar)
           selectedSong?.let { song ->
             val clipLen = (song.endSec - song.startSec).coerceAtLeast(1L)
             Surface(
-              shape = RoundedCornerShape(18.dp),
-              color = Color(0xFF1A1530),
+              shape = RoundedCornerShape(12.dp),
+              color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
               modifier = Modifier
                 .fillMaxWidth()
                 .border(
-                  1.dp,
-                  Brush.horizontalGradient(listOf(Color(0xFFEC4899), Color(0xFF6366F1))),
-                  RoundedCornerShape(18.dp)
+                  0.7.dp,
+                  MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                  RoundedCornerShape(12.dp)
                 )
             ) {
               Row(
                 modifier = Modifier
                   .fillMaxWidth()
-                  .padding(horizontal = 14.dp, vertical = 10.dp),
+                  .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
               ) {
                 Box(
                   modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(Color(0xFFEC4899), Color(0xFF8B5CF6)))),
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer),
                   contentAlignment = Alignment.Center
                 ) {
-                  Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = Color.White)
+                  Icon(
+                    Icons.Rounded.MusicNote,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                  )
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                  Text(song.title, color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                   Text(
-                    text = "${song.artist} · Cut ${formatSongSec(song.startSec.toInt())}–${formatSongSec(song.endSec.toInt())} (${clipLen}s)",
-                    color = Color(0xFFF472B6),
+                    text = song.title,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                  Text(
+                    text = "${song.artist} · ${formatSongSec(song.startSec.toInt())}–${formatSongSec(song.endSec.toInt())} (${clipLen}s)",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -658,58 +655,104 @@ fun CreatePostDialog(
                 }
                 TextButton(
                   onClick = { showSongPicker = true },
-                  contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                  contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                 ) {
-                  Icon(Icons.Rounded.ContentCut, contentDescription = "Cut song", tint = Color.White, modifier = Modifier.size(16.dp))
+                  Icon(Icons.Rounded.ContentCut, contentDescription = "Trim song", modifier = Modifier.size(15.dp))
                   Spacer(Modifier.width(4.dp))
-                  Text("Cut", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                  Text("Trim", style = MaterialTheme.typography.labelSmall)
                 }
-                IconButton(onClick = { selectedSong = null }, modifier = Modifier.size(32.dp)) {
-                  Icon(Icons.Rounded.Close, contentDescription = "Remove song", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
+                IconButton(onClick = { selectedSong = null }, modifier = Modifier.size(30.dp)) {
+                  Icon(
+                    Icons.Rounded.Close,
+                    contentDescription = "Remove song",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(17.dp)
+                  )
                 }
               }
             }
           }
 
-          // Photo / Video Modern Showcase Stage
+          // Photo / Video Preview with compact modern overlay icons
           if (mediaUri.isNotBlank()) {
             if (mediaType == "image") {
-              Surface(
-                shape = RoundedCornerShape(22.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
-                modifier = Modifier.fillMaxWidth()
+              Box(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clip(RoundedCornerShape(14.dp))
               ) {
                 FullPhotoImage(
                   model = mediaUri,
                   contentDescription = "Selected photo",
-                  cornerRadius = 18.dp,
-                  minHeight = 180.dp,
-                  maxHeight = 380.dp,
+                  cornerRadius = 14.dp,
+                  minHeight = 160.dp,
+                  maxHeight = 360.dp,
                   enableFullscreenViewer = true
                 )
+                Row(
+                  modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp),
+                  horizontalArrangement = Arrangement.spacedBy(6.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Surface(
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.62f),
+                    modifier = Modifier
+                      .clip(CircleShape)
+                      .clickable { pendingCropUri = mediaUri }
+                      .testTag("crop_post_photo_button")
+                  ) {
+                    Row(
+                      modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                      Icon(Icons.Rounded.Crop, contentDescription = "Edit photo", tint = Color.White, modifier = Modifier.size(14.dp))
+                      Text("Edit", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
+                    }
+                  }
+                  Surface(
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.62f),
+                    modifier = Modifier
+                      .size(28.dp)
+                      .clip(CircleShape)
+                      .clickable {
+                        mediaUri = ""
+                        mediaType = "none"
+                      }
+                  ) {
+                    Box(contentAlignment = Alignment.Center) {
+                      Icon(Icons.Rounded.Close, contentDescription = "Remove photo", tint = Color.White, modifier = Modifier.size(15.dp))
+                    }
+                  }
+                }
               }
             } else {
               Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
                 modifier = Modifier.fillMaxWidth()
               ) {
                 Row(
-                  modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                   verticalAlignment = Alignment.CenterVertically,
                   horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                   Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Rounded.VideoLibrary, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Text("Video attached ✓", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Icon(Icons.Rounded.Videocam, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                    Text("Video attached", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                   }
-                  TextButton(onClick = {
-                    mediaUri = ""
-                    mediaType = "none"
-                  }) {
-                    Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Remove", color = MaterialTheme.colorScheme.error)
+                  IconButton(
+                    onClick = {
+                      mediaUri = ""
+                      mediaType = "none"
+                    },
+                    modifier = Modifier.size(30.dp)
+                  ) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Remove video", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                   }
                 }
               }
@@ -717,56 +760,38 @@ fun CreatePostDialog(
           }
         }
 
-        // Bottom Creator Action Dock
-        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+        // Compact Real Action Toolbar
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
         val dockStrings = com.example.ui.i18n.LocalAppStrings.current
         Row(
           modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-          horizontalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
           verticalAlignment = Alignment.CenterVertically
         ) {
           CreatorDockChip(
             icon = Icons.Rounded.Image,
-            label = if (mediaType == "image") "Change ${dockStrings.photo}" else dockStrings.photo,
-            gradientColors = listOf(Color(0xFF10B981), Color(0xFF059669)),
+            label = if (mediaType == "image") "Photo" else dockStrings.photo,
+            iconTint = Color(0xFF16A34A),
             onClick = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
             modifier = Modifier.testTag("post_add_photo_chip")
           )
           CreatorDockChip(
             icon = Icons.Rounded.MusicNote,
             label = if (selectedSong == null) dockStrings.song else selectedSong!!.title.take(14),
-            gradientColors = listOf(Color(0xFFEC4899), Color(0xFF8B5CF6)),
+            iconTint = MaterialTheme.colorScheme.primary,
             onClick = { showSongPicker = true },
             modifier = Modifier.testTag("post_add_song_chip")
           )
           CreatorDockChip(
-            icon = Icons.Rounded.VideoLibrary,
+            icon = Icons.Rounded.Videocam,
             label = dockStrings.video,
-            gradientColors = listOf(Color(0xFF3B82F6), Color(0xFF06B6D4)),
+            iconTint = Color(0xFFE11D48),
             onClick = { videoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }
           )
-          if (mediaUri.isNotBlank() && mediaType == "image") {
-            CreatorDockChip(
-              icon = Icons.Rounded.Tune,
-              label = "Photo Studio",
-              gradientColors = listOf(Color(0xFFF59E0B), Color(0xFFEA580C)),
-              onClick = { pendingCropUri = mediaUri },
-              modifier = Modifier.testTag("crop_post_photo_button")
-            )
-            CreatorDockChip(
-              icon = Icons.Rounded.DeleteOutline,
-              label = "Clear",
-              gradientColors = listOf(Color(0xFFEF4444), Color(0xFFDC2626)),
-              onClick = {
-                mediaUri = ""
-                mediaType = "none"
-              }
-            )
-          }
         }
       }
     }
@@ -806,37 +831,27 @@ fun CreatePostDialog(
 private fun CreatorDockChip(
   icon: androidx.compose.ui.graphics.vector.ImageVector,
   label: String,
-  gradientColors: List<Color>,
+  iconTint: Color,
   onClick: () -> Unit,
   modifier: Modifier = Modifier
 ) {
-  val leadTint = gradientColors.first()
   Surface(
-    shape = RoundedCornerShape(18.dp),
-    color = leadTint.copy(alpha = 0.11f),
+    shape = RoundedCornerShape(10.dp),
+    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
     modifier = modifier
-      .border(1.dp, leadTint.copy(alpha = 0.25f), RoundedCornerShape(18.dp))
-      .clip(RoundedCornerShape(18.dp))
+      .clip(RoundedCornerShape(10.dp))
       .clickable(onClick = onClick)
   ) {
     Row(
-      modifier = Modifier.padding(start = 8.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+      modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(8.dp)
+      horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-      Box(
-        modifier = Modifier
-          .size(30.dp)
-          .clip(RoundedCornerShape(10.dp))
-          .background(Brush.linearGradient(gradientColors)),
-        contentAlignment = Alignment.Center
-      ) {
-        Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(16.dp))
-      }
+      Icon(icon, contentDescription = label, tint = iconTint, modifier = Modifier.size(17.dp))
       Text(
         text = label,
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Medium,
         color = MaterialTheme.colorScheme.onSurface
       )
     }

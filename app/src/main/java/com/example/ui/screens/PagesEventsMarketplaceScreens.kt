@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -64,6 +65,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -1107,16 +1109,25 @@ fun MarketplaceScreen(
 
   val categories = remember { listOf("All", "Electronics", "Home", "Fashion", "Vehicles", "Books", "Services") }
 
-  Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+  Column(modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-      Column(modifier = Modifier.weight(1f)) {
-        Text(strings.marketplace, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text("Buy, sell & chat directly with local sellers", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-      }
-      Button(onClick = { showCreate = true }, modifier = Modifier.testTag("create_listing_button")) {
-        Icon(Icons.Rounded.Add, null)
-        Spacer(Modifier.width(4.dp))
-        Text(strings.sellItem)
+      Text(strings.marketplace, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+      Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = Modifier
+          .clip(RoundedCornerShape(18.dp))
+          .clickable { showCreate = true }
+          .testTag("create_listing_button")
+      ) {
+        Row(
+          modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+          Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(17.dp))
+          Text(strings.sellItem, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+        }
       }
     }
     if (isUploading) {
@@ -1129,29 +1140,48 @@ fun MarketplaceScreen(
     OutlinedTextField(
       value = query,
       onValueChange = { query = it },
-      placeholder = { Text("Search ${strings.marketplace}...") },
-      leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+      placeholder = { Text("Search ${strings.marketplace}") },
+      leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
       trailingIcon = {
         if (query.isNotBlank()) {
           IconButton(onClick = { query = "" }) {
-            Icon(Icons.Rounded.Close, contentDescription = "Clear search")
+            Icon(Icons.Rounded.Close, contentDescription = "Clear search", modifier = Modifier.size(18.dp))
           }
         }
       },
-      shape = RoundedCornerShape(24.dp),
+      shape = RoundedCornerShape(22.dp),
+      colors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+        unfocusedBorderColor = Color.Transparent,
+        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+      ),
       modifier = Modifier.fillMaxWidth().testTag("marketplace_search_input"),
       singleLine = true
     )
 
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       items(categories) { cat ->
-        FilterChip(selected = selectedCategory == cat, onClick = { selectedCategory = cat }, label = { Text(cat) })
+        val selected = selectedCategory == cat
+        Surface(
+          shape = CircleShape,
+          color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+          modifier = Modifier.clip(CircleShape).clickable { selectedCategory = cat }
+        ) {
+          Text(
+            text = cat,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+          )
+        }
       }
     }
 
     Row(
       modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-      horizontalArrangement = Arrangement.spacedBy(8.dp),
+      horizontalArrangement = Arrangement.spacedBy(6.dp),
       verticalAlignment = Alignment.CenterVertically
     ) {
       listOf(
@@ -1160,28 +1190,51 @@ fun MarketplaceScreen(
         "Sold" to strings.sold,
         "Mine" to "My Listings"
       ).forEach { (key, label) ->
-        FilterChip(selected = statusFilter == key, onClick = { statusFilter = key }, label = { Text(label) })
-      }
-      FilterChip(
-        selected = sortMode != "Newest",
-        onClick = {
-          sortMode = when (sortMode) {
-            "Newest" -> "PriceAsc"
-            "PriceAsc" -> "PriceDesc"
-            else -> "Newest"
-          }
-        },
-        leadingIcon = { Icon(Icons.Rounded.SwapVert, contentDescription = null, modifier = Modifier.size(16.dp)) },
-        label = {
+        val selected = statusFilter == key
+        Surface(
+          shape = CircleShape,
+          color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+          modifier = Modifier.clip(CircleShape).clickable { statusFilter = key }
+        ) {
           Text(
-            when (sortMode) {
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+          )
+        }
+      }
+      Surface(
+        shape = CircleShape,
+        color = if (sortMode != "Newest") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        modifier = Modifier
+          .clip(CircleShape)
+          .clickable {
+            sortMode = when (sortMode) {
+              "Newest" -> "PriceAsc"
+              "PriceAsc" -> "PriceDesc"
+              else -> "Newest"
+            }
+          }
+      ) {
+        Row(
+          modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+          Icon(Icons.Rounded.SwapVert, contentDescription = null, modifier = Modifier.size(14.dp))
+          Text(
+            text = when (sortMode) {
               "PriceAsc" -> "Price ↑"
               "PriceDesc" -> "Price ↓"
               else -> "Newest"
-            }
+            },
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Medium
           )
         }
-      )
+      }
     }
 
     when (val state = listingsState) {
@@ -1212,69 +1265,86 @@ fun MarketplaceScreen(
         if (filtered.isEmpty()) {
           EmptyStateCard(Icons.Rounded.Storefront, "No listings match", "Post an item or adjust your filters.", actionLabel = strings.sellItem, onAction = { showCreate = true })
         } else {
-          LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
-            items(filtered, key = { it.id }) { item ->
-              val isSold = item.status == "sold"
-              Card(
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .clip(RoundedCornerShape(18.dp))
-                  .clickable { detailListing = item }
-                  .testTag("marketplace_card_${item.id}"),
-                shape = RoundedCornerShape(18.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+          val rows = remember(filtered) { filtered.chunked(2) }
+          LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = 16.dp)
+          ) {
+            items(rows, key = { row -> row.first().id }) { pair ->
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
               ) {
-                Row(modifier = Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                  if (item.imageUri.isNotBlank()) {
-                    AsyncImage(
-                      model = item.imageUri,
-                      contentDescription = item.title,
-                      modifier = Modifier.size(94.dp).clip(RoundedCornerShape(14.dp)),
-                      contentScale = ContentScale.Crop
-                    )
-                  } else {
-                    Surface(
-                      color = MaterialTheme.colorScheme.primaryContainer,
-                      shape = RoundedCornerShape(14.dp),
-                      modifier = Modifier.size(94.dp)
+                pair.forEach { item ->
+                  val isSold = item.status == "sold"
+                  Column(
+                    modifier = Modifier
+                      .weight(1f)
+                      .clip(RoundedCornerShape(10.dp))
+                      .clickable { detailListing = item }
+                      .testTag("marketplace_card_${item.id}")
+                  ) {
+                    Box(
+                      modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
                     ) {
-                      Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.Storefront, contentDescription = item.title, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                      }
-                    }
-                  }
-                  Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                      modifier = Modifier.fillMaxWidth(),
-                      horizontalArrangement = Arrangement.SpaceBetween,
-                      verticalAlignment = Alignment.CenterVertically
-                    ) {
-                      Text(
-                        text = "${item.currency}${"%.2f".format(item.price)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.primary
-                      )
-                      Surface(
-                        shape = CircleShape,
-                        color = if (isSold) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
-                      ) {
-                        Text(
-                          text = if (isSold) strings.sold else strings.available,
-                          style = MaterialTheme.typography.labelSmall,
-                          fontWeight = FontWeight.Bold,
-                          color = if (isSold) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
-                          modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                      if (item.imageUri.isNotBlank()) {
+                        AsyncImage(
+                          model = item.imageUri,
+                          contentDescription = item.title,
+                          modifier = Modifier.fillMaxSize(),
+                          contentScale = ContentScale.Crop
                         )
+                      } else {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                          Icon(
+                            Icons.Rounded.Storefront,
+                            contentDescription = item.title,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(30.dp)
+                          )
+                        }
+                      }
+                      if (isSold) {
+                        Surface(
+                          shape = RoundedCornerShape(6.dp),
+                          color = Color.Black.copy(alpha = 0.7f),
+                          modifier = Modifier.align(Alignment.TopStart).padding(6.dp)
+                        ) {
+                          Text(
+                            text = strings.sold,
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                          )
+                        }
                       }
                     }
-                    Text(item.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("${item.category} · ${item.condition}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                      Icon(Icons.Rounded.LocationOn, contentDescription = null, modifier = Modifier.size(13.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(
+                      modifier = Modifier.padding(top = 6.dp, start = 2.dp, end = 2.dp, bottom = 4.dp),
+                      verticalArrangement = Arrangement.spacedBy(1.dp)
+                    ) {
                       Text(
-                        text = "${item.locationText.ifBlank { "Local pickup" }} · ${item.sellerName}",
+                        text = "${item.currency}${if (item.price % 1.0 == 0.0) item.price.toLong().toString() else "%.2f".format(item.price)}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
+                      )
+                      Text(
+                        text = item.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Normal,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                      )
+                      Text(
+                        text = item.locationText.ifBlank { item.category },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -1282,6 +1352,9 @@ fun MarketplaceScreen(
                       )
                     }
                   }
+                }
+                if (pair.size == 1) {
+                  Spacer(modifier = Modifier.weight(1f))
                 }
               }
             }
@@ -1505,7 +1578,7 @@ private fun MarketplaceEditorDialog(
 
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text(if (existingListing == null) "New Marketplace Listing" else editTitle) },
+    title = { Text(if (existingListing == null) "New Listing" else editTitle) },
     text = {
       Column(
         modifier = Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
@@ -1542,7 +1615,7 @@ private fun MarketplaceEditorDialog(
         OutlinedButton(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.fillMaxWidth()) {
           Icon(Icons.Rounded.Image, null, Modifier.size(16.dp))
           Spacer(Modifier.width(6.dp))
-          Text(if (imageUri.isBlank()) "Pick Photo" else "Change Photo")
+          Text(if (imageUri.isBlank()) "Add Photo" else "Change Photo")
         }
         if (imageUri.isNotBlank()) {
           FullPhotoImage(
@@ -1555,7 +1628,7 @@ private fun MarketplaceEditorDialog(
           OutlinedButton(onClick = { pendingCropUri = imageUri }, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Rounded.Crop, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
-            Text("Photo Filter & Crop Studio")
+            Text("Edit / Crop Photo")
           }
         }
       }
@@ -1565,7 +1638,7 @@ private fun MarketplaceEditorDialog(
         enabled = title.trim().length >= 2 && price.toDoubleOrNull() != null,
         onClick = { onSave(title.trim(), price.trim(), currency, category, condition, locationText.trim(), desc.trim(), imageUri) }
       ) {
-        Text(if (existingListing == null) "List Item" else "Save Changes")
+        Text(if (existingListing == null) "Publish" else "Save")
       }
     },
     dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }

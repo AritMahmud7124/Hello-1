@@ -132,15 +132,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val IgPurple = Color(0xFF5B51D8)
-private val IgViolet = Color(0xFF833AB4)
-private val IgMagenta = Color(0xFFC13584)
-private val IgRose = Color(0xFFE1306C)
-private val IgAmber = Color(0xFFF58529)
-private val IgBlue = Color(0xFF0095F6)
+private val HelloIndigo = Color(0xFF3B82F6)
+private val HelloViolet = Color(0xFF6366F1)
+private val HelloMagenta = Color(0xFF4F46E5)
+private val HelloRose = Color(0xFFE11D48)
+private val HelloAmber = Color(0xFF0EA5E9)
+private val HelloBlue = Color(0xFF2563EB)
 
-private val IgStoryGradient = Brush.linearGradient(listOf(IgAmber, IgRose, IgViolet))
-private val IgDirectBubbleGradient = Brush.linearGradient(listOf(IgPurple, IgViolet, IgMagenta))
+private val HelloRingBrush = Brush.linearGradient(listOf(HelloBlue, HelloViolet))
+private val HelloBubbleBrush = Brush.linearGradient(listOf(HelloBlue, HelloIndigo))
 
 private enum class DmInboxFilter(val label: String) {
   ALL("Primary"),
@@ -203,13 +203,13 @@ fun MessengerScreen(
           )
           Surface(
             shape = RoundedCornerShape(10.dp),
-            color = IgMagenta.copy(alpha = 0.14f)
+            color = HelloMagenta.copy(alpha = 0.14f)
           ) {
             Text(
               text = "HELLO",
               style = MaterialTheme.typography.labelSmall,
               fontWeight = FontWeight.Bold,
-              color = IgMagenta,
+              color = HelloMagenta,
               modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
             )
           }
@@ -308,7 +308,7 @@ fun MessengerScreen(
               Text(
                 text = "Group +",
                 style = MaterialTheme.typography.labelSmall,
-                color = IgViolet,
+                color = HelloViolet,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
               )
@@ -342,7 +342,7 @@ fun MessengerScreen(
                 .size(58.dp)
                 .then(
                   if (person.effectiveOnline) {
-                    Modifier.border(2.dp, IgStoryGradient, CircleShape)
+                    Modifier.border(2.dp, HelloRingBrush, CircleShape)
                   } else {
                     Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), CircleShape)
                   }
@@ -425,8 +425,8 @@ fun MessengerScreen(
                 )
               },
               colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = IgPurple.copy(alpha = 0.14f),
-                selectedLabelColor = IgPurple
+                selectedContainerColor = HelloIndigo.copy(alpha = 0.14f),
+                selectedLabelColor = HelloIndigo
               )
             )
           }
@@ -497,7 +497,7 @@ fun MessengerScreen(
                   modifier = Modifier
                     .size(58.dp)
                     .then(
-                      if (isUnread) Modifier.border(2.dp, IgStoryGradient, CircleShape).padding(3.dp)
+                      if (isUnread) Modifier.border(2.dp, HelloRingBrush, CircleShape).padding(3.dp)
                       else Modifier
                     ),
                   contentAlignment = Alignment.Center
@@ -514,7 +514,7 @@ fun MessengerScreen(
                         .align(Alignment.BottomEnd)
                         .size(20.dp)
                         .clip(CircleShape)
-                        .background(IgViolet)
+                        .background(HelloViolet)
                         .border(1.5.dp, MaterialTheme.colorScheme.background, CircleShape),
                       contentAlignment = Alignment.Center
                     ) {
@@ -546,7 +546,7 @@ fun MessengerScreen(
                       style = MaterialTheme.typography.bodySmall,
                       fontWeight = if (isUnread || otherTyping) FontWeight.SemiBold else FontWeight.Normal,
                       color = when {
-                        otherTyping -> IgMagenta
+                        otherTyping -> HelloMagenta
                         isUnread -> MaterialTheme.colorScheme.onSurface
                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                       },
@@ -567,7 +567,7 @@ fun MessengerScreen(
                     modifier = Modifier
                       .size(10.dp)
                       .clip(CircleShape)
-                      .background(IgBlue)
+                      .background(HelloBlue)
                   )
                 } else {
                   Icon(
@@ -947,7 +947,7 @@ fun ChatThreadScreen(
               modifier = Modifier
                 .size(40.dp)
                 .then(
-                  if (otherUser?.effectiveOnline == true) Modifier.border(1.8.dp, IgStoryGradient, CircleShape).padding(2.dp)
+                  if (otherUser?.effectiveOnline == true) Modifier.border(1.8.dp, HelloRingBrush, CircleShape).padding(2.dp)
                   else Modifier
                 )
             ) {
@@ -973,7 +973,7 @@ fun ChatThreadScreen(
               Text(
                 text = subtitle,
                 style = MaterialTheme.typography.labelSmall,
-                color = if (typingOthers.isNotEmpty()) IgMagenta else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (typingOthers.isNotEmpty()) HelloMagenta else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
               )
@@ -1055,8 +1055,8 @@ fun ChatThreadScreen(
 
     if (isUploading) {
       Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
-        Text("Sending media...", style = MaterialTheme.typography.labelSmall, color = IgMagenta)
-        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = IgMagenta)
+        Text("Sending media...", style = MaterialTheme.typography.labelSmall, color = HelloMagenta)
+        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = HelloMagenta)
       }
     }
 
@@ -1163,7 +1163,7 @@ fun ChatThreadScreen(
                         .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f), bubbleShape)
                         .background(MaterialTheme.colorScheme.surface)
                     } else if (isMine) {
-                      Modifier.background(IgDirectBubbleGradient)
+                      Modifier.background(HelloBubbleBrush)
                     } else {
                       Modifier.background(MaterialTheme.colorScheme.surfaceVariant)
                     }
@@ -1246,7 +1246,7 @@ fun ChatThreadScreen(
                           Icon(
                             Icons.Rounded.Description,
                             contentDescription = "Download file",
-                            tint = if (isMine) Color.White else IgPurple,
+                            tint = if (isMine) Color.White else HelloIndigo,
                             modifier = Modifier.size(18.dp)
                           )
                           Text(
@@ -1373,7 +1373,7 @@ fun ChatThreadScreen(
               Text(
                 text = "● ● ●",
                 style = MaterialTheme.typography.labelMedium,
-                color = IgMagenta,
+                color = HelloMagenta,
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
               )
             }
@@ -1399,7 +1399,7 @@ fun ChatThreadScreen(
                 text = "Replying to ${if (target.senderId == currentUserId) "yourself" else target.senderName}",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = IgPurple
+                color = HelloIndigo
               )
               Text(
                 text = target.text.ifBlank { target.fileName.ifBlank { target.mediaType } },
@@ -1539,7 +1539,7 @@ fun ChatThreadScreen(
               modifier = Modifier
                 .size(38.dp)
                 .clip(CircleShape)
-                .background(IgDirectBubbleGradient)
+                .background(HelloBubbleBrush)
                 .clickable { mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
               contentAlignment = Alignment.Center
             ) {
@@ -1593,12 +1593,12 @@ fun ChatThreadScreen(
                 },
                 modifier = Modifier.size(40.dp).testTag("send_chat_button")
               ) {
-                Icon(Icons.Rounded.Favorite, contentDescription = "Send heart", tint = IgRose)
+                Icon(Icons.Rounded.Favorite, contentDescription = "Send heart", tint = HelloRose)
               }
             } else {
               Surface(
                 shape = RoundedCornerShape(20.dp),
-                color = IgBlue,
+                color = HelloBlue,
                 modifier = Modifier
                   .padding(end = 4.dp)
                   .clip(RoundedCornerShape(20.dp))

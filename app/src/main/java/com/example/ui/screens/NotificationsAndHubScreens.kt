@@ -29,8 +29,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Comment
 import androidx.compose.material.icons.rounded.AdminPanelSettings
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.Event
@@ -331,7 +331,7 @@ fun HubMenuScreen(
     add(HubTile("Home Feed", "Posts & reactions", HelloRoutes.HOME, Icons.Rounded.Home, "hub_home"))
     add(HubTile("Friends", "Requests & people", HelloRoutes.FRIENDS, Icons.Rounded.PersonAdd, "hub_friends"))
     add(HubTile("Reels", "Short videos", HelloRoutes.REELS, Icons.Rounded.PlayCircle, "hub_reels"))
-    add(HubTile("Stories", "24h highlights", HelloRoutes.STORIES, Icons.Rounded.AutoAwesome, "hub_stories"))
+    add(HubTile("Stories", "24h highlights", HelloRoutes.STORIES, Icons.Rounded.Collections, "hub_stories"))
     add(HubTile("Messenger", "Direct & group chat", HelloRoutes.MESSENGER, Icons.Rounded.Notifications, "hub_messenger"))
     add(HubTile("Notifications", "All alerts", HelloRoutes.NOTIFICATIONS, Icons.Rounded.Notifications, "hub_notifications"))
     add(HubTile("Groups", "Circles & communities", HelloRoutes.GROUPS, Icons.Rounded.Groups, "hub_groups"))

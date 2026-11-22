@@ -228,227 +228,258 @@ fun SongPickerAndTrimmerDialog(
     },
     properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
   ) {
-    Column(
-      modifier = Modifier
-        .fillMaxSize()
-        .background(
-          Brush.verticalGradient(
-            listOf(Color(0xFF0A0D16), Color(0xFF121827), Color(0xFF0A0D16))
-          )
-        )
-        .statusBarsPadding()
-        .navigationBarsPadding()
-        .imePadding()
+    Surface(
+      color = MaterialTheme.colorScheme.background,
+      modifier = Modifier.fillMaxSize()
     ) {
-      // Top Glass Header
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-      ) {
-        IconButton(onClick = {
-          stopPreview()
-          onDismiss()
-        }) {
-          Icon(Icons.Rounded.Close, contentDescription = "Close music studio", tint = Color.White)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          Box(
-            modifier = Modifier
-              .size(30.dp)
-              .clip(CircleShape)
-              .background(
-                Brush.linearGradient(listOf(Color(0xFFEC4899), Color(0xFF8B5CF6)))
-              ),
-            contentAlignment = Alignment.Center
-          ) {
-            Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-          }
-          Text(
-            text = "Music & Song Cutter",
-            color = Color.White,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-          )
-        }
-        Spacer(Modifier.width(48.dp))
-      }
-
-      // Phone Song Picker Card + Search
       Column(
         modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+          .fillMaxSize()
+          .statusBarsPadding()
+          .navigationBarsPadding()
+          .imePadding()
       ) {
-        Surface(
-          shape = RoundedCornerShape(18.dp),
-          color = Color(0xFF1B2336),
+        // Clean Top Bar
+        Row(
           modifier = Modifier
             .fillMaxWidth()
-            .border(
-              1.dp,
-              Brush.horizontalGradient(listOf(Color(0xFF38BDF8).copy(alpha = 0.6f), Color(0xFFEC4899).copy(alpha = 0.6f))),
-              RoundedCornerShape(18.dp)
-            )
-            .clickable { deviceAudioPicker.launch(arrayOf("audio/*")) }
-            .testTag("pick_device_song_button")
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
         ) {
+          IconButton(onClick = {
+            stopPreview()
+            onDismiss()
+          }) {
+            Icon(
+              Icons.Rounded.Close,
+              contentDescription = "Close music picker",
+              tint = MaterialTheme.colorScheme.onSurface
+            )
+          }
           Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            Icon(
+              Icons.Rounded.MusicNote,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(20.dp)
+            )
+            Text(
+              text = "Music",
+              color = MaterialTheme.colorScheme.onSurface,
+              style = MaterialTheme.typography.titleMedium,
+              fontWeight = FontWeight.Bold
+            )
+          }
+          Spacer(Modifier.width(48.dp))
+        }
+
+        // Device Audio Picker + Search
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+          verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+          Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
             modifier = Modifier
               .fillMaxWidth()
-              .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+              .border(
+                0.8.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                RoundedCornerShape(14.dp)
+              )
+              .clip(RoundedCornerShape(14.dp))
+              .clickable { deviceAudioPicker.launch(arrayOf("audio/*")) }
+              .testTag("pick_device_song_button")
           ) {
-            Box(
-              modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(Brush.linearGradient(listOf(Color(0xFF38BDF8), Color(0xFF6366F1)))),
-              contentAlignment = Alignment.Center
-            ) {
-              Icon(Icons.Rounded.AudioFile, contentDescription = null, tint = Color.White)
-            }
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = "Pick Any Song From Phone",
-                color = Color.White,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-              )
-              Text(
-                text = "MP3, M4A, AAC, WAV — select & cut your favorite part",
-                color = Color.White.copy(alpha = 0.7f),
-                style = MaterialTheme.typography.labelSmall
-              )
-            }
-            Icon(Icons.Rounded.ContentCut, contentDescription = null, tint = Color(0xFF38BDF8))
-          }
-        }
-
-        OutlinedTextField(
-          value = searchQuery,
-          onValueChange = { searchQuery = it },
-          placeholder = { Text("Search studio vibes or mood...", color = Color.White.copy(alpha = 0.55f)) },
-          leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = Color.White.copy(alpha = 0.7f)) },
-          singleLine = true,
-          shape = RoundedCornerShape(16.dp),
-          colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Color.White,
-            focusedBorderColor = Color(0xFF8B5CF6),
-            unfocusedBorderColor = Color.White.copy(alpha = 0.18f),
-            focusedContainerColor = Color(0xFF141A29),
-            unfocusedContainerColor = Color(0xFF141A29)
-          ),
-          modifier = Modifier.fillMaxWidth()
-        )
-      }
-
-      Spacer(Modifier.height(10.dp))
-
-      // Tracks list
-      LazyColumn(
-        modifier = Modifier
-          .weight(1f)
-          .fillMaxWidth()
-          .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(bottom = 12.dp)
-      ) {
-        item {
-          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Icon(Icons.Rounded.LibraryMusic, contentDescription = null, tint = Color(0xFFEC4899), modifier = Modifier.size(16.dp))
-            Text(
-              text = "HELLO Vibe Library · Ready to Cut",
-              color = Color.White.copy(alpha = 0.85f),
-              style = MaterialTheme.typography.labelLarge,
-              fontWeight = FontWeight.SemiBold
-            )
-          }
-        }
-
-        if (isLoadingTracks) {
-          item {
-            Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-              CircularProgressIndicator(color = Color(0xFFEC4899))
-            }
-          }
-        } else {
-          items(filteredTracks, key = { it.id }) { track ->
-            val isSelected = selectedTrack?.id == track.id
-            Surface(
-              shape = RoundedCornerShape(16.dp),
-              color = if (isSelected) Color(0xFF231B3D) else Color(0xFF141926),
+            Row(
               modifier = Modifier
                 .fillMaxWidth()
-                .border(
-                  width = if (isSelected) 1.5.dp else 1.dp,
-                  color = if (isSelected) Color(0xFFEC4899) else Color.White.copy(alpha = 0.08f),
-                  shape = RoundedCornerShape(16.dp)
-                )
-                .clickable {
-                  selectedTrack = track
-                  val totalSec = (track.durationMs / 1000f).coerceAtLeast(5f)
-                  val endSec = minOf(totalSec, 20f).coerceAtLeast(minOf(totalSec, 3f))
-                  cutRange = 0f..endSec
-                  startPreview(track, 0f, endSec)
-                }
-                .testTag("studio_song_${track.id}")
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-              Row(
+              Box(
+                modifier = Modifier
+                  .size(38.dp)
+                  .clip(RoundedCornerShape(10.dp))
+                  .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+              ) {
+                Icon(
+                  Icons.Rounded.AudioFile,
+                  contentDescription = null,
+                  tint = MaterialTheme.colorScheme.primary,
+                  modifier = Modifier.size(20.dp)
+                )
+              }
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = "Choose from device",
+                  color = MaterialTheme.colorScheme.onSurface,
+                  style = MaterialTheme.typography.titleSmall,
+                  fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                  text = "MP3, M4A, AAC, WAV · Trim your clip",
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  style = MaterialTheme.typography.labelSmall
+                )
+              }
+              Icon(
+                Icons.Rounded.ContentCut,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+              )
+            }
+          }
+
+          OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = {
+              Text(
+                "Search songs or mood",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            },
+            leadingIcon = {
+              Icon(
+                Icons.Rounded.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+              )
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(22.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+              focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+              unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+              focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+              unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+            ),
+            modifier = Modifier.fillMaxWidth()
+          )
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        // Tracks list
+        LazyColumn(
+          modifier = Modifier
+            .weight(1f)
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
+          contentPadding = PaddingValues(bottom = 12.dp)
+        ) {
+          item {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              modifier = Modifier.padding(vertical = 2.dp)
+            ) {
+              Icon(
+                Icons.Rounded.LibraryMusic,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+              )
+              Text(
+                text = "Audio Library",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+              )
+            }
+          }
+
+          if (isLoadingTracks) {
+            item {
+              Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.5.dp)
+              }
+            }
+          } else {
+            items(filteredTracks, key = { it.id }) { track ->
+              val isSelected = selectedTrack?.id == track.id
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                 modifier = Modifier
                   .fillMaxWidth()
-                  .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                  .border(
+                    width = if (isSelected) 1.dp else 0.5.dp,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                    else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(12.dp)
+                  )
+                  .clip(RoundedCornerShape(12.dp))
+                  .clickable {
+                    selectedTrack = track
+                    val totalSec = (track.durationMs / 1000f).coerceAtLeast(5f)
+                    val endSec = minOf(totalSec, 20f).coerceAtLeast(minOf(totalSec, 3f))
+                    cutRange = 0f..endSec
+                    startPreview(track, 0f, endSec)
+                  }
+                  .testTag("studio_song_${track.id}")
               ) {
-                Box(
+                Row(
                   modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(
-                      if (isSelected) Brush.linearGradient(listOf(Color(0xFFEC4899), Color(0xFF8B5CF6)))
-                      else SolidColor(Color(0xFF22293D))
-                    ),
-                  contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                  Icon(
-                    imageVector = if (isSelected && isPreviewPlaying) Icons.Rounded.Pause else Icons.Rounded.MusicNote,
-                    contentDescription = null,
-                    tint = Color.White
-                  )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                  Text(
-                    text = track.title,
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                  )
-                  Text(
-                    text = "${track.artist} · ${track.moodTag} · ${formatSongSec((track.durationMs / 1000L).toInt())}",
-                    color = Color.White.copy(alpha = 0.65f),
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                  )
-                }
-                if (isSelected) {
-                  Surface(
-                    shape = CircleShape,
-                    color = Color(0xFFEC4899).copy(alpha = 0.2f)
+                  Box(
+                    modifier = Modifier
+                      .size(40.dp)
+                      .clip(RoundedCornerShape(10.dp))
+                      .background(
+                        if (isSelected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.surfaceVariant
+                      ),
+                    contentAlignment = Alignment.Center
                   ) {
+                    Icon(
+                      imageVector = if (isSelected && isPreviewPlaying) Icons.Rounded.Pause else Icons.Rounded.MusicNote,
+                      contentDescription = null,
+                      tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                      modifier = Modifier.size(20.dp)
+                    )
+                  }
+                  Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                      text = track.title,
+                      color = MaterialTheme.colorScheme.onSurface,
+                      style = MaterialTheme.typography.titleSmall,
+                      fontWeight = FontWeight.SemiBold,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                      text = "${track.artist} · ${track.moodTag} · ${formatSongSec((track.durationMs / 1000L).toInt())}",
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      style = MaterialTheme.typography.labelSmall,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis
+                    )
+                  }
+                  if (isSelected) {
                     Icon(
                       Icons.Rounded.Check,
                       contentDescription = "Selected track",
-                      tint = Color(0xFFEC4899),
-                      modifier = Modifier.padding(6.dp).size(16.dp)
+                      tint = MaterialTheme.colorScheme.primary,
+                      modifier = Modifier.size(20.dp)
                     )
                   }
                 }
@@ -456,187 +487,191 @@ fun SongPickerAndTrimmerDialog(
             }
           }
         }
-      }
 
-      // Interactive Song Cutter Panel (shows once any track is selected)
-      selectedTrack?.let { track ->
-        val maxSec = (track.durationMs / 1000f).coerceAtLeast(5f)
-        val minClip = 3f
-        val maxClip = minOf(30f, maxSec)
-        val startSecInt = cutRange.start.roundToLong().coerceAtLeast(0L)
-        val endSecInt = cutRange.endInclusive.roundToLong().coerceAtLeast(startSecInt + 3L)
-        val clipDuration = (endSecInt - startSecInt).coerceAtLeast(1L)
+        // Clean Interactive Song Cutter Panel
+        selectedTrack?.let { track ->
+          val maxSec = (track.durationMs / 1000f).coerceAtLeast(5f)
+          val minClip = 3f
+          val maxClip = minOf(30f, maxSec)
+          val startSecInt = cutRange.start.roundToLong().coerceAtLeast(0L)
+          val endSecInt = cutRange.endInclusive.roundToLong().coerceAtLeast(startSecInt + 3L)
+          val clipDuration = (endSecInt - startSecInt).coerceAtLeast(1L)
 
-        Surface(
-          shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
-          color = Color(0xFF161C2C),
-          modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
-        ) {
-          Column(
+          Surface(
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 3.dp,
             modifier = Modifier
               .fillMaxWidth()
-              .padding(horizontal = 18.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+              .border(
+                0.8.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+              )
           ) {
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.SpaceBetween
+            Column(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+              verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-              Column(modifier = Modifier.weight(1f)) {
-                Text(
-                  text = track.title,
-                  color = Color.White,
-                  style = MaterialTheme.typography.titleSmall,
-                  fontWeight = FontWeight.Bold,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                  text = "Cut: ${formatSongSec(startSecInt.toInt())} – ${formatSongSec(endSecInt.toInt())} (${clipDuration}s clip)",
-                  color = Color(0xFFF472B6),
-                  style = MaterialTheme.typography.labelMedium,
-                  fontWeight = FontWeight.SemiBold
-                )
-              }
-              IconButton(
-                onClick = {
-                  if (isPreviewPlaying) {
-                    runCatching { previewPlayer?.pause() }
-                    isPreviewPlaying = false
-                  } else if (previewPlayer != null) {
-                    runCatching {
-                      previewPlayer?.seekTo((cutRange.start * 1000f).toInt())
-                      previewPlayer?.start()
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = track.title,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                  Text(
+                    text = "${formatSongSec(startSecInt.toInt())} – ${formatSongSec(endSecInt.toInt())} (${clipDuration}s clip)",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold
+                  )
+                }
+                IconButton(
+                  onClick = {
+                    if (isPreviewPlaying) {
+                      runCatching { previewPlayer?.pause() }
+                      isPreviewPlaying = false
+                    } else if (previewPlayer != null) {
+                      runCatching {
+                        previewPlayer?.seekTo((cutRange.start * 1000f).toInt())
+                        previewPlayer?.start()
+                      }
+                      isPreviewPlaying = true
+                    } else {
+                      startPreview(track, cutRange.start, cutRange.endInclusive)
                     }
-                    isPreviewPlaying = true
-                  } else {
-                    startPreview(track, cutRange.start, cutRange.endInclusive)
+                  },
+                  modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .testTag("song_cut_preview_button")
+                ) {
+                  Icon(
+                    imageVector = if (isPreviewPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    contentDescription = if (isPreviewPlaying) "Pause preview" else "Play cut preview",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(20.dp)
+                  )
+                }
+              }
+
+              // Clean Minimal Waveform reflecting active cut selection
+              val waveSeed = remember(track.id) { abs(track.title.hashCode()) }
+              val startFrac = (cutRange.start / maxSec).coerceIn(0f, 1f)
+              val endFrac = (cutRange.endInclusive / maxSec).coerceIn(startFrac, 1f)
+              val playFrac = ((previewPositionMs / 1000f) / maxSec).coerceIn(0f, 1f)
+
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .height(30.dp)
+                  .clip(RoundedCornerShape(8.dp))
+                  .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                  .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.5.dp)
+              ) {
+                val barCount = 36
+                for (i in 0 until barCount) {
+                  val frac = i.toFloat() / barCount.toFloat()
+                  val inCut = frac in startFrac..endFrac
+                  val passedPlayhead = isPreviewPlaying && frac in startFrac..playFrac
+                  val amp = 0.25f + (abs((waveSeed * (i + 5) * 19) % 75) / 100f)
+                  val barColor = when {
+                    passedPlayhead -> MaterialTheme.colorScheme.primary
+                    inCut -> MaterialTheme.colorScheme.primary.copy(alpha = 0.48f)
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f)
+                  }
+                  Box(
+                    modifier = Modifier
+                      .weight(1f)
+                      .height((24.dp * amp).coerceIn(4.dp, 24.dp))
+                      .clip(CircleShape)
+                      .background(barColor)
+                  )
+                }
+              }
+
+              RangeSlider(
+                value = cutRange,
+                onValueChange = { next ->
+                  var s = next.start.coerceIn(0f, maxSec - minClip)
+                  var e = next.endInclusive.coerceIn(s + minClip, maxSec)
+                  if (e - s > maxClip) {
+                    if (abs(s - cutRange.start) > 0.05f) {
+                      e = (s + maxClip).coerceAtMost(maxSec)
+                    } else {
+                      s = (e - maxClip).coerceAtLeast(0f)
+                    }
+                  }
+                  cutRange = s..e
+                },
+                onValueChangeFinished = {
+                  if (isPreviewPlaying) {
+                    runCatching { previewPlayer?.seekTo((cutRange.start * 1000f).toInt()) }
                   }
                 },
-                modifier = Modifier
-                  .size(46.dp)
-                  .clip(CircleShape)
-                  .background(Brush.linearGradient(listOf(Color(0xFFEC4899), Color(0xFF8B5CF6))))
-                  .testTag("song_cut_preview_button")
-              ) {
-                Icon(
-                  imageVector = if (isPreviewPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                  contentDescription = if (isPreviewPlaying) "Pause preview" else "Play cut preview",
-                  tint = Color.White
-                )
-              }
-            }
+                valueRange = 0f..maxSec,
+                colors = SliderDefaults.colors(
+                  thumbColor = MaterialTheme.colorScheme.primary,
+                  activeTrackColor = MaterialTheme.colorScheme.primary,
+                  inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                ),
+                modifier = Modifier.testTag("song_cut_range_slider")
+              )
 
-            // Visual Waveform reflecting active cut selection
-            val waveSeed = remember(track.id) { abs(track.title.hashCode()) }
-            val startFrac = (cutRange.start / maxSec).coerceIn(0f, 1f)
-            val endFrac = (cutRange.endInclusive / maxSec).coerceIn(startFrac, 1f)
-            val playFrac = ((previewPositionMs / 1000f) / maxSec).coerceIn(0f, 1f)
-
-            Row(
-              modifier = Modifier
-                .fillMaxWidth()
-                .height(34.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF0E1320))
-                .padding(horizontal = 8.dp),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(2.5.dp)
-            ) {
-              val barCount = 36
-              for (i in 0 until barCount) {
-                val frac = i.toFloat() / barCount.toFloat()
-                val inCut = frac in startFrac..endFrac
-                val passedPlayhead = isPreviewPlaying && frac in startFrac..playFrac
-                val amp = 0.25f + (abs((waveSeed * (i + 5) * 19) % 75) / 100f)
-                val barColor = when {
-                  passedPlayhead -> Color(0xFF38BDF8)
-                  inCut -> Color(0xFFEC4899)
-                  else -> Color.White.copy(alpha = 0.22f)
-                }
-                Box(
-                  modifier = Modifier
-                    .weight(1f)
-                    .height((28.dp * amp).coerceIn(5.dp, 28.dp))
-                    .clip(CircleShape)
-                    .background(barColor)
-                )
-              }
-            }
-
-            // Drag Start & End Handles to Cut Song
-            RangeSlider(
-              value = cutRange,
-              onValueChange = { next ->
-                var s = next.start.coerceIn(0f, maxSec - minClip)
-                var e = next.endInclusive.coerceIn(s + minClip, maxSec)
-                if (e - s > maxClip) {
-                  if (abs(s - cutRange.start) > 0.05f) {
-                    e = (s + maxClip).coerceAtMost(maxSec)
-                  } else {
-                    s = (e - maxClip).coerceAtLeast(0f)
-                  }
-                }
-                cutRange = s..e
-              },
-              onValueChangeFinished = {
-                if (isPreviewPlaying) {
-                  runCatching { previewPlayer?.seekTo((cutRange.start * 1000f).toInt()) }
-                }
-              },
-              valueRange = 0f..maxSec,
-              colors = SliderDefaults.colors(
-                thumbColor = Color.White,
-                activeTrackColor = Color(0xFFEC4899),
-                inactiveTrackColor = Color.White.copy(alpha = 0.2f)
-              ),
-              modifier = Modifier.testTag("song_cut_range_slider")
-            )
-
-            Button(
-              onClick = {
-                if (!isTrimming) {
-                  stopPreview()
-                  isTrimming = true
-                  scope.launch {
-                    val trimmedUri = AudioTrimmerAndStudio.trimAudioSegmentToWav(
-                      context = context,
-                      sourceUriString = track.uriString,
-                      startMs = startSecInt * 1000L,
-                      endMs = endSecInt * 1000L
-                    )
-                    isTrimming = false
-                    onSongAttached(
-                      MusicAttachment(
-                        title = track.title,
-                        artist = track.artist,
-                        audioUri = trimmedUri,
-                        startSec = startSecInt,
-                        endSec = endSecInt
+              Button(
+                onClick = {
+                  if (!isTrimming) {
+                    stopPreview()
+                    isTrimming = true
+                    scope.launch {
+                      val trimmedUri = AudioTrimmerAndStudio.trimAudioSegmentToWav(
+                        context = context,
+                        sourceUriString = track.uriString,
+                        startMs = startSecInt * 1000L,
+                        endMs = endSecInt * 1000L
                       )
-                    )
+                      isTrimming = false
+                      onSongAttached(
+                        MusicAttachment(
+                          title = track.title,
+                          artist = track.artist,
+                          audioUri = trimmedUri,
+                          startSec = startSecInt,
+                          endSec = endSecInt
+                        )
+                      )
+                    }
                   }
+                },
+                enabled = !isTrimming,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .height(46.dp)
+                  .testTag("attach_cut_song_button")
+              ) {
+                if (isTrimming) {
+                  CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                  Spacer(Modifier.width(8.dp))
+                  Text("Trimming clip...", fontWeight = FontWeight.SemiBold)
+                } else {
+                  Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                  Spacer(Modifier.width(6.dp))
+                  Text("Use Song (${clipDuration}s)", fontWeight = FontWeight.SemiBold)
                 }
-              },
-              enabled = !isTrimming,
-              shape = RoundedCornerShape(16.dp),
-              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC4899)),
-              modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp)
-                .testTag("attach_cut_song_button")
-            ) {
-              if (isTrimming) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
-                Spacer(Modifier.width(8.dp))
-                Text("Cutting Song Clip...", fontWeight = FontWeight.Bold, color = Color.White)
-              } else {
-                Icon(Icons.Rounded.ContentCut, contentDescription = null, tint = Color.White)
-                Spacer(Modifier.width(8.dp))
-                Text("Cut & Add Song (${clipDuration}s)", fontWeight = FontWeight.Bold, color = Color.White)
               }
             }
           }
@@ -681,12 +716,6 @@ fun PostMusicBanner(
     animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Restart),
     label = "eq"
   )
-  val discRotation by inf.animateFloat(
-    initialValue = 0f,
-    targetValue = 360f,
-    animationSpec = infiniteRepeatable(tween(4200, easing = LinearEasing), RepeatMode.Restart),
-    label = "disc_spin"
-  )
 
   // Keep playback progress synced and loop trimmed segment cleanly
   LaunchedEffect(isPlaying, mediaPlayer, startSec, endSec) {
@@ -713,109 +742,59 @@ fun PostMusicBanner(
   val rangeLabel = if (endSec > startSec) {
     "${formatSongSec(startSec.toInt())}–${formatSongSec(endSec.toInt())}"
   } else {
-    "Studio Track"
+    ""
   }
 
+  // Clean authentic social post music bar
   Surface(
-    shape = RoundedCornerShape(18.dp),
-    color = Color.Transparent,
+    shape = RoundedCornerShape(12.dp),
+    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
     modifier = modifier
       .fillMaxWidth()
-      .clip(RoundedCornerShape(18.dp))
-      .background(
-        Brush.horizontalGradient(
-          listOf(Color(0xFF151226), Color(0xFF21173B), Color(0xFF131B2E))
-        )
-      )
+      .clip(RoundedCornerShape(12.dp))
       .border(
-        1.dp,
-        Brush.horizontalGradient(listOf(Color(0xFFEC4899).copy(alpha = 0.65f), Color(0xFF38BDF8).copy(alpha = 0.55f))),
-        RoundedCornerShape(18.dp)
+        0.7.dp,
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        RoundedCornerShape(12.dp)
       )
   ) {
     Column(modifier = Modifier.fillMaxWidth()) {
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 12.dp, vertical = 10.dp),
+          .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(11.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
       ) {
-        // Spinning Vinyl / Disc Medallion
         Box(
           modifier = Modifier
-            .size(44.dp)
-            .clip(CircleShape)
-            .background(
-              Brush.sweepGradient(
-                listOf(Color(0xFFEC4899), Color(0xFF8B5CF6), Color(0xFF38BDF8), Color(0xFFEC4899))
-              )
-            )
-            .padding(2.5.dp),
+            .size(38.dp)
+            .clip(RoundedCornerShape(9.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer),
           contentAlignment = Alignment.Center
         ) {
-          Box(
-            modifier = Modifier
-              .fillMaxSize()
-              .clip(CircleShape)
-              .background(Color(0xFF0E111A)),
-            contentAlignment = Alignment.Center
-          ) {
-            Icon(
-              Icons.Rounded.MusicNote,
-              contentDescription = null,
-              tint = Color(0xFFF472B6),
-              modifier = Modifier.size(20.dp)
-            )
-            // Subtle rotating shine dot
-            val angle = if (isPlaying) discRotation else 0f
-            val rad = Math.toRadians(angle.toDouble())
-            Box(
-              modifier = Modifier
-                .fillMaxSize()
-                .padding(5.dp),
-              contentAlignment = Alignment.Center
-            ) {
-              Box(
-                modifier = Modifier
-                  .size(4.dp)
-                  .clip(CircleShape)
-                  .background(
-                    if (isPlaying) Color(0xFF38BDF8).copy(alpha = (0.4f + 0.5f * abs(sin(rad))).toFloat())
-                    else Color.Transparent
-                  )
-              )
-            }
-          }
+          Icon(
+            Icons.Rounded.MusicNote,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(19.dp)
+          )
         }
 
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-              text = title.ifBlank { "Attached Song" },
-              color = Color.White,
-              style = MaterialTheme.typography.labelLarge,
-              fontWeight = FontWeight.Bold,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis,
-              modifier = Modifier.weight(1f, fill = false)
-            )
-            Surface(
-              shape = CircleShape,
-              color = Color(0xFFEC4899).copy(alpha = 0.22f)
-            ) {
-              Text(
-                text = rangeLabel,
-                color = Color(0xFFF9A8D4),
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-              )
-            }
-          }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
           Text(
-            text = artist.ifBlank { "HELLO Studio Audio" },
+            text = title.ifBlank { "Attached Song" },
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+          val artistDisplay = artist.ifBlank { "Music" }
+          Text(
+            text = if (rangeLabel.isNotBlank()) "$artistDisplay · $rangeLabel" else artistDisplay,
             style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.72f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
@@ -823,18 +802,18 @@ fun PostMusicBanner(
 
         if (isPlaying) {
           Row(
-            horizontalArrangement = Arrangement.spacedBy(2.5.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.Bottom,
-            modifier = Modifier.height(18.dp)
+            modifier = Modifier.height(14.dp)
           ) {
-            for (i in 0..4) {
-              val h = (5f + 12f * abs(sin(animPhase + i * 0.85f))).dp
+            for (i in 0..2) {
+              val h = (4f + 9f * abs(sin(animPhase + i * 0.9f))).dp
               Box(
                 modifier = Modifier
-                  .width(3.dp)
+                  .width(2.5.dp)
                   .height(h)
                   .clip(CircleShape)
-                  .background(Brush.verticalGradient(listOf(Color(0xFF38BDF8), Color(0xFFEC4899))))
+                  .background(MaterialTheme.colorScheme.primary)
               )
             }
           }
@@ -905,37 +884,41 @@ fun PostMusicBanner(
               }
             },
             modifier = Modifier
-              .size(40.dp)
+              .size(34.dp)
               .clip(CircleShape)
-              .background(Brush.linearGradient(listOf(Color(0xFFEC4899), Color(0xFF8B5CF6))))
+              .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
               .testTag("post_music_play_button")
           ) {
             if (isPreparing) {
-              CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+              CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary
+              )
             } else {
               Icon(
                 imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                 contentDescription = if (isPlaying) "Pause song" else "Play song",
-                tint = Color.White
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(19.dp)
               )
             }
           }
         }
       }
 
-      // Live playback scrubber underline
       if (isPlaying || clipProgress > 0f) {
         Box(
           modifier = Modifier
             .fillMaxWidth()
-            .height(2.5.dp)
-            .background(Color.White.copy(alpha = 0.08f))
+            .height(2.dp)
+            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
         ) {
           Box(
             modifier = Modifier
               .fillMaxWidth(clipProgress.coerceIn(0.02f, 1f))
-              .height(2.5.dp)
-              .background(Brush.horizontalGradient(listOf(Color(0xFFEC4899), Color(0xFF38BDF8))))
+              .height(2.dp)
+              .background(MaterialTheme.colorScheme.primary)
           )
         }
       }
@@ -1060,47 +1043,50 @@ fun StoryMusicPlayerPill(
 
   val rangeStr = if (endSec > startSec) " · ${formatSongSec(startSec.toInt())}–${formatSongSec(endSec.toInt())}" else ""
 
+  // Clean frosted Story Music Sticker
   Surface(
-    shape = RoundedCornerShape(18.dp),
-    color = Color.Transparent,
+    shape = RoundedCornerShape(12.dp),
+    color = Color.Black.copy(alpha = 0.52f),
     modifier = modifier
-      .clip(RoundedCornerShape(18.dp))
-      .background(
-        Brush.horizontalGradient(listOf(Color(0xD9111428), Color(0xD925143B)))
-      )
+      .clip(RoundedCornerShape(12.dp))
       .border(
-        1.dp,
-        Brush.horizontalGradient(listOf(Color(0xFFEC4899).copy(alpha = 0.65f), Color(0xFF38BDF8).copy(alpha = 0.55f))),
-        RoundedCornerShape(18.dp)
+        0.6.dp,
+        Color.White.copy(alpha = 0.18f),
+        RoundedCornerShape(12.dp)
       )
   ) {
     Column {
       Row(
-        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
       ) {
         Box(
           modifier = Modifier
-            .size(30.dp)
-            .clip(CircleShape)
-            .background(Brush.linearGradient(listOf(Color(0xFFEC4899), Color(0xFF8B5CF6)))),
+            .size(28.dp)
+            .clip(RoundedCornerShape(7.dp))
+            .background(Color.White.copy(alpha = 0.16f)),
           contentAlignment = Alignment.Center
         ) {
-          Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+          Icon(
+            Icons.Rounded.MusicNote,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(15.dp)
+          )
         }
         Column(modifier = Modifier.weight(1f, fill = false)) {
           Text(
-            text = title.ifBlank { "Story Song" },
+            text = title.ifBlank { "Story Music" },
             color = Color.White,
             style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
           Text(
-            text = "${artist.ifBlank { "HELLO Music" }}$rangeStr",
-            color = Color.White.copy(alpha = 0.78f),
+            text = "${artist.ifBlank { "Audio" }}$rangeStr",
+            color = Color.White.copy(alpha = 0.75f),
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -1110,16 +1096,16 @@ fun StoryMusicPlayerPill(
           Row(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.Bottom,
-            modifier = Modifier.height(14.dp)
+            modifier = Modifier.height(12.dp)
           ) {
-            for (i in 0..3) {
-              val h = (4f + 9f * abs(sin(eqPhase + i * 0.9f))).dp
+            for (i in 0..2) {
+              val h = (3.5f + 7.5f * abs(sin(eqPhase + i * 0.9f))).dp
               Box(
                 modifier = Modifier
-                  .width(2.5.dp)
+                  .width(2.dp)
                   .height(h)
                   .clip(CircleShape)
-                  .background(Color(0xFFF472B6))
+                  .background(Color.White)
               )
             }
           }
@@ -1127,13 +1113,13 @@ fun StoryMusicPlayerPill(
         if (audioUri.isNotBlank()) {
           IconButton(
             onClick = { isMuted = !isMuted },
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(30.dp)
           ) {
             Icon(
               imageVector = if (isMuted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
               contentDescription = if (isMuted) "Unmute story music" else "Mute story music",
               tint = Color.White,
-              modifier = Modifier.size(18.dp)
+              modifier = Modifier.size(16.dp)
             )
           }
         }
@@ -1142,14 +1128,14 @@ fun StoryMusicPlayerPill(
         Box(
           modifier = Modifier
             .fillMaxWidth()
-            .height(2.dp)
-            .background(Color.White.copy(alpha = 0.12f))
+            .height(1.5.dp)
+            .background(Color.White.copy(alpha = 0.14f))
         ) {
           Box(
             modifier = Modifier
               .fillMaxWidth(clipProgress.coerceIn(0.03f, 1f))
-              .height(2.dp)
-              .background(Brush.horizontalGradient(listOf(Color(0xFFEC4899), Color(0xFF38BDF8))))
+              .height(1.5.dp)
+              .background(Color.White)
           )
         }
       }
