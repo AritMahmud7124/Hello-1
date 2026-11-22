@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -681,22 +682,23 @@ fun SongPickerAndTrimmerDialog(
   }
 }
 
+class PostAudioController internal constructor(
+  val isPlaying: Boolean,
+  val isPreparing: Boolean,
+  val toggle: () -> Unit
+)
+
 @Composable
-fun PostMusicBanner(
-  title: String,
-  artist: String,
+fun rememberPostAudioController(
   audioUri: String,
   startSec: Long,
-  endSec: Long,
-  modifier: Modifier = Modifier
-) {
-  if (title.isBlank() && audioUri.isBlank()) return
+  endSec: Long
+): PostAudioController {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
   var isPlaying by remember(audioUri) { mutableStateOf(false) }
   var isPreparing by remember(audioUri) { mutableStateOf(false) }
   var mediaPlayer by remember(audioUri) { mutableStateOf<MediaPlayer?>(null) }
-  var clipProgress by remember(audioUri) { mutableFloatStateOf(0f) }
 
   DisposableEffect(audioUri) {
     onDispose {
@@ -709,221 +711,93 @@ fun PostMusicBanner(
     }
   }
 
-  val inf = rememberInfiniteTransition(label = "post_music_anim")
-  val animPhase by inf.animateFloat(
-    initialValue = 0f,
-    targetValue = 6.283f,
-    animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Restart),
-    label = "eq"
-  )
-
-  // Keep playback progress synced and loop trimmed segment cleanly
   LaunchedEffect(isPlaying, mediaPlayer, startSec, endSec) {
     val mp = mediaPlayer ?: return@LaunchedEffect
     while (isPlaying) {
       val totalDur = runCatching { mp.duration }.getOrDefault(0).coerceAtLeast(1)
       val pos = runCatching { mp.currentPosition }.getOrDefault(0).coerceAtLeast(0)
-      val hasSegment = endSec > startSec
       val expectedSegMs = ((endSec - startSec) * 1000L).toInt()
-      if (hasSegment && totalDur > expectedSegMs + 2500) {
+      if (endSec > startSec && totalDur > expectedSegMs + 2500) {
         val segStartMs = (startSec * 1000L).toInt().coerceIn(0, totalDur - 500)
         val segEndMs = (endSec * 1000L).toInt().coerceIn(segStartMs + 500, totalDur)
         if (pos >= segEndMs || pos < segStartMs - 300) {
           runCatching { mp.seekTo(segStartMs) }
         }
-        clipProgress = ((pos - segStartMs).toFloat() / (segEndMs - segStartMs).toFloat()).coerceIn(0f, 1f)
-      } else {
-        clipProgress = (pos.toFloat() / totalDur.toFloat()).coerceIn(0f, 1f)
       }
-      delay(120L)
+      delay(160L)
     }
   }
 
-  val rangeLabel = if (endSec > startSec) {
-    "${formatSongSec(startSec.toInt())}–${formatSongSec(endSec.toInt())}"
-  } else {
-    ""
-  }
-
-  // Clean authentic social post music bar
-  Surface(
-    shape = RoundedCornerShape(12.dp),
-    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-    modifier = modifier
-      .fillMaxWidth()
-      .clip(RoundedCornerShape(12.dp))
-      .border(
-        0.7.dp,
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-        RoundedCornerShape(12.dp)
-      )
-  ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-      ) {
-        Box(
-          modifier = Modifier
-            .size(38.dp)
-            .clip(RoundedCornerShape(9.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer),
-          contentAlignment = Alignment.Center
-        ) {
-          Icon(
-            Icons.Rounded.MusicNote,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(19.dp)
-          )
-        }
-
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-          Text(
-            text = title.ifBlank { "Attached Song" },
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-          )
-          val artistDisplay = artist.ifBlank { "Music" }
-          Text(
-            text = if (rangeLabel.isNotBlank()) "$artistDisplay · $rangeLabel" else artistDisplay,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-          )
-        }
-
+  val toggleAction: () -> Unit = {
+    if (audioUri.isNotBlank()) {
+      val cur = mediaPlayer
+      if (cur != null) {
         if (isPlaying) {
-          Row(
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalAlignment = Alignment.Bottom,
-            modifier = Modifier.height(14.dp)
-          ) {
-            for (i in 0..2) {
-              val h = (4f + 9f * abs(sin(animPhase + i * 0.9f))).dp
-              Box(
-                modifier = Modifier
-                  .width(2.5.dp)
-                  .height(h)
-                  .clip(CircleShape)
-                  .background(MaterialTheme.colorScheme.primary)
-              )
-            }
-          }
+          runCatching { cur.pause() }
+          isPlaying = false
+        } else {
+          runCatching { cur.start() }
+          isPlaying = true
         }
-
-        if (audioUri.isNotBlank()) {
-          IconButton(
-            onClick = {
-              val cur = mediaPlayer
-              if (cur != null) {
-                if (isPlaying) {
-                  runCatching { cur.pause() }
-                  isPlaying = false
-                } else {
-                  runCatching { cur.start() }
-                  isPlaying = true
-                }
-              } else if (!isPreparing) {
-                isPreparing = true
-                scope.launch {
-                  val resolvedPath = if (FirestoreMediaStore.isFirestoreMediaUri(audioUri)) {
-                    val db = FirebaseFirestore.getInstance(context.applicationContext.getString(R.string.firestore_database_id))
-                    runCatching {
-                      FirestoreMediaStore.resolveToLocalFile(context.applicationContext, db, audioUri).absolutePath
-                    }.getOrNull()
-                  } else {
-                    audioUri
-                  }
-                  if (resolvedPath.isNullOrBlank()) {
-                    isPreparing = false
-                    return@launch
-                  }
-                  val mp = MediaPlayer().apply {
-                    setAudioAttributes(
-                      AudioAttributes.Builder()
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .build()
-                    )
-                    setOnPreparedListener { p ->
-                      isPreparing = false
-                      p.isLooping = true
-                      val expectedSegMs = ((endSec - startSec) * 1000L).toInt()
-                      if (endSec > startSec && p.duration > expectedSegMs + 2500) {
-                        val startMs = (startSec * 1000L).toInt().coerceIn(0, (p.duration - 500).coerceAtLeast(0))
-                        p.seekTo(startMs)
-                      }
-                      p.start()
-                      isPlaying = true
-                    }
-                    setOnErrorListener { _, _, _ ->
-                      isPreparing = false
-                      isPlaying = false
-                      true
-                    }
-                  }
-                  mediaPlayer = mp
-                  runCatching {
-                    if (resolvedPath.startsWith("/")) mp.setDataSource(resolvedPath)
-                    else mp.setDataSource(context, Uri.parse(resolvedPath))
-                    mp.prepareAsync()
-                  }.onFailure {
-                    isPreparing = false
-                    runCatching { mp.release() }
-                    mediaPlayer = null
-                  }
-                }
+      } else if (!isPreparing) {
+        isPreparing = true
+        scope.launch {
+          val resolvedPath = if (FirestoreMediaStore.isFirestoreMediaUri(audioUri)) {
+            val db = FirebaseFirestore.getInstance(context.applicationContext.getString(R.string.firestore_database_id))
+            runCatching {
+              FirestoreMediaStore.resolveToLocalFile(context.applicationContext, db, audioUri).absolutePath
+            }.getOrNull()
+          } else {
+            audioUri
+          }
+          if (resolvedPath.isNullOrBlank()) {
+            isPreparing = false
+            return@launch
+          }
+          val mp = MediaPlayer().apply {
+            setAudioAttributes(
+              AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .build()
+            )
+            setOnPreparedListener { p ->
+              isPreparing = false
+              p.isLooping = true
+              val expectedSegMs = ((endSec - startSec) * 1000L).toInt()
+              if (endSec > startSec && p.duration > expectedSegMs + 2500) {
+                val startMs = (startSec * 1000L).toInt().coerceIn(0, (p.duration - 500).coerceAtLeast(0))
+                p.seekTo(startMs)
               }
-            },
-            modifier = Modifier
-              .size(34.dp)
-              .clip(CircleShape)
-              .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-              .testTag("post_music_play_button")
-          ) {
-            if (isPreparing) {
-              CircularProgressIndicator(
-                modifier = Modifier.size(16.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.primary
-              )
-            } else {
-              Icon(
-                imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                contentDescription = if (isPlaying) "Pause song" else "Play song",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(19.dp)
-              )
+              p.start()
+              isPlaying = true
+            }
+            setOnErrorListener { _, _, _ ->
+              isPreparing = false
+              isPlaying = false
+              true
             }
           }
-        }
-      }
-
-      if (isPlaying || clipProgress > 0f) {
-        Box(
-          modifier = Modifier
-            .fillMaxWidth()
-            .height(2.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
-        ) {
-          Box(
-            modifier = Modifier
-              .fillMaxWidth(clipProgress.coerceIn(0.02f, 1f))
-              .height(2.dp)
-              .background(MaterialTheme.colorScheme.primary)
-          )
+          mediaPlayer = mp
+          runCatching {
+            if (resolvedPath.startsWith("/")) mp.setDataSource(resolvedPath)
+            else mp.setDataSource(context, Uri.parse(resolvedPath))
+            mp.prepareAsync()
+          }.onFailure {
+            isPreparing = false
+            runCatching { mp.release() }
+            mediaPlayer = null
+          }
         }
       }
     }
   }
+
+  return PostAudioController(
+    isPlaying = isPlaying,
+    isPreparing = isPreparing,
+    toggle = toggleAction
+  )
 }
 
 @Composable
@@ -1041,38 +915,37 @@ fun StoryMusicPlayerPill(
     }
   }
 
-  val rangeStr = if (endSec > startSec) " · ${formatSongSec(startSec.toInt())}–${formatSongSec(endSec.toInt())}" else ""
-
-  // Clean frosted Story Music Sticker
+  // Compact authentic dark Story Music Sticker
   Surface(
-    shape = RoundedCornerShape(12.dp),
-    color = Color.Black.copy(alpha = 0.52f),
+    shape = RoundedCornerShape(10.dp),
+    color = Color(0xFF141416).copy(alpha = 0.84f),
     modifier = modifier
-      .clip(RoundedCornerShape(12.dp))
+      .widthIn(min = 165.dp, max = 265.dp)
+      .clip(RoundedCornerShape(10.dp))
       .border(
         0.6.dp,
-        Color.White.copy(alpha = 0.18f),
-        RoundedCornerShape(12.dp)
+        Color.White.copy(alpha = 0.14f),
+        RoundedCornerShape(10.dp)
       )
   ) {
     Column {
       Row(
-        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
       ) {
         Box(
           modifier = Modifier
-            .size(28.dp)
-            .clip(RoundedCornerShape(7.dp))
-            .background(Color.White.copy(alpha = 0.16f)),
+            .size(32.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color.White.copy(alpha = 0.14f)),
           contentAlignment = Alignment.Center
         ) {
           Icon(
             Icons.Rounded.MusicNote,
             contentDescription = null,
             tint = Color.White,
-            modifier = Modifier.size(15.dp)
+            modifier = Modifier.size(16.dp)
           )
         }
         Column(modifier = Modifier.weight(1f, fill = false)) {
@@ -1084,22 +957,33 @@ fun StoryMusicPlayerPill(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
-          Text(
-            text = "${artist.ifBlank { "Audio" }}$rangeStr",
-            color = Color.White.copy(alpha = 0.75f),
-            style = MaterialTheme.typography.labelSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-          )
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
+          ) {
+            Icon(
+              Icons.Rounded.MusicNote,
+              contentDescription = null,
+              tint = Color.White.copy(alpha = 0.72f),
+              modifier = Modifier.size(10.dp)
+            )
+            Text(
+              text = artist.ifBlank { "Audio" },
+              color = Color.White.copy(alpha = 0.76f),
+              style = MaterialTheme.typography.labelSmall,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
         }
         if (!shouldPause && !isMuted && audioUri.isNotBlank()) {
           Row(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.Bottom,
-            modifier = Modifier.height(12.dp)
+            modifier = Modifier.height(11.dp)
           ) {
             for (i in 0..2) {
-              val h = (3.5f + 7.5f * abs(sin(eqPhase + i * 0.9f))).dp
+              val h = (3f + 7f * abs(sin(eqPhase + i * 0.9f))).dp
               Box(
                 modifier = Modifier
                   .width(2.dp)
@@ -1113,13 +997,13 @@ fun StoryMusicPlayerPill(
         if (audioUri.isNotBlank()) {
           IconButton(
             onClick = { isMuted = !isMuted },
-            modifier = Modifier.size(30.dp)
+            modifier = Modifier.size(28.dp)
           ) {
             Icon(
               imageVector = if (isMuted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
               contentDescription = if (isMuted) "Unmute story music" else "Mute story music",
               tint = Color.White,
-              modifier = Modifier.size(16.dp)
+              modifier = Modifier.size(15.dp)
             )
           }
         }

@@ -399,22 +399,43 @@ fun StoriesScreen(
                     ) {
                       if (story.musicTitle.isNotBlank()) {
                         Surface(
-                          color = Color.Black.copy(alpha = 0.55f),
-                          shape = CircleShape
+                          color = Color(0xFF141416).copy(alpha = 0.84f),
+                          shape = RoundedCornerShape(8.dp),
+                          border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.14f))
                         ) {
                           Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                           ) {
-                            Icon(Icons.Rounded.MusicNote, null, tint = Color.White, modifier = Modifier.size(11.dp))
-                            Text(
-                              text = story.musicTitle,
-                              color = Color.White,
-                              style = MaterialTheme.typography.labelSmall,
-                              maxLines = 1,
-                              overflow = TextOverflow.Ellipsis
-                            )
+                            Box(
+                              modifier = Modifier
+                                .size(22.dp)
+                                .clip(RoundedCornerShape(5.dp))
+                                .background(Color.White.copy(alpha = 0.14f)),
+                              contentAlignment = Alignment.Center
+                            ) {
+                              Icon(Icons.Rounded.MusicNote, null, tint = Color.White, modifier = Modifier.size(13.dp))
+                            }
+                            Column {
+                              Text(
+                                text = story.musicTitle,
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                              )
+                              if (story.musicArtist.isNotBlank()) {
+                                Text(
+                                  text = "♪ ${story.musicArtist}",
+                                  color = Color.White.copy(alpha = 0.74f),
+                                  style = MaterialTheme.typography.labelSmall,
+                                  maxLines = 1,
+                                  overflow = TextOverflow.Ellipsis
+                                )
+                              }
+                            }
                           }
                         }
                       }
@@ -1436,7 +1457,8 @@ fun StoryViewerDialog(
             audioUri = activeStory.musicUri,
             startSec = activeStory.musicStartSec,
             endSec = activeStory.musicEndSec,
-            shouldPause = shouldPauseTimer
+            shouldPause = shouldPauseTimer,
+            modifier = Modifier.align(Alignment.Start)
           )
         }
         if (activeStory.caption.isNotBlank() && activeStory.mediaType != "text") {

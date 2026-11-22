@@ -50,6 +50,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Comment
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Close
@@ -59,6 +61,7 @@ import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Public
@@ -901,6 +904,13 @@ fun PostCard(
   var showReportDialog by remember { mutableStateOf(false) }
   val myReaction = reactions.firstOrNull { it.userId == currentUserId }
   val cardContext = LocalContext.current
+  val postAudioCtrl = if (post.musicUri.isNotBlank()) {
+    rememberPostAudioController(
+      audioUri = post.musicUri,
+      startSec = post.musicStartSec,
+      endSec = post.musicEndSec
+    )
+  } else null
 
   Card(
     modifier = modifier.fillMaxWidth(),
@@ -937,15 +947,36 @@ fun PostCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
               if (post.musicTitle.isNotBlank()) {
+                val songLabel = if (post.musicArtist.isNotBlank()) {
+                  "${post.musicArtist} · ${post.musicTitle}"
+                } else {
+                  post.musicTitle
+                }
                 Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(
-                  text = "🎵 ${post.musicTitle}",
-                  style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.primary,
-                  fontWeight = FontWeight.Medium,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(3.dp),
+                  modifier = Modifier
+                    .weight(1f, fill = false)
+                    .clip(RoundedCornerShape(6.dp))
+                    .then(if (postAudioCtrl != null) Modifier.clickable { postAudioCtrl.toggle() } else Modifier)
+                    .padding(horizontal = 2.dp, vertical = 1.dp)
+                ) {
+                  Icon(
+                    imageVector = if (postAudioCtrl?.isPlaying == true) Icons.AutoMirrored.Rounded.VolumeUp else Icons.Rounded.MusicNote,
+                    contentDescription = "Attached song",
+                    modifier = Modifier.size(13.dp),
+                    tint = MaterialTheme.colorScheme.onSurface
+                  )
+                  Text(
+                    text = songLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                }
               }
               Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant)
               Icon(
@@ -1014,25 +1045,54 @@ fun PostCard(
         if (post.mediaType == "video") {
           VideoPlayerBox(videoUri = post.mediaUri)
         } else {
-          FullPhotoImage(
-            model = post.mediaUri,
-            contentDescription = "Post photo",
-            cornerRadius = 16.dp,
-            minHeight = 180.dp,
-            maxHeight = 560.dp
-          )
+          Box(modifier = Modifier.fillMaxWidth()) {
+            FullPhotoImage(
+              model = post.mediaUri,
+              contentDescription = "Post photo",
+              cornerRadius = 16.dp,
+              minHeight = 180.dp,
+              maxHeight = 560.dp
+            )
+            if (postAudioCtrl != null) {
+              Box(
+                modifier = Modifier
+                  .align(Alignment.BottomEnd)
+                  .padding(4.dp)
+                  .size(48.dp)
+                  .clip(CircleShape)
+                  .clickable { postAudioCtrl.toggle() }
+                  .testTag("post_music_play_button"),
+                contentAlignment = Alignment.Center
+              ) {
+                Box(
+                  modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.62f)),
+                  contentAlignment = Alignment.Center
+                ) {
+                  if (postAudioCtrl.isPreparing) {
+                    CircularProgressIndicator(
+                      modifier = Modifier.size(15.dp),
+                      strokeWidth = 1.8.dp,
+                      color = Color.White
+                    )
+                  } else {
+                    Icon(
+                      imageVector = if (postAudioCtrl.isPlaying) Icons.AutoMirrored.Rounded.VolumeUp else Icons.AutoMirrored.Rounded.VolumeOff,
+                      contentDescription = if (postAudioCtrl.isPlaying) "Mute post music" else "Play post music",
+                      tint = Color.White,
+                      modifier = Modifier.size(17.dp)
+                    )
+                  }
+                }
+              }
+            }
+          }
         }
       }
 
-      if (post.musicTitle.isNotBlank() || post.musicUri.isNotBlank()) {
-        PostMusicBanner(
-          title = post.musicTitle,
-          artist = post.musicArtist,
-          audioUri = post.musicUri,
-          startSec = post.musicStartSec,
-          endSec = post.musicEndSec
-        )
-      }
+
 
       AnimatedVisibility(visible = showReactionBar) {
         Row(

@@ -73,14 +73,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.example.data.model.GlobalSettings
 import com.example.data.model.MusicAttachment
 import com.example.data.model.Post
@@ -191,7 +194,7 @@ fun HomeScreen(
       }
     }
 
-    // Stories strip
+    // Stories strip (compact vertical Story cards)
     item {
       Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -205,61 +208,175 @@ fun HomeScreen(
         val stories = remember(storiesState, blockedUids) {
           ((storiesState as? UiState.Success)?.data.orEmpty()).filter { it.authorId !in blockedUids }
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           item {
-            Column(
-              horizontalAlignment = Alignment.CenterHorizontally,
+            Card(
+              shape = RoundedCornerShape(14.dp),
+              colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)),
               modifier = Modifier
-                .width(62.dp)
+                .width(102.dp)
+                .height(164.dp)
                 .clickable(onClick = onOpenStories)
                 .testTag("add_story_chip")
             ) {
-              Box(
-                modifier = Modifier
-                  .size(56.dp)
-                  .clip(CircleShape)
-                  .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-              ) {
-                Icon(
-                  Icons.Rounded.Add,
-                  contentDescription = "Create story",
-                  tint = MaterialTheme.colorScheme.primary,
-                  modifier = Modifier.size(22.dp)
-                )
+              Box(modifier = Modifier.fillMaxSize()) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                  Box(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .weight(0.66f)
+                      .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    if (!me?.photoUrl.isNullOrBlank()) {
+                      AsyncImage(
+                        model = me?.photoUrl,
+                        contentDescription = "Your profile",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                      )
+                    } else {
+                      UserAvatar(name = me?.displayName ?: "Me", photoUrl = "", size = 46.dp)
+                    }
+                  }
+                  Box(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .weight(0.34f)
+                      .padding(top = 14.dp, bottom = 6.dp, start = 6.dp, end = 6.dp),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    Text(
+                      text = "Create story",
+                      style = MaterialTheme.typography.labelSmall,
+                      fontWeight = FontWeight.SemiBold,
+                      color = MaterialTheme.colorScheme.onSurface,
+                      textAlign = TextAlign.Center,
+                      maxLines = 2
+                    )
+                  }
+                }
+                Box(
+                  modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(top = 42.dp)
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .border(2.5.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                  contentAlignment = Alignment.Center
+                ) {
+                  Icon(
+                    Icons.Rounded.Add,
+                    contentDescription = "Create story",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                  )
+                }
               }
-              Spacer(Modifier.height(4.dp))
-              Text("Your Story", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
           }
           items(stories, key = { it.id }) { story ->
-            val ringColors = remember(story.backgroundHex) { storyGradientForHex(story.backgroundHex) }
-            Column(
-              horizontalAlignment = Alignment.CenterHorizontally,
+            val cardGradient = remember(story.backgroundHex) { storyGradientForHex(story.backgroundHex) }
+            Card(
+              shape = RoundedCornerShape(14.dp),
               modifier = Modifier
-                .width(62.dp)
+                .width(102.dp)
+                .height(164.dp)
                 .clickable { onOpenStoryViewer(story) }
             ) {
               Box(
                 modifier = Modifier
-                  .size(56.dp)
-                  .border(
-                    2.dp,
-                    Brush.linearGradient(ringColors),
-                    CircleShape
-                  )
-                  .padding(2.5.dp),
-                contentAlignment = Alignment.Center
+                  .fillMaxSize()
+                  .background(Brush.linearGradient(cardGradient))
               ) {
-                UserAvatar(name = story.authorName, photoUrl = story.authorAvatar, size = 50.dp)
+                if (story.mediaUri.isNotBlank() && story.mediaType == "image") {
+                  AsyncImage(
+                    model = story.mediaUri,
+                    contentDescription = "${story.authorName}'s story",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                  )
+                } else if (story.caption.isNotBlank()) {
+                  Text(
+                    text = story.caption,
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                      .align(Alignment.Center)
+                      .padding(horizontal = 8.dp)
+                  )
+                }
+                Box(
+                  modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                      Brush.verticalGradient(
+                        listOf(
+                          Color.Black.copy(alpha = 0.25f),
+                          Color.Transparent,
+                          Color.Black.copy(alpha = 0.72f)
+                        )
+                      )
+                    )
+                )
+                Box(
+                  modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+                    .size(34.dp)
+                    .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                    .padding(2.dp)
+                ) {
+                  UserAvatar(name = story.authorName, photoUrl = story.authorAvatar, size = 30.dp)
+                }
+                Column(
+                  modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                  verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                  if (story.musicTitle.isNotBlank()) {
+                    Surface(
+                      shape = RoundedCornerShape(6.dp),
+                      color = Color(0xFF141416).copy(alpha = 0.84f)
+                    ) {
+                      Row(
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                      ) {
+                        Icon(
+                          Icons.Rounded.MusicNote,
+                          contentDescription = null,
+                          tint = Color.White,
+                          modifier = Modifier.size(10.dp)
+                        )
+                        Text(
+                          text = story.musicTitle,
+                          color = Color.White,
+                          style = MaterialTheme.typography.labelSmall,
+                          maxLines = 1,
+                          overflow = TextOverflow.Ellipsis
+                        )
+                      }
+                    }
+                  }
+                  Text(
+                    text = story.authorName.ifBlank { "Story" },
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                }
               }
-              Spacer(Modifier.height(4.dp))
-              Text(
-                text = story.authorName.substringBefore(" "),
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-              )
             }
           }
         }

@@ -889,31 +889,7 @@ fun UserProfileScreen(
                 Text(targetUser.bio, style = MaterialTheme.typography.bodyMedium)
               }
 
-              if (targetUser.isVerifiedOwner && ownerCfg?.showContactEmail == true && !ownerCfg?.contactEmail.isNullOrBlank()) {
-                val publicEmail = ownerCfg!!.contactEmail.trim()
-                val ctx = LocalContext.current
-                Surface(
-                  shape = RoundedCornerShape(12.dp),
-                  color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable {
-                      runCatching {
-                        ctx.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$publicEmail")))
-                      }
-                    }
-                ) {
-                  Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                  ) {
-                    Icon(Icons.Rounded.Email, contentDescription = "Owner Contact Gmail", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                    Text(publicEmail, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                  }
-                }
-              }
+
 
               Text(
                 text = "${targetUser.followersCount} followers · ${profilePosts.size} posts · ${activeUserStories.size} stories",
