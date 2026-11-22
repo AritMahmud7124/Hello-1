@@ -936,6 +936,17 @@ fun PostCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
+              if (post.musicTitle.isNotBlank()) {
+                Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                  text = "🎵 ${post.musicTitle}",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.primary,
+                  fontWeight = FontWeight.Medium,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
+                )
+              }
               Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant)
               Icon(
                 imageVector = when (post.privacy) {

@@ -132,15 +132,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val HelloIndigo = Color(0xFF3B82F6)
-private val HelloViolet = Color(0xFF6366F1)
-private val HelloMagenta = Color(0xFF4F46E5)
+private val HelloIndigo = Color(0xFF71717A)
+private val HelloViolet = Color(0xFF52525B)
+private val HelloMagenta = Color(0xFF71717A)
 private val HelloRose = Color(0xFFE11D48)
-private val HelloAmber = Color(0xFF0EA5E9)
-private val HelloBlue = Color(0xFF2563EB)
+private val HelloAmber = Color(0xFF71717A)
+private val HelloBlue = Color(0xFF27272A)
 
-private val HelloRingBrush = Brush.linearGradient(listOf(HelloBlue, HelloViolet))
-private val HelloBubbleBrush = Brush.linearGradient(listOf(HelloBlue, HelloIndigo))
+private val HelloRingBrush = Brush.linearGradient(listOf(Color(0xFF71717A), Color(0xFF3F3F46)))
+private val HelloBubbleBrush = Brush.linearGradient(listOf(Color(0xFF27272A), Color(0xFF18181B)))
 
 private enum class DmInboxFilter(val label: String) {
   ALL("Primary"),
