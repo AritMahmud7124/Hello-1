@@ -1,0 +1,1766 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hello - Social Media App</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        hello: {
+                            blue: '#1877F2',
+                            hover: '#166fe5',
+                            lightBg: '#F0F2F5',
+                            darkBg: '#18191A',
+                            darkCard: '#242526',
+                            darkHover: '#3A3B3C',
+                            darkText: '#E4E6EB',
+                            darkSubtext: '#B0B3B8'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #bcc0c4; border-radius: 99px; }
+        .dark ::-webkit-scrollbar-thumb { background: #4E4F50; }
+        .scrollbar-none::-webkit-scrollbar { display: none; }
+        .bottom-nav-glow {
+            box-shadow: 0 -10px 25px -5px rgba(24, 119, 242, 0.15), 0 10px 30px -5px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-hello-lightBg dark:bg-hello-darkBg text-gray-900 dark:text-hello-darkText h-full font-sans antialiased flex flex-col transition-colors duration-300 select-none overflow-hidden">
+
+    <!-- TOP NAVIGATION BAR (Account Switcher Removed as per Req 6) -->
+    <header class="sticky top-0 z-40 bg-white/95 dark:bg-hello-darkCard/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-4 h-14 flex items-center justify-between shrink-0 shadow-sm">
+        <div class="flex items-center space-x-3 lg:w-1/4">
+            <h1 class="text-2xl sm:text-3xl font-extrabold text-hello-blue tracking-tight cursor-pointer" onclick="switchTab('feed')">Hello</h1>
+            <div class="relative hidden sm:block w-full max-w-xs">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                <input type="text" placeholder="Search Hello..." class="w-full bg-gray-100 dark:bg-hello-darkHover text-xs rounded-full pl-9 pr-4 py-2 focus:outline-none focus:ring-2 focus:ring-hello-blue">
+            </div>
+        </div>
+
+        <nav class="hidden md:flex items-center justify-center space-x-1 lg:space-x-2 h-full flex-1 max-w-xl">
+            <button onclick="switchTab('feed')" id="dtab-feed" class="desktop-tab flex-1 h-full flex items-center justify-center text-hello-blue border-b-4 border-hello-blue hover:bg-gray-100 dark:hover:bg-hello-darkHover rounded-t-lg transition">
+                <i class="fa-solid fa-house text-xl"></i>
+            </button>
+            <button onclick="switchTab('watch')" id="dtab-watch" class="desktop-tab flex-1 h-full flex items-center justify-center text-gray-500 border-b-4 border-transparent hover:bg-gray-100 dark:hover:bg-hello-darkHover rounded-t-lg transition">
+                <i class="fa-solid fa-clapperboard text-xl"></i>
+            </button>
+            <button onclick="switchTab('secret-love')" id="dtab-secret-love" class="desktop-tab flex-1 h-full flex items-center justify-center text-gray-500 border-b-4 border-transparent hover:bg-gray-100 dark:hover:bg-hello-darkHover rounded-t-lg transition">
+                <i class="fa-solid fa-heart text-xl text-pink-500"></i>
+            </button>
+            <button onclick="switchTab('groups')" id="dtab-groups" class="desktop-tab flex-1 h-full flex items-center justify-center text-gray-500 border-b-4 border-transparent hover:bg-gray-100 dark:hover:bg-hello-darkHover rounded-t-lg transition">
+                <i class="fa-solid fa-users text-xl"></i>
+            </button>
+            <button onclick="switchTab('marketplace')" id="dtab-marketplace" class="desktop-tab flex-1 h-full flex items-center justify-center text-gray-500 border-b-4 border-transparent hover:bg-gray-100 dark:hover:bg-hello-darkHover rounded-t-lg transition">
+                <i class="fa-solid fa-store text-xl"></i>
+            </button>
+        </nav>
+
+        <div class="flex items-center justify-end space-x-2 sm:space-x-3 lg:w-1/4">
+            <!-- Theme Toggle -->
+            <button onclick="toggleDarkMode()" class="w-9 h-9 rounded-full bg-gray-100 dark:bg-hello-darkHover text-gray-700 dark:text-yellow-400 flex items-center justify-center hover:bg-gray-200 transition" title="Toggle Day/Dark Mode">
+                <i class="fa-solid fa-sun text-yellow-500 hidden dark:block"></i>
+                <i class="fa-solid fa-moon text-gray-700 dark:hidden"></i>
+            </button>
+
+            <!-- Messenger -->
+            <button onclick="toggleMessengerDrawer()" class="relative w-9 h-9 rounded-full bg-gray-100 dark:bg-hello-darkHover text-gray-800 dark:text-gray-200 flex items-center justify-center hover:bg-gray-200 transition" title="Messenger">
+                <i class="fa-solid fa-paper-plane text-hello-blue text-sm"></i>
+            </button>
+
+            <!-- Profile Avatar -->
+            <button onclick="switchTab('profile')" class="flex items-center space-x-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-hello-darkHover transition" title="Profile">
+                <img id="header-avatar-img" src="1000003017_2.jpg" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200';" class="w-9 h-9 rounded-full object-cover border-2 border-hello-blue">
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN BODY -->
+    <div class="flex-1 flex overflow-hidden max-w-[1920px] mx-auto w-full relative">
+
+        <!-- LEFT SIDEBAR -->
+        <aside class="hidden lg:block w-72 p-4 overflow-y-auto shrink-0 space-y-2 select-none border-r border-gray-200/60 dark:border-gray-800">
+            <button onclick="switchTab('profile')" class="w-full flex items-center space-x-3 p-2.5 rounded-2xl hover:bg-gray-200/70 dark:hover:bg-hello-darkHover transition">
+                <img id="sidebar-avatar-img" src="1000003017_2.jpg" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200';" class="w-9 h-9 rounded-full object-cover">
+                <div class="text-left">
+                    <h4 id="sidebar-name-text" class="font-bold text-sm leading-tight">Arit Mahmud</h4>
+                    <span id="sidebar-role-badge" class="text-[11px] text-hello-blue font-semibold">Account Owner</span>
+                </div>
+            </button>
+
+            <button onclick="switchTab('feed')" class="w-full flex items-center space-x-3 p-2.5 rounded-2xl hover:bg-gray-200/70 dark:hover:bg-hello-darkHover transition">
+                <div class="w-8 h-8 rounded-xl bg-blue-500/10 text-hello-blue flex items-center justify-center"><i class="fa-solid fa-newspaper text-sm"></i></div>
+                <span class="font-semibold text-sm">News Feed</span>
+            </button>
+
+            <button onclick="switchTab('friends')" class="w-full flex items-center space-x-3 p-2.5 rounded-2xl hover:bg-gray-200/70 dark:hover:bg-hello-darkHover transition">
+                <div class="w-8 h-8 rounded-xl bg-blue-400/10 text-blue-400 flex items-center justify-center"><i class="fa-solid fa-user-group text-sm"></i></div>
+                <span class="font-semibold text-sm">Friend Requests</span>
+            </button>
+
+            <button onclick="switchTab('watch')" class="w-full flex items-center space-x-3 p-2.5 rounded-2xl hover:bg-gray-200/70 dark:hover:bg-hello-darkHover transition">
+                <div class="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center"><i class="fa-solid fa-clapperboard text-sm"></i></div>
+                <span class="font-semibold text-sm">Reels & Videos</span>
+            </button>
+
+            <button onclick="switchTab('secret-love')" class="w-full flex items-center space-x-3 p-2.5 rounded-2xl hover:bg-gray-200/70 dark:hover:bg-hello-darkHover transition">
+                <div class="w-8 h-8 rounded-xl bg-pink-500/10 text-pink-500 flex items-center justify-center"><i class="fa-solid fa-heart text-sm"></i></div>
+                <span class="font-semibold text-sm">Secret Love & Hints</span>
+            </button>
+
+            <button onclick="switchTab('groups')" class="w-full flex items-center space-x-3 p-2.5 rounded-2xl hover:bg-gray-200/70 dark:hover:bg-hello-darkHover transition">
+                <div class="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center"><i class="fa-solid fa-users text-sm"></i></div>
+                <span class="font-semibold text-sm">Groups & Live SOS</span>
+            </button>
+
+            <button onclick="switchTab('marketplace')" class="w-full flex items-center space-x-3 p-2.5 rounded-2xl hover:bg-gray-200/70 dark:hover:bg-hello-darkHover transition">
+                <div class="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center"><i class="fa-solid fa-store text-sm"></i></div>
+                <span class="font-semibold text-sm">Marketplace</span>
+            </button>
+
+            <button onclick="switchTab('settings')" class="w-full flex items-center space-x-3 p-2.5 rounded-2xl hover:bg-gray-200/70 dark:hover:bg-hello-darkHover transition">
+                <div class="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center"><i class="fa-solid fa-gear text-sm"></i></div>
+                <span class="font-semibold text-sm">Settings</span>
+            </button>
+        </aside>
+
+        <!-- CENTER VIEWPORT -->
+        <main class="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 pb-24 md:pb-8 h-full">
+
+            <!-- TAB 1: FEED -->
+            <div id="view-feed" class="tab-view max-w-2xl mx-auto space-y-4">
+                <!-- Stories Carousel -->
+                <div class="flex space-x-3 overflow-x-auto pb-1 scrollbar-none">
+                    <div onclick="openStoryUploader()" class="w-28 h-48 rounded-2xl bg-white dark:bg-hello-darkCard shadow-sm flex-shrink-0 relative overflow-hidden group cursor-pointer border border-gray-200 dark:border-gray-800">
+                        <img id="story-my-avatar" src="1000003017_2.jpg" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200';" class="h-32 w-full object-cover">
+                        <div class="absolute top-28 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-hello-blue text-white rounded-full p-2 border-4 border-white dark:border-hello-darkCard flex items-center justify-center shadow">
+                            <i class="fa-solid fa-plus text-xs"></i>
+                        </div>
+                        <span class="absolute bottom-2 left-0 right-0 text-center text-[11px] font-bold">Add Story</span>
+                        <input type="file" id="story-picker-input" accept="image/*" class="hidden" onchange="handleStoryFileSelected(event)">
+                    </div>
+                    <div id="stories-container" class="flex space-x-3"></div>
+                </div>
+
+                <!-- Create Post Box -->
+                <div class="bg-white dark:bg-hello-darkCard rounded-2xl p-4 shadow-sm border border-gray-200 dark:border-gray-800 space-y-3">
+                    <div class="flex items-center space-x-3">
+                        <img id="post-input-avatar" src="1000003017_2.jpg" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200';" class="w-10 h-10 rounded-full object-cover shrink-0">
+                        <input id="post-text-input" type="text" placeholder="What's on your mind?" onkeypress="if(event.key==='Enter') publishPost()" class="w-full bg-gray-100 dark:bg-hello-darkHover rounded-full px-4 py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-hello-blue">
+                        <button onclick="publishPost()" class="bg-hello-blue hover:bg-hello-hover text-white font-bold text-xs px-5 py-2.5 rounded-full transition shadow">Post</button>
+                    </div>
+
+                    <div id="post-img-preview-box" class="hidden relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+                        <img id="post-img-preview" src="" class="w-full max-h-56 object-cover">
+                        <button onclick="clearPostImage()" class="absolute top-2 right-2 bg-black/70 text-white rounded-full w-6 h-6 flex items-center justify-center"><i class="fa-solid fa-xmark text-xs"></i></button>
+                    </div>
+
+                    <input type="file" id="post-album-picker" accept="image/*" class="hidden" onchange="handlePostAlbumImage(event)">
+
+                    <hr class="border-gray-100 dark:border-gray-800">
+                    <div class="flex justify-between items-center text-xs font-semibold text-gray-500">
+                        <button onclick="document.getElementById('post-album-picker').click()" class="flex-1 flex items-center justify-center space-x-2 p-2 hover:bg-gray-100 dark:hover:bg-hello-darkHover rounded-xl transition">
+                            <i class="fa-solid fa-images text-green-500 text-base"></i>
+                            <span>Photo/Album</span>
+                        </button>
+                        <button onclick="openFeelingModal()" class="flex-1 flex items-center justify-center space-x-2 p-2 hover:bg-gray-100 dark:hover:bg-hello-darkHover rounded-xl transition">
+                            <i class="fa-solid fa-face-smile text-yellow-500 text-base"></i>
+                            <span>Feeling/Activity</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Feed Posts -->
+                <div id="feed-posts-list" class="space-y-4"></div>
+            </div>
+
+            <!-- TAB: FRIEND REQUESTS -->
+            <div id="view-friends" class="tab-view hidden max-w-2xl mx-auto space-y-4">
+                <div class="bg-white dark:bg-hello-darkCard rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-800 space-y-4">
+                    <h2 class="text-xl font-extrabold flex items-center gap-2 border-b border-gray-200 dark:border-gray-700 pb-3">
+                        <i class="fa-solid fa-user-group text-hello-blue"></i> Friend Requests & Suggestions
+                    </h2>
+                    <div id="friend-requests-list" class="space-y-3"></div>
+                </div>
+            </div>
+
+            <!-- TAB: WATCH / REELS -->
+            <div id="view-watch" class="tab-view hidden max-w-xl mx-auto h-[calc(100vh-120px)] flex flex-col">
+                <div class="flex justify-between items-center mb-3 shrink-0">
+                    <h2 class="text-xl font-extrabold flex items-center gap-2">
+                        <i class="fa-solid fa-clapperboard text-purple-500"></i> Continuous Reels & Videos
+                    </h2>
+                    <button onclick="document.getElementById('reel-video-picker').click()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 shadow">
+                        <i class="fa-solid fa-plus"></i> Add Reel
+                    </button>
+                    <input type="file" id="reel-video-picker" accept="video/*" class="hidden" onchange="addNewReel(event)">
+                </div>
+                <div id="reels-feed-box" class="flex-1 overflow-y-auto space-y-6 scrollbar-none"></div>
+            </div>
+
+            <!-- TAB: SECRET LOVE & ANONYMOUS HINTS (Req 4 & 5: Sender strictly hidden) -->
+            <div id="view-secret-love" class="tab-view hidden max-w-3xl mx-auto space-y-6">
+                <div class="bg-gradient-to-r from-pink-600 via-rose-600 to-purple-600 rounded-3xl p-6 text-white shadow-xl space-y-3 relative overflow-hidden">
+                    <span class="bg-white/20 backdrop-blur-md text-[11px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-shield-heart"></i> AI Emotional Authenticity Engine
+                    </span>
+                    <h2 class="text-2xl sm:text-3xl font-black">Secret Love & Anonymous Hint Inbox</h2>
+                    <p class="text-xs sm:text-sm text-pink-100 max-w-xl leading-relaxed">
+                        এখানে আপনার প্রাপ্ত সিক্রেট হিন্ট মেসেজগুলো উপরে প্রদর্শিত হবে। আপনি মেসেজ পড়তে পারবেন কিন্তু **কে পাঠিয়েছে তা সম্পূর্ণ অদেখা এবং গোপন থাকবে**।
+                    </p>
+                </div>
+
+                <!-- TOP PROMINENT ANONYMOUS HINT INBOX (Requirement 5) -->
+                <div class="bg-white dark:bg-hello-darkCard rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-800 space-y-4">
+                    <div class="flex justify-between items-center border-b border-gray-200 dark:border-gray-800 pb-3">
+                        <h3 class="font-bold text-base flex items-center gap-2 text-pink-600 dark:text-pink-400">
+                            <i class="fa-solid fa-user-secret text-lg"></i> Received Anonymous Hints (Sender Identity Hidden)
+                        </h3>
+                        <span class="bg-pink-100 text-pink-700 text-xs font-bold px-2.5 py-0.5 rounded-full">100% Anonymous</span>
+                    </div>
+
+                    <div id="anonymous-hints-inbox" class="space-y-3 max-h-60 overflow-y-auto p-1">
+                        <!-- Loaded dynamically via JS -->
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-hello-darkCard rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-800 space-y-4">
+                    <h3 class="font-bold text-base flex items-center gap-2">
+                        <i class="fa-solid fa-user-check text-pink-500"></i> Select Person & Check 7-Day ID Browsing
+                    </h3>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Target Person ID</label>
+                            <select id="love-target-select" onchange="updateBrowsingAnalysis()" class="w-full bg-gray-100 dark:bg-hello-darkHover rounded-xl p-3 text-xs font-bold outline-none border border-gray-300 dark:border-gray-700">
+                                <option value="Sarah Jenkins">Sarah Jenkins</option>
+                                <option value="Alex Rivera">Alex Rivera</option>
+                                <option value="Emily Clarke">Emily Clarke</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Simulate Browsing Activity</label>
+                            <button onclick="simulateBrowsing()" class="w-full bg-pink-100 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300 font-bold p-3 rounded-xl text-xs hover:bg-pink-200 transition">
+                                <i class="fa-solid fa-clock-rotate-left"></i> Simulate ID Visit (+15 mins)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="browsing-result-box" class="p-4 rounded-xl bg-pink-50 dark:bg-pink-950/20 border border-pink-200 dark:border-pink-900/50 space-y-1 text-xs"></div>
+
+                    <button onclick="requestHintPermission()" class="w-full bg-gradient-to-r from-pink-500 to-rose-600 text-white font-extrabold py-3 rounded-xl shadow-lg hover:from-pink-600 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-paper-plane"></i> Send Anonymous Hint to Target ID
+                    </button>
+                </div>
+
+                <div class="bg-white dark:bg-hello-darkCard rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-800 space-y-4">
+                    <h3 class="font-bold text-base flex items-center justify-between">
+                        <span class="flex items-center gap-2"><i class="fa-solid fa-lock text-rose-500"></i> Mutual Acceptance & Secret Message Unlock</span>
+                        <span id="mutual-status-badge" class="bg-gray-100 dark:bg-gray-800 text-xs font-bold px-3 py-1 rounded-full">Locked</span>
+                    </h3>
+
+                    <div id="mutual-status-desc" class="p-4 rounded-xl bg-gray-50 dark:bg-hello-darkHover text-xs text-gray-500 text-center">
+                        উভয় পক্ষ ব্রাউজ করলে এবং এক্সেপ্ট করলেই সিক্রেট মেসেজ অপশন খুলবে। পরিচয় গোপন থাকবে।
+                    </div>
+
+                    <button onclick="verifyMutualUnlock()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs shadow transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-key"></i> Verify Mutual Match & Unlock Secret Chat
+                    </button>
+
+                    <div id="secret-chat-area" class="hidden space-y-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <div class="bg-pink-100 dark:bg-pink-900/40 p-3 rounded-xl text-xs font-bold text-pink-800 dark:text-pink-200 flex items-center justify-between">
+                            <span><i class="fa-solid fa-shield-halved"></i> Encrypted True Love Secret Channel</span>
+                            <span class="bg-green-500 text-white text-[10px] px-2 py-0.5 rounded-full">UNLOCKED</span>
+                        </div>
+                        <div id="secret-log-container" class="h-40 overflow-y-auto bg-gray-100 dark:bg-hello-darkHover rounded-xl p-3 space-y-2 text-xs"></div>
+                        <div class="flex items-center space-x-2">
+                            <input id="secret-chat-input" type="text" placeholder="Type secret loving message..." class="flex-1 bg-white dark:bg-hello-darkCard rounded-xl px-3 py-2 text-xs outline-none border border-gray-300 dark:border-gray-700">
+                            <button onclick="sendSecretChatMsg()" class="bg-rose-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-rose-700">Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: GROUPS & SOS (Req 3: Group photo/video, cover photo, add & out people) -->
+            <div id="view-groups" class="tab-view hidden max-w-4xl mx-auto space-y-5">
+                <div class="flex justify-between items-center bg-white dark:bg-hello-darkCard p-4 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800">
+                    <div>
+                        <h2 class="text-xl font-extrabold flex items-center gap-2">
+                            <i class="fa-solid fa-users text-indigo-500"></i> Groups, Calls & Live SOS Hub
+                        </h2>
+                        <p class="text-xs text-gray-500">Community groups with live GPS SOS broadcasting and member management.</p>
+                    </div>
+                    <button onclick="openCreateGroupModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow transition">
+                        + Create Group
+                    </button>
+                </div>
+
+                <!-- Emergency SOS Panic Button -->
+                <div class="bg-red-600 text-white rounded-2xl p-4 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-full bg-white text-red-600 flex items-center justify-center font-black text-xl animate-bounce shrink-0">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-black text-sm uppercase tracking-wide">Emergency SOS Panic Button</h4>
+                            <p class="text-xs text-red-100">Click to fetch your live browser GPS coordinates and broadcast them instantly to the group feed.</p>
+                        </div>
+                    </div>
+                    <button onclick="triggerEmergencySOS()" class="bg-white text-red-600 font-black text-xs px-5 py-2.5 rounded-xl hover:bg-red-50 transition shrink-0 shadow flex items-center gap-2">
+                        <i class="fa-solid fa-location-arrow"></i> BROADCAST LIVE SOS
+                    </button>
+                </div>
+
+                <div id="groups-grid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+                
+                <!-- Group Detail Box with Cover Photo, Post Photo/Video & Member Add/Out -->
+                <div id="group-detail-box" class="bg-white dark:bg-hello-darkCard rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden space-y-4"></div>
+            </div>
+
+            <!-- TAB: MARKETPLACE (Req 7: Real FB Marketplace functionality) -->
+            <div id="view-marketplace" class="tab-view hidden max-w-5xl mx-auto space-y-5">
+                <div class="flex justify-between items-center bg-white dark:bg-hello-darkCard p-4 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800">
+                    <div>
+                        <h2 class="text-xl font-extrabold flex items-center gap-2">
+                            <i class="fa-solid fa-store text-emerald-500"></i> Marketplace
+                        </h2>
+                        <p class="text-xs text-gray-500">Buy and sell items locally or list new products.</p>
+                    </div>
+                    <button onclick="openAddProductModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow transition">
+                        + Sell Something
+                    </button>
+                </div>
+
+                <!-- Search and Categories -->
+                <div class="flex flex-col sm:flex-row items-center gap-3">
+                    <div class="relative flex-1 w-full">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                        <input id="market-search" type="text" placeholder="Search Marketplace..." onkeyup="renderMarketplace()" class="w-full bg-white dark:bg-hello-darkCard rounded-xl pl-9 pr-4 py-2.5 text-xs border border-gray-200 dark:border-gray-800 outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+                    <select id="market-cat" onchange="renderMarketplace()" class="w-full sm:w-auto bg-white dark:bg-hello-darkCard rounded-xl px-4 py-2.5 text-xs font-semibold border border-gray-200 dark:border-gray-800 outline-none">
+                        <option value="ALL">All Categories</option>
+                        <option value="Electronics">Electronics</option>
+                        <option value="Gadgets">Gadgets</option>
+                        <option value="Vehicles">Vehicles</option>
+                        <option value="Fashion">Fashion</option>
+                        <option value="Home & Garden">Home & Garden</option>
+                    </select>
+                </div>
+
+                <!-- Products Grid -->
+                <div id="marketplace-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+            </div>
+
+            <!-- TAB: FACEBOOK STYLE PROFILE (Req 1 & 8: Everyone can edit ALL their profile info) -->
+            <div id="view-profile" class="tab-view hidden max-w-4xl mx-auto space-y-4">
+                <div class="bg-white dark:bg-hello-darkCard rounded-3xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
+                    <div class="h-48 sm:h-72 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 relative">
+                        <img id="profile-cover" src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200" class="w-full h-full object-cover">
+                        <input type="file" id="cover-file" accept="image/*" class="hidden" onchange="uploadCover(event)">
+                        <button onclick="document.getElementById('cover-file').click()" class="absolute bottom-3 right-3 bg-white/90 dark:bg-black/80 text-gray-800 dark:text-white text-xs font-bold px-3 py-2 rounded-xl shadow flex items-center gap-1.5">
+                            <i class="fa-solid fa-camera"></i> Change Cover
+                        </button>
+                    </div>
+
+                    <div class="px-4 sm:px-6 pb-2">
+                        <div class="flex flex-col sm:flex-row items-center sm:items-end justify-between -mt-16 sm:-mt-24 mb-4 gap-3 border-b border-gray-200 dark:border-gray-800 pb-4">
+                            <div class="flex flex-col sm:flex-row items-center sm:items-end space-y-2 sm:space-y-0 sm:space-x-4 text-center sm:text-left">
+                                <div class="relative group">
+                                    <img id="profile-avatar" src="1000003017_2.jpg" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500';" class="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-white dark:border-hello-darkCard object-cover shadow-xl bg-gray-200">
+                                    <input type="file" id="avatar-file" accept="image/*" class="hidden" onchange="uploadAvatar(event)">
+                                    <button onclick="document.getElementById('avatar-file').click()" class="absolute bottom-2 right-2 bg-gray-200 dark:bg-hello-darkHover p-2.5 rounded-full border-2 border-white shadow">
+                                        <i class="fa-solid fa-camera text-xs"></i>
+                                    </button>
+                                </div>
+                                <div>
+                                    <h2 id="profile-name" class="text-xl sm:text-2xl font-black flex items-center justify-center sm:justify-start gap-1.5">
+                                        Arit Mahmud <i class="fa-solid fa-circle-check text-hello-blue text-base"></i>
+                                    </h2>
+                                    <p id="profile-stats-subtext" class="text-xs text-gray-500 font-semibold">1.4K friends · 240 posts</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button onclick="openStoryUploader()" class="bg-hello-blue text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 shadow">
+                                    <i class="fa-solid fa-plus"></i> Add Story
+                                </button>
+                                <button onclick="openEditProfileModal()" class="bg-gray-100 dark:bg-hello-darkHover text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-1.5 hover:bg-gray-200 transition">
+                                    <i class="fa-solid fa-pen"></i> Edit Profile Info
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Profile Sub-tabs -->
+                        <div class="flex space-x-1 overflow-x-auto text-xs font-bold text-gray-500 scrollbar-none">
+                            <button onclick="switchProfileSubTab('posts')" id="psub-posts" class="px-4 py-3 text-hello-blue border-b-4 border-hello-blue">Posts</button>
+                            <button onclick="switchProfileSubTab('about')" id="psub-about" class="px-4 py-3 hover:text-gray-900 dark:hover:text-white">About</button>
+                            <button onclick="switchProfileSubTab('friends')" id="psub-friends" class="px-4 py-3 hover:text-gray-900 dark:hover:text-white">Friends</button>
+                            <button onclick="switchProfileSubTab('photos')" id="psub-photos" class="px-4 py-3 hover:text-gray-900 dark:hover:text-white">Photos</button>
+                            <button onclick="switchProfileSubTab('videos')" id="psub-videos" class="px-4 py-3 hover:text-gray-900 dark:hover:text-white">Videos</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profile Sub-tab Content Containers -->
+                <div id="profile-subtab-content" class="space-y-4"></div>
+            </div>
+
+            <!-- TAB 7: SETTINGS (Req 1 & 6: Account Switcher moved HERE exclusively; Owner Info protected) -->
+            <div id="view-settings" class="tab-view hidden max-w-3xl mx-auto space-y-5">
+                <div class="bg-white dark:bg-hello-darkCard rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-800 space-y-4">
+                    <h2 class="text-xl font-extrabold flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 pb-3">
+                        <i class="fa-solid fa-gear text-hello-blue"></i> Settings & Account Switcher
+                    </h2>
+
+                    <!-- Account Switcher EXCLUSIVELY in Settings (Req 6) -->
+                    <div class="p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200 dark:border-blue-900/50 space-y-2">
+                        <label class="block font-extrabold text-xs text-blue-900 dark:text-blue-300">
+                            <i class="fa-solid fa-users-gear mr-1"></i> Switch Active Logged-in Account
+                        </label>
+                        <select id="settings-account-switch" onchange="switchUserFromSettings(this.value)" class="w-full bg-white dark:bg-hello-darkCard p-3 rounded-xl text-xs font-bold outline-none border border-gray-300 dark:border-gray-700 cursor-pointer shadow-sm">
+                            <option value="arit">Arit Mahmud (Platform Owner)</option>
+                            <option value="sarah">Sarah Jenkins</option>
+                            <option value="alex">Alex Rivera</option>
+                            <option value="emily">Emily Clarke</option>
+                        </select>
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400">Switching accounts allows you to view and edit that user's profile information while keeping Owner settings secure.</p>
+                    </div>
+
+                    <!-- Owner Security Privilege Box (Req 1: Non-owners cannot edit Owner Info) -->
+                    <div class="p-4 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900/50 flex items-center justify-between">
+                        <div>
+                            <h4 id="owner-privilege-title" class="font-bold text-xs text-purple-900 dark:text-purple-300">Owner Security Protection Active</h4>
+                            <p id="owner-privilege-desc" class="text-[11px] text-purple-700 dark:text-purple-400">Only the official platform owner can modify owner settings and creator bio.</p>
+                        </div>
+                        <span id="owner-badge-label" class="bg-purple-600 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase">Owner Mode</span>
+                    </div>
+
+                    <div class="space-y-3 text-xs">
+                        <div>
+                            <label class="block font-semibold mb-1">Platform Owner Bio / Info (Owner Only)</label>
+                            <textarea id="owner-bio-input" rows="2" class="w-full bg-gray-100 dark:bg-hello-darkHover p-3 rounded-xl outline-none border border-gray-300 dark:border-gray-700 font-medium">Founder & Lead Software Architect at Hello Social Platform 🚀</textarea>
+                        </div>
+                        <button id="save-owner-bio-btn" onclick="saveOwnerBio()" class="bg-hello-blue text-white font-bold px-4 py-2.5 rounded-xl shadow hover:bg-hello-hover transition">Save Owner Settings</button>
+                    </div>
+
+                    <div class="flex justify-between items-center p-3.5 bg-gray-50 dark:bg-hello-darkHover rounded-xl">
+                        <div>
+                            <h4 class="font-bold text-xs">App Display Mode</h4>
+                            <p class="text-[11px] text-gray-500">Toggle between Light Mode and Dark Mode</p>
+                        </div>
+                        <button onclick="toggleDarkMode()" class="bg-hello-blue text-white px-3.5 py-1.5 rounded-xl text-xs font-bold">Switch Theme</button>
+                    </div>
+                </div>
+
+                <!-- Synchronized Platform Owner Card -->
+                <div class="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 text-white rounded-3xl p-6 shadow-xl space-y-4">
+                    <div class="flex items-center space-x-2 text-yellow-300 text-xs font-black uppercase tracking-wider">
+                        <i class="fa-solid fa-crown text-base"></i>
+                        <span>Platform Owner & System Creator</span>
+                    </div>
+                    <div class="flex items-center space-x-5">
+                        <img id="settings-owner-avatar" src="1000003017_2.jpg" class="w-20 h-20 rounded-full border-4 border-yellow-400 object-cover shadow-2xl shrink-0">
+                        <div class="space-y-1">
+                            <h3 id="settings-owner-name" class="text-2xl font-black flex items-center gap-2">
+                                Arit Mahmud <i class="fa-solid fa-circle-check text-yellow-300 text-lg"></i>
+                            </h3>
+                            <p id="settings-owner-bio" class="text-xs text-blue-100 font-medium">Founder & Lead Software Architect at Hello Social Platform 🚀</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- BOTTOM MOBILE NAVIGATION -->
+    <nav class="md:hidden fixed bottom-3 left-4 right-4 z-40 bg-white/95 dark:bg-hello-darkCard/95 backdrop-blur-xl rounded-full border border-gray-200/80 dark:border-gray-700/80 bottom-nav-glow flex justify-around items-center h-14 px-3">
+        <button onclick="switchTab('feed')" class="flex flex-col items-center justify-center w-10 h-10 rounded-full text-hello-blue"><i class="fa-solid fa-house text-lg"></i></button>
+        <button onclick="switchTab('watch')" class="flex flex-col items-center justify-center w-10 h-10 rounded-full text-gray-400"><i class="fa-solid fa-clapperboard text-lg"></i></button>
+        <button onclick="switchTab('secret-love')" class="flex flex-col items-center justify-center w-10 h-10 rounded-full text-pink-500"><i class="fa-solid fa-heart text-lg"></i></button>
+        <button onclick="switchTab('groups')" class="flex flex-col items-center justify-center w-10 h-10 rounded-full text-gray-400"><i class="fa-solid fa-users text-lg"></i></button>
+        <button onclick="switchTab('profile')" class="flex flex-col items-center justify-center w-10 h-10 rounded-full text-gray-400"><i class="fa-solid fa-user text-lg"></i></button>
+    </nav>
+
+    <!-- FB-STYLE MESSENGER DRAWER & CALL DIALOGS (Req 2) -->
+    <div id="messenger-drawer" class="fixed inset-y-0 right-0 z-50 w-full sm:w-96 bg-white dark:bg-hello-darkCard shadow-2xl border-l border-gray-200 dark:border-gray-800 transform translate-x-full transition-transform duration-300 flex flex-col">
+        <div class="p-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between bg-white dark:bg-hello-darkCard shadow-sm">
+            <div class="flex items-center space-x-2">
+                <div class="relative">
+                    <img id="msg-recipient-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200" class="w-9 h-9 rounded-full object-cover">
+                    <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full"></span>
+                </div>
+                <div>
+                    <h4 id="msg-recipient-name" class="font-bold text-xs">Sarah Jenkins</h4>
+                    <span class="text-[10px] text-green-500 font-semibold">Active Now</span>
+                </div>
+            </div>
+            <div class="flex items-center space-x-1 text-hello-blue">
+                <button onclick="startVoiceCall()" class="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-hello-darkHover flex items-center justify-center" title="Voice Call"><i class="fa-solid fa-phone text-sm"></i></button>
+                <button onclick="startVideoCall()" class="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-hello-darkHover flex items-center justify-center" title="Video Call"><i class="fa-solid fa-video text-sm"></i></button>
+                <button onclick="toggleMessengerDrawer()" class="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-hello-darkHover text-gray-400 flex items-center justify-center text-base"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        </div>
+
+        <div class="flex-1 flex flex-col overflow-hidden bg-white dark:bg-hello-darkCard">
+            <div id="messenger-log" class="flex-1 p-4 overflow-y-auto space-y-3 text-xs flex flex-col"></div>
+            <div class="p-3 border-t border-gray-200 dark:border-gray-800 flex items-center space-x-2 bg-white dark:bg-hello-darkCard">
+                <button onclick="alert('Photo attachment menu opened')" class="text-hello-blue hover:opacity-80 px-1"><i class="fa-solid fa-image text-base"></i></button>
+                <input id="messenger-msg-input" type="text" placeholder="Aa" onkeypress="if(event.key==='Enter') sendMessengerMsg()" class="flex-1 bg-gray-100 dark:bg-hello-darkHover rounded-full px-4 py-2 text-xs outline-none">
+                <button onclick="sendMessengerMsg()" class="text-hello-blue hover:opacity-80 px-1"><i class="fa-solid fa-paper-plane text-base"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VOICE/VIDEO CALL OVERLAY MODAL -->
+    <div id="modal-call-overlay" class="fixed inset-0 z-50 bg-black/90 hidden flex flex-col items-center justify-between p-8 backdrop-blur-md text-white">
+        <div class="text-center space-y-2 mt-8">
+            <span id="call-type-badge" class="bg-white/20 text-[11px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">Audio Call</span>
+            <h3 id="call-contact-name" class="text-2xl font-black">Sarah Jenkins</h3>
+            <p id="call-status-timer" class="text-xs text-gray-300">Calling...</p>
+        </div>
+
+        <div class="relative w-40 h-40 flex items-center justify-center">
+            <div class="absolute inset-0 rounded-full bg-hello-blue/30 animate-ping"></div>
+            <img id="call-contact-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400" class="w-36 h-36 rounded-full border-4 border-hello-blue object-cover shadow-2xl relative z-10">
+        </div>
+
+        <div class="flex items-center space-x-6 mb-8">
+            <button onclick="toggleCallMute()" id="call-mute-btn" class="w-14 h-14 rounded-full bg-white/20 text-white flex items-center justify-center text-xl hover:bg-white/30 transition">
+                <i class="fa-solid fa-microphone"></i>
+            </button>
+            <button onclick="endCall()" class="w-16 h-16 rounded-full bg-red-600 text-white flex items-center justify-center text-2xl hover:bg-red-700 transition shadow-lg">
+                <i class="fa-solid fa-phone-slash"></i>
+            </button>
+            <button onclick="toggleCallSpeaker()" id="call-speaker-btn" class="w-14 h-14 rounded-full bg-white/20 text-white flex items-center justify-center text-xl hover:bg-white/30 transition">
+                <i class="fa-solid fa-volume-high"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL: EDIT USER PROFILE INFO (Req 8: All users can edit bio, work, education, relationship) -->
+    <div id="modal-edit-profile" class="fixed inset-0 z-50 bg-black/60 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-hello-darkCard rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-gray-200 dark:border-gray-800">
+            <div class="flex justify-between items-center border-b border-gray-200 dark:border-gray-800 pb-3">
+                <h3 class="font-extrabold text-base flex items-center gap-2">
+                    <i class="fa-solid fa-user-pen text-hello-blue"></i> Edit Profile Information
+                </h3>
+                <button onclick="closeEditProfileModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold mb-1">Bio / Tagline</label>
+                    <textarea id="edit-user-bio" rows="2" class="w-full bg-gray-100 dark:bg-hello-darkHover p-2.5 rounded-xl outline-none border border-gray-300 dark:border-gray-700 font-medium"></textarea>
+                </div>
+                <div>
+                    <label class="block font-semibold mb-1">Education</label>
+                    <input id="edit-user-edu" type="text" class="w-full bg-gray-100 dark:bg-hello-darkHover p-2.5 rounded-xl outline-none border border-gray-300 dark:border-gray-700">
+                </div>
+                <div>
+                    <label class="block font-semibold mb-1">Work / Occupation</label>
+                    <input id="edit-user-work" type="text" class="w-full bg-gray-100 dark:bg-hello-darkHover p-2.5 rounded-xl outline-none border border-gray-300 dark:border-gray-700">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-semibold mb-1">Relationship</label>
+                        <select id="edit-user-rel" class="w-full bg-gray-100 dark:bg-hello-darkHover p-2.5 rounded-xl outline-none border border-gray-300 dark:border-gray-700 font-semibold">
+                            <option value="Single">Single</option>
+                            <option value="In a Relationship">In a Relationship</option>
+                            <option value="Engaged">Engaged</option>
+                            <option value="Married">Married</option>
+                            <option value="It's Complicated">It's Complicated</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold mb-1">Location</label>
+                        <input id="edit-user-loc" type="text" class="w-full bg-gray-100 dark:bg-hello-darkHover p-2.5 rounded-xl outline-none border border-gray-300 dark:border-gray-700">
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-2 pt-3">
+                    <button onclick="closeEditProfileModal()" class="px-4 py-2 rounded-xl bg-gray-200 dark:bg-hello-darkHover font-bold">Cancel</button>
+                    <button onclick="saveUserProfileDetails()" class="px-5 py-2 rounded-xl bg-hello-blue text-white font-bold hover:bg-hello-hover shadow">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: MARKETPLACE ITEM VIEW / BUY (Req 7) -->
+    <div id="modal-market-detail" class="fixed inset-0 z-50 bg-black/60 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-hello-darkCard rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-200 dark:border-gray-800 space-y-4">
+            <div class="relative h-60 bg-gray-100 dark:bg-hello-darkHover">
+                <img id="mview-img" src="" class="w-full h-full object-cover">
+                <button onclick="closeMarketDetailModal()" class="absolute top-3 right-3 bg-black/60 text-white rounded-full w-8 h-8 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-5 space-y-3 text-xs">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span id="mview-cat" class="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider"></span>
+                        <h3 id="mview-title" class="text-lg font-black text-gray-900 dark:text-white"></h3>
+                    </div>
+                    <span id="mview-price" class="text-lg font-black text-emerald-600"></span>
+                </div>
+                <p id="mview-desc" class="text-gray-600 dark:text-gray-300 leading-relaxed"></p>
+                <div class="p-3 bg-gray-50 dark:bg-hello-darkHover rounded-xl flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <img id="mview-seller-img" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200" class="w-8 h-8 rounded-full object-cover">
+                        <div>
+                            <span class="font-bold text-gray-800 dark:text-gray-200 block" id="mview-seller-name"></span>
+                            <span class="text-[10px] text-gray-400">Listed on Marketplace</span>
+                        </div>
+                    </div>
+                    <button onclick="contactSeller()" class="bg-hello-blue text-white px-3 py-1.5 rounded-lg font-bold flex items-center gap-1">
+                        <i class="fa-solid fa-paper-plane"></i> Message Seller
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ADD MARKETPLACE PRODUCT -->
+    <div id="modal-add-product" class="fixed inset-0 z-50 bg-black/60 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-hello-darkCard rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-gray-200 dark:border-gray-800">
+            <div class="flex justify-between items-center border-b border-gray-200 dark:border-gray-800 pb-3">
+                <h3 class="font-bold text-base">List New Item on Marketplace</h3>
+                <button onclick="closeAddProductModal()" class="text-gray-400"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold mb-1">Product Title</label>
+                    <input id="prod-title" type="text" placeholder="e.g. Wireless Gaming Mouse" class="w-full bg-gray-100 dark:bg-hello-darkHover p-2.5 rounded-xl outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-semibold mb-1">Price ($)</label>
+                        <input id="prod-price" type="text" placeholder="$45" class="w-full bg-gray-100 dark:bg-hello-darkHover p-2.5 rounded-xl outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold mb-1">Category</label>
+                        <select id="prod-cat" class="w-full bg-gray-100 dark:bg-hello-darkHover p-2.5 rounded-xl outline-none font-semibold">
+                            <option value="Electronics">Electronics</option>
+                            <option value="Gadgets">Gadgets</option>
+                            <option value="Vehicles">Vehicles</option>
+                            <option value="Fashion">Fashion</option>
+                            <option value="Home & Garden">Home & Garden</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-semibold mb-1">Description</label>
+                    <textarea id="prod-desc" rows="2" placeholder="Describe your item details..." class="w-full bg-gray-100 dark:bg-hello-darkHover p-2.5 rounded-xl outline-none"></textarea>
+                </div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button onclick="closeAddProductModal()" class="px-4 py-2 rounded-xl bg-gray-200 dark:bg-hello-darkHover font-bold">Cancel</button>
+                    <button onclick="saveProduct()" class="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold">Publish Listing</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CREATE GROUP -->
+    <div id="modal-create-group" class="fixed inset-0 z-50 bg-black/60 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-hello-darkCard rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-gray-200 dark:border-gray-800 pb-3">
+                <h3 class="font-bold text-base">Create Community Group</h3>
+                <button onclick="closeCreateGroupModal()" class="text-gray-400"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold mb-1">Group Name</label>
+                    <input id="group-name-input" type="text" placeholder="e.g. Dhaka Developers Network" class="w-full bg-gray-100 dark:bg-hello-darkHover p-2.5 rounded-xl outline-none">
+                </div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button onclick="closeCreateGroupModal()" class="px-4 py-2 rounded-xl bg-gray-200 dark:bg-hello-darkHover font-bold">Cancel</button>
+                    <button onclick="saveGroup()" class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold">Create Group</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- STORY VIEWER MODAL -->
+    <div id="modal-story-viewer" class="fixed inset-0 z-50 bg-black/95 hidden flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="relative max-w-sm w-full h-[520px] rounded-3xl overflow-hidden bg-gray-900 flex flex-col justify-between p-4 shadow-2xl">
+            <div class="w-full bg-white/30 rounded-full h-1 overflow-hidden z-10">
+                <div id="story-progress-bar" class="bg-hello-blue h-full w-0 transition-all duration-300"></div>
+            </div>
+            <div class="flex items-center justify-between text-white z-10">
+                <div class="flex items-center space-x-2">
+                    <img id="story-view-avatar" src="" class="w-9 h-9 rounded-full object-cover border-2 border-hello-blue">
+                    <span id="story-view-name" class="font-bold text-xs"></span>
+                </div>
+                <button onclick="closeStoryViewer()" class="text-white text-lg bg-black/40 w-8 h-8 rounded-full flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <img id="story-view-img" src="" class="absolute inset-0 w-full h-full object-cover">
+            <div class="relative z-10 flex items-center space-x-2">
+                <input type="text" placeholder="Reply to story..." class="w-full bg-white/20 backdrop-blur-md rounded-full px-4 py-2 text-xs text-white placeholder-white/70 outline-none">
+                <button onclick="closeStoryViewer()" class="bg-hello-blue text-white px-4 py-2 rounded-full text-xs font-bold">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FEELING MODAL -->
+    <div id="modal-feeling" class="fixed inset-0 z-50 bg-black/60 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-hello-darkCard rounded-3xl max-w-sm w-full p-5 space-y-3 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-gray-200 dark:border-gray-800 pb-2">
+                <h3 class="font-bold text-sm">How are you feeling?</h3>
+                <button onclick="closeFeelingModal()" class="text-gray-400"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-xs font-bold">
+                <button onclick="selectFeeling('😊', 'Happy')" class="p-2.5 bg-gray-100 dark:bg-hello-darkHover rounded-xl text-left">😊 Happy</button>
+                <button onclick="selectFeeling('🥰', 'Loved')" class="p-2.5 bg-gray-100 dark:bg-hello-darkHover rounded-xl text-left">🥰 Loved</button>
+                <button onclick="selectFeeling('🤩', 'Excited')" class="p-2.5 bg-gray-100 dark:bg-hello-darkHover rounded-xl text-left">🤩 Excited</button>
+                <button onclick="selectFeeling('😇', 'Blessed')" class="p-2.5 bg-gray-100 dark:bg-hello-darkHover rounded-xl text-left">😇 Blessed</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT APP LOGIC -->
+    <script>
+        // Accounts & Profile State
+        const ACCOUNTS = {
+            arit: { 
+                key: 'arit', 
+                name: "Arit Mahmud", 
+                avatar: "1000003017_2.jpg", 
+                cover: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200", 
+                bio: "Founder & Lead Software Architect at Hello Social Platform 🚀", 
+                education: "B.Sc in Computer Science & Engineering",
+                work: "Lead Architect at Hello Tech Inc.",
+                relationship: "Single / True Love Seeker",
+                location: "Dhaka, Bangladesh",
+                role: "Account Owner", 
+                isOwner: true 
+            },
+            sarah: { 
+                key: 'sarah', 
+                name: "Sarah Jenkins", 
+                avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=500", 
+                cover: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200", 
+                bio: "UI/UX Designer & Creative Enthusiast ✨", 
+                education: "B.A. in Graphic Design & Arts",
+                work: "Senior UI/UX Designer",
+                relationship: "In a Relationship",
+                location: "Chittagong, Bangladesh",
+                role: "UI Designer", 
+                isOwner: false 
+            },
+            alex: { 
+                key: 'alex', 
+                name: "Alex Rivera", 
+                avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500", 
+                cover: "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1200", 
+                bio: "Fullstack Engineer & Open Source Developer 💻", 
+                education: "M.Sc in Software Engineering",
+                work: "Fullstack Developer at TechCorp",
+                relationship: "Single",
+                location: "Sylhet, Bangladesh",
+                role: "Developer", 
+                isOwner: false 
+            },
+            emily: { 
+                key: 'emily', 
+                name: "Emily Clarke", 
+                avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=500", 
+                cover: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1200", 
+                bio: "Digital Creator & Traveler 📸", 
+                education: "B.A. in Mass Communication",
+                work: "Content Strategist & Photographer",
+                relationship: "Single",
+                location: "Cox's Bazar, Bangladesh",
+                role: "Creator", 
+                isOwner: false 
+            }
+        };
+
+        let state = {
+            currentUserKey: 'arit',
+            posts: [
+                {
+                    id: 1,
+                    author: "Arit Mahmud",
+                    avatar: "1000003017_2.jpg",
+                    time: "2h ago",
+                    content: "Welcome to Hello! Explore news feeds, true love verification, reels, and emergency SOS live GPS location alerts.",
+                    image: null,
+                    likes: 19,
+                    userLiked: false,
+                    comments: [{ author: "Sarah Jenkins", text: "Amazing platform design!" }]
+                }
+            ],
+            friendRequests: [
+                { id: 11, name: "Sarah Jenkins", mutual: "12 mutual friends", avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200", status: "pending" },
+                { id: 12, name: "Michael Scott", mutual: "3 mutual friends", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200", status: "pending" }
+            ],
+            stories: [
+                { id: 101, user: "Sarah Jenkins", avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200", image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
+                { id: 102, user: "Alex Rivera", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200", image: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=500" }
+            ],
+            reels: [
+                { id: 201, author: "Emily Clarke", avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200", video: "https://assets.mixkit.co/videos/preview/mixkit-tree-branches-in-the-breeze-1188-large.mp4", desc: "Serene nature walk 🌿", likes: 120 },
+                { id: 202, author: "Alex Rivera", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200", video: "https://assets.mixkit.co/videos/preview/mixkit-waves-in-the-water-1164-large.mp4", desc: "Ocean waves relaxation 🌊", likes: 245 }
+            ],
+            groups: [
+                { 
+                    id: 301, 
+                    name: "Hello Tech Community", 
+                    coverPhoto: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1000",
+                    members: ["Arit Mahmud", "Sarah Jenkins", "Alex Rivera"], 
+                    posts: [
+                        { author: "Sarah Jenkins", text: "Welcome everyone to our tech community group!", media: null, type: "text" }
+                    ] 
+                }
+            ],
+            activeGroupId: 301,
+            marketplace: [
+                { id: 401, title: "Wireless Noise-Canceling Headphones", price: "$89", category: "Electronics", image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400", seller: "Sarah Jenkins", desc: "High quality wireless bluetooth headphones with active noise cancellation." },
+                { id: 402, title: "Mechanical RGB Keyboard", price: "$65", category: "Gadgets", image: "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=400", seller: "Alex Rivera", desc: "Clicky tactile mechanical switches with full RGB backlighting." },
+                { id: 403, title: "Vintage Leather Jacket", price: "$120", category: "Fashion", image: "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400", seller: "Emily Clarke", desc: "Genuine dark brown leather jacket in excellent condition." }
+            ],
+            browsingData: {
+                "Sarah Jenkins": { minutes: 25, browsedBack: true },
+                "Alex Rivera": { minutes: 10, browsedBack: false },
+                "Emily Clarke": { minutes: 30, browsedBack: true }
+            },
+            secretChats: [],
+            // Req 5: Anonymous Hints (Sender Identity Strictly Hidden)
+            anonymousHints: [
+                { hint: "Someone who admires your coding work sent you a secret hint!", time: "10m ago" },
+                { hint: "You have an anonymous admirer visiting your profile regularly.", time: "1h ago" }
+            ],
+            messengerLog: [
+                { sender: "Sarah Jenkins", text: "Hey Arit! Have you checked the emergency SOS feature?", type: "incoming" },
+                { sender: "Arit Mahmud", text: "Yes Sarah! All features are running smoothly.", type: "outgoing" }
+            ]
+        };
+
+        let tempPostImage = null;
+        let tempFeeling = null;
+        let activeProfileSubTab = 'posts';
+        let callTimerInterval = null;
+        let callSeconds = 0;
+
+        function getCurrentUser() {
+            return ACCOUNTS[state.currentUserKey];
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-view').forEach(v => v.classList.add('hidden'));
+            const target = document.getElementById(`view-${tabId}`);
+            if (target) target.classList.remove('hidden');
+
+            if (tabId === 'profile') renderProfileSubTab(activeProfileSubTab);
+            if (tabId === 'watch') renderReels();
+            if (tabId === 'groups') renderGroupsHub();
+            if (tabId === 'marketplace') renderMarketplace();
+            if (tabId === 'secret-love') renderAnonymousHints();
+        }
+
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+        }
+
+        function toggleMessengerDrawer() {
+            const drawer = document.getElementById('messenger-drawer');
+            drawer.classList.toggle('translate-x-full');
+            renderMessengerLog();
+        }
+
+        // Requirement 2: Messenger & Calling System
+        function renderMessengerLog() {
+            const log = document.getElementById('messenger-log');
+            if (!log) return;
+            log.innerHTML = state.messengerLog.map(m => {
+                const isMe = m.sender === getCurrentUser().name;
+                return `
+                    <div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-2">
+                        <div class="max-w-[75%] px-3.5 py-2 rounded-2xl text-xs ${isMe ? 'bg-hello-blue text-white rounded-br-sm' : 'bg-gray-200 dark:bg-hello-darkHover text-gray-900 dark:text-gray-100 rounded-bl-sm'} shadow-sm">
+                            <p class="font-medium">${m.text}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function sendMessengerMsg() {
+            const input = document.getElementById('messenger-msg-input');
+            const val = input ? input.value.trim() : '';
+            if (!val) return;
+            state.messengerLog.push({ sender: getCurrentUser().name, text: val, type: 'outgoing' });
+            input.value = '';
+            renderMessengerLog();
+        }
+
+        function startVoiceCall() {
+            openCallModal('Audio Call');
+        }
+
+        function startVideoCall() {
+            openCallModal('Video Call');
+        }
+
+        function openCallModal(type) {
+            document.getElementById('call-type-badge').innerText = type;
+            document.getElementById('modal-call-overlay').classList.remove('hidden');
+            callSeconds = 0;
+            document.getElementById('call-status-timer').innerText = "Connecting...";
+
+            clearInterval(callTimerInterval);
+            callTimerInterval = setInterval(() => {
+                callSeconds++;
+                const mins = String(Math.floor(callSeconds / 60)).padStart(2, '0');
+                const secs = String(callSeconds % 60).padStart(2, '0');
+                document.getElementById('call-status-timer').innerText = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        function endCall() {
+            clearInterval(callTimerInterval);
+            document.getElementById('modal-call-overlay').classList.add('hidden');
+        }
+
+        function toggleCallMute() {
+            const btn = document.getElementById('call-mute-btn');
+            btn.classList.toggle('bg-red-500');
+        }
+
+        function toggleCallSpeaker() {
+            const btn = document.getElementById('call-speaker-btn');
+            btn.classList.toggle('bg-blue-500');
+        }
+
+        // Stories
+        function renderStories() {
+            const c = document.getElementById('stories-container');
+            if (!c) return;
+            c.innerHTML = state.stories.map(s => `
+                <div onclick="openStoryViewer('${s.user}', '${s.avatar}', '${s.image}')" class="w-28 h-48 rounded-2xl shadow-sm flex-shrink-0 relative overflow-hidden group cursor-pointer">
+                    <img src="${s.image}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent"></div>
+                    <img src="${s.avatar}" class="absolute top-3 left-3 w-8 h-8 rounded-full border-2 border-hello-blue object-cover">
+                    <span class="absolute bottom-2 left-2 right-2 text-white text-xs font-bold truncate">${s.user}</span>
+                </div>
+            `).join('');
+        }
+
+        function openStoryUploader() {
+            document.getElementById('story-picker-input').click();
+        }
+
+        function handleStoryFileSelected(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    state.stories.unshift({
+                        id: Date.now(),
+                        user: getCurrentUser().name,
+                        avatar: getCurrentUser().avatar,
+                        image: evt.target.result
+                    });
+                    renderStories();
+                    alert("Story successfully uploaded!");
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function openStoryViewer(user, avatar, image) {
+            document.getElementById('story-view-name').innerText = user;
+            document.getElementById('story-view-avatar').src = avatar;
+            document.getElementById('story-view-img').src = image;
+            document.getElementById('modal-story-viewer').classList.remove('hidden');
+            const bar = document.getElementById('story-progress-bar');
+            bar.style.width = '0%';
+            setTimeout(() => { bar.style.width = '100%'; }, 50);
+        }
+
+        function closeStoryViewer() {
+            document.getElementById('modal-story-viewer').classList.add('hidden');
+        }
+
+        // Feed & Posts
+        function handlePostAlbumImage(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    tempPostImage = evt.target.result;
+                    document.getElementById('post-img-preview').src = tempPostImage;
+                    document.getElementById('post-img-preview-box').classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function clearPostImage() {
+            tempPostImage = null;
+            document.getElementById('post-img-preview-box').classList.add('hidden');
+        }
+
+        function openFeelingModal() {
+            document.getElementById('modal-feeling').classList.remove('hidden');
+        }
+
+        function closeFeelingModal() {
+            document.getElementById('modal-feeling').classList.add('hidden');
+        }
+
+        function selectFeeling(icon, text) {
+            tempFeeling = { icon, text };
+            closeFeelingModal();
+            alert(`Selected feeling: ${icon} ${text}`);
+        }
+
+        function publishPost() {
+            const input = document.getElementById('post-text-input');
+            const text = input ? input.value.trim() : '';
+
+            if (!text && !tempPostImage && !tempFeeling) {
+                alert("Please write something or attach a photo.");
+                return;
+            }
+
+            state.posts.unshift({
+                id: Date.now(),
+                author: getCurrentUser().name,
+                avatar: getCurrentUser().avatar,
+                time: "Just now",
+                content: text,
+                image: tempPostImage,
+                feeling: tempFeeling,
+                likes: 0,
+                userLiked: false,
+                comments: []
+            });
+
+            if (input) input.value = '';
+            clearPostImage();
+            tempFeeling = null;
+            renderFeedPosts();
+        }
+
+        function renderFeedPosts() {
+            const list = document.getElementById('feed-posts-list');
+            if (!list) return;
+            list.innerHTML = state.posts.map(p => buildPostCard(p)).join('');
+        }
+
+        function buildPostCard(p) {
+            return `
+                <div class="bg-white dark:bg-hello-darkCard rounded-2xl p-4 shadow-sm border border-gray-200 dark:border-gray-800 space-y-3">
+                    <div class="flex items-center space-x-3">
+                        <img src="${p.avatar}" class="w-10 h-10 rounded-full object-cover border border-gray-200">
+                        <div>
+                            <h4 class="font-bold text-sm flex items-center gap-1">
+                                <span>${p.author}</span>
+                                ${p.feeling ? `<span class="text-xs font-normal text-gray-500">is ${p.feeling.icon} ${p.feeling.text}</span>` : ''}
+                            </h4>
+                            <p class="text-[11px] text-gray-400">${p.time} · <i class="fa-solid fa-globe"></i></p>
+                        </div>
+                    </div>
+                    ${p.content ? `<p class="text-xs sm:text-sm leading-relaxed">${p.content}</p>` : ''}
+                    ${p.image ? `<img src="${p.image}" class="rounded-xl w-full max-h-80 object-cover">` : ''}
+                    <div class="flex justify-between items-center text-xs text-gray-500 border-b border-gray-100 dark:border-gray-800 pb-2">
+                        <span><i class="fa-solid fa-thumbs-up text-hello-blue"></i> ${p.likes} likes</span>
+                        <span>${p.comments.length} comments</span>
+                    </div>
+                    <div class="flex justify-around text-xs font-bold text-gray-600 dark:text-gray-300">
+                        <button onclick="likePost(${p.id})" class="flex items-center gap-1.5 py-1 px-3 hover:bg-gray-100 dark:hover:bg-hello-darkHover rounded-lg ${p.userLiked ? 'text-hello-blue' : ''}">
+                            <i class="fa-solid fa-thumbs-up"></i> ${p.userLiked ? 'Liked' : 'Like'}
+                        </button>
+                        <button onclick="toggleComments(${p.id})" class="flex items-center gap-1.5 py-1 px-3 hover:bg-gray-100 dark:hover:bg-hello-darkHover rounded-lg">
+                            <i class="fa-regular fa-comment"></i> Comment
+                        </button>
+                        <button onclick="sharePost(${p.id})" class="flex items-center gap-1.5 py-1 px-3 hover:bg-gray-100 dark:hover:bg-hello-darkHover rounded-lg">
+                            <i class="fa-solid fa-share"></i> Share
+                        </button>
+                    </div>
+                    <div id="comments-box-${p.id}" class="hidden pt-2 border-t border-gray-100 dark:border-gray-800 space-y-2">
+                        <div class="flex space-x-2">
+                            <input id="cmt-input-${p.id}" type="text" placeholder="Write a comment..." class="flex-1 bg-gray-100 dark:bg-hello-darkHover rounded-full px-3 py-1.5 text-xs outline-none">
+                            <button onclick="addComment(${p.id})" class="bg-hello-blue text-white px-3 py-1.5 rounded-full text-xs font-bold">Post</button>
+                        </div>
+                        <div class="space-y-1">
+                            ${p.comments.map(c => `<div class="p-2 rounded-xl bg-gray-50 dark:bg-hello-darkHover text-xs"><strong>${c.author}:</strong> ${c.text}</div>`).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function likePost(id) {
+            const p = state.posts.find(x => x.id === id);
+            if (p) {
+                p.userLiked = !p.userLiked;
+                p.likes += p.userLiked ? 1 : -1;
+                renderFeedPosts();
+            }
+        }
+
+        function toggleComments(id) {
+            const box = document.getElementById(`comments-box-${id}`);
+            if (box) box.classList.toggle('hidden');
+        }
+
+        function addComment(id) {
+            const input = document.getElementById(`cmt-input-${id}`);
+            const val = input ? input.value.trim() : '';
+            if (!val) return;
+            const p = state.posts.find(x => x.id === id);
+            if (p) {
+                p.comments.push({ author: getCurrentUser().name, text: val });
+                renderFeedPosts();
+                document.getElementById(`comments-box-${id}`).classList.remove('hidden');
+            }
+        }
+
+        function sharePost(id) {
+            alert("Post shared successfully to your timeline!");
+        }
+
+        // Friend Requests
+        function renderFriendRequests() {
+            const list = document.getElementById('friend-requests-list');
+            if (!list) return;
+            list.innerHTML = state.friendRequests.map(f => `
+                <div class="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-hello-darkHover border border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center space-x-3">
+                        <img src="${f.avatar}" class="w-12 h-12 rounded-full object-cover">
+                        <div>
+                            <h4 class="font-bold text-sm">${f.name}</h4>
+                            <p class="text-xs text-gray-500">${f.mutual}</p>
+                        </div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="acceptFriend(${f.id})" class="bg-hello-blue hover:bg-hello-hover text-white text-xs font-bold px-4 py-2 rounded-xl shadow">Confirm</button>
+                        <button onclick="removeFriendReq(${f.id})" class="bg-gray-200 dark:bg-gray-700 text-xs font-bold px-4 py-2 rounded-xl">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function acceptFriend(id) {
+            state.friendRequests = state.friendRequests.filter(f => f.id !== id);
+            renderFriendRequests();
+            alert("Friend request accepted!");
+        }
+
+        function removeFriendReq(id) {
+            state.friendRequests = state.friendRequests.filter(f => f.id !== id);
+            renderFriendRequests();
+        }
+
+        // Reels / Watch
+        function renderReels() {
+            const box = document.getElementById('reels-feed-box');
+            if (!box) return;
+            box.innerHTML = state.reels.map(r => `
+                <div class="bg-black rounded-3xl overflow-hidden relative aspect-[9/16] max-h-[500px] flex flex-col justify-between p-4 shadow-2xl">
+                    <video src="${r.video}" autoplay loop muted class="absolute inset-0 w-full h-full object-cover"></video>
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent"></div>
+                    <div class="relative z-10 flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <img src="${r.avatar}" class="w-10 h-10 rounded-full border-2 border-white object-cover">
+                            <span class="text-white font-bold text-xs">${r.author}</span>
+                        </div>
+                        <button class="bg-hello-blue text-white text-xs font-bold px-3.5 py-1.5 rounded-full">Follow</button>
+                    </div>
+                    <div class="relative z-10 space-y-2">
+                        <p class="text-white text-xs">${r.desc}</p>
+                        <div class="flex justify-around text-white text-xs font-bold pt-2 border-t border-white/20">
+                            <button onclick="alert('Liked reel!')" class="flex items-center gap-1"><i class="fa-solid fa-heart text-pink-500"></i> ${r.likes}</button>
+                            <button onclick="alert('Comment box opened')" class="flex items-center gap-1"><i class="fa-solid fa-comment"></i> 14</button>
+                            <button onclick="alert('Reel shared!')" class="flex items-center gap-1"><i class="fa-solid fa-share"></i> Share</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function addNewReel(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                state.reels.unshift({
+                    id: Date.now(),
+                    author: getCurrentUser().name,
+                    avatar: getCurrentUser().avatar,
+                    video: url,
+                    desc: "My new video reel 🎬",
+                    likes: 1
+                });
+                renderReels();
+                alert("Reel successfully added!");
+            }
+        }
+
+        // Req 4 & 5: Anonymous Hints (Sender Identity Strictly Hidden)
+        function renderAnonymousHints() {
+            const inbox = document.getElementById('anonymous-hints-inbox');
+            if (!inbox) return;
+            inbox.innerHTML = state.anonymousHints.map(h => `
+                <div class="p-3 bg-pink-50/70 dark:bg-pink-950/30 rounded-xl shadow-sm border border-pink-200 dark:border-pink-900/40 flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-9 h-9 rounded-full bg-pink-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                            <i class="fa-solid fa-user-secret"></i>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-pink-200 text-pink-800 dark:bg-pink-900 dark:text-pink-200">Sender Identity Hidden</span>
+                            <p class="text-xs font-semibold mt-1 text-gray-800 dark:text-gray-100">${h.hint}</p>
+                        </div>
+                    </div>
+                    <span class="text-[10px] text-gray-400 shrink-0">${h.time}</span>
+                </div>
+            `).join('');
+        }
+
+        function updateBrowsingAnalysis() {
+            const target = document.getElementById('love-target-select').value;
+            const data = state.browsingData[target] || { minutes: 5, browsedBack: false };
+            const box = document.getElementById('browsing-result-box');
+            box.innerHTML = `
+                <p><strong>Target ID:</strong> ${target}</p>
+                <p><strong>Total Browsing Time (7 Days):</strong> ${data.minutes} minutes</p>
+                <p><strong>Mutual Browsing Status:</strong> ${data.browsedBack ? '<span class="text-green-600 font-bold">Mutual Match Verified (Both browsed each other)</span>' : '<span class="text-amber-600 font-bold">Pending return visit from target</span>'}</p>
+            `;
+        }
+
+        function simulateBrowsing() {
+            const target = document.getElementById('love-target-select').value;
+            if (!state.browsingData[target]) state.browsingData[target] = { minutes: 0, browsedBack: false };
+            state.browsingData[target].minutes += 15;
+            if (state.browsingData[target].minutes >= 30) state.browsingData[target].browsedBack = true;
+            updateBrowsingAnalysis();
+            alert(`Simulated 15 minutes browsing on ${target}'s ID!`);
+        }
+
+        function requestHintPermission() {
+            const target = document.getElementById('love-target-select').value;
+            const hintText = prompt(`Send anonymous hint to ${target}:`);
+            if (hintText) {
+                state.anonymousHints.unshift({ hint: hintText, time: "Just now" });
+                renderAnonymousHints();
+                alert(`Anonymous hint sent to ${target}! Sender identity is strictly hidden.`);
+            }
+        }
+
+        function verifyMutualUnlock() {
+            const target = document.getElementById('love-target-select').value;
+            const data = state.browsingData[target];
+            if (data && data.browsedBack) {
+                document.getElementById('mutual-status-badge').innerText = "UNLOCKED";
+                document.getElementById('mutual-status-badge').className = "bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-full";
+                document.getElementById('mutual-status-desc').innerText = "Mutual True Love Match Verified! Secret message channel is now open.";
+                document.getElementById('secret-chat-area').classList.remove('hidden');
+                alert("Mutual Match confirmed! Secret channel unlocked.");
+            } else {
+                alert("Mutual match not verified yet. Target user must browse back to unlock secret messaging.");
+            }
+        }
+
+        function sendSecretChatMsg() {
+            const input = document.getElementById('secret-chat-input');
+            const val = input ? input.value.trim() : '';
+            if (!val) return;
+            state.secretChats.push({ sender: getCurrentUser().name, text: val });
+            input.value = '';
+            renderSecretLog();
+        }
+
+        function renderSecretLog() {
+            const c = document.getElementById('secret-log-container');
+            if (!c) return;
+            c.innerHTML = state.secretChats.map(s => `
+                <div class="p-2 rounded-lg bg-white dark:bg-hello-darkCard">
+                    <strong class="text-pink-600">${s.sender}:</strong> <span>${s.text}</span>
+                </div>
+            `).join('');
+        }
+
+        // Requirement 3: Groups (Cover Photo, Photo/Video Post, Add & Out Members)
+        function renderGroupsHub() {
+            const grid = document.getElementById('groups-grid');
+            if (!grid) return;
+            grid.innerHTML = state.groups.map(g => `
+                <div onclick="selectGroup(${g.id})" class="p-4 rounded-2xl bg-white dark:bg-hello-darkCard shadow-sm border border-gray-200 dark:border-gray-800 cursor-pointer hover:border-hello-blue transition">
+                    <h4 class="font-extrabold text-sm">${g.name}</h4>
+                    <p class="text-xs text-gray-500 mt-1">${g.members.length} members · Active</p>
+                </div>
+            `).join('');
+            renderActiveGroupDetails();
+        }
+
+        function selectGroup(id) {
+            state.activeGroupId = id;
+            renderActiveGroupDetails();
+        }
+
+        function renderActiveGroupDetails() {
+            const box = document.getElementById('group-detail-box');
+            if (!box) return;
+            const g = state.groups.find(x => x.id === state.activeGroupId) || state.groups[0];
+            box.innerHTML = `
+                <div class="relative h-44 bg-gray-200 dark:bg-hello-darkHover">
+                    <img src="${g.coverPhoto}" class="w-full h-full object-cover">
+                    <input type="file" id="group-cover-picker" accept="image/*" class="hidden" onchange="updateGroupCover(event, ${g.id})">
+                    <button onclick="document.getElementById('group-cover-picker').click()" class="absolute bottom-3 right-3 bg-black/70 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow hover:bg-black/80 transition">
+                        <i class="fa-solid fa-camera"></i> Change Group Cover Photo
+                    </button>
+                </div>
+                <div class="p-5 space-y-4">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-200 dark:border-gray-800 pb-3 gap-2">
+                        <div>
+                            <h3 class="font-extrabold text-base">${g.name}</h3>
+                            <div class="flex flex-wrap items-center gap-1 mt-1">
+                                <span class="text-xs text-gray-500 font-semibold mr-1">Members:</span>
+                                ${g.members.map(m => `
+                                    <span class="inline-flex items-center gap-1 bg-gray-100 dark:bg-hello-darkHover text-[11px] font-bold px-2.5 py-0.5 rounded-full border border-gray-200 dark:border-gray-700">
+                                        ${m} 
+                                        <i class="fa-solid fa-xmark text-red-500 cursor-pointer hover:scale-125 transition ml-1" onclick="removeGroupMember('${m}')" title="Remove Member (People Out)"></i>
+                                    </span>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button onclick="startGroupCall()" class="bg-green-600 text-white text-xs font-bold px-3 py-2 rounded-xl"><i class="fa-solid fa-phone"></i> Group Call</button>
+                            <button onclick="addMemberToGroup()" class="bg-indigo-600 text-white text-xs font-bold px-3 py-2 rounded-xl">+ Add Member</button>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex space-x-2">
+                            <input id="grp-msg-input" type="text" placeholder="Write group photo/video post..." class="flex-1 bg-gray-100 dark:bg-hello-darkHover rounded-xl px-3 py-2 text-xs outline-none">
+                            <input type="file" id="group-media-picker" accept="image/*,video/*" class="hidden" onchange="sendGroupPostWithMedia(event)">
+                            <button onclick="document.getElementById('group-media-picker').click()" class="bg-gray-200 dark:bg-hello-darkHover px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 hover:bg-gray-300 transition">
+                                <i class="fa-solid fa-image text-green-500"></i> Media
+                            </button>
+                            <button onclick="sendGroupPost()" class="bg-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-xl">Post</button>
+                        </div>
+                        <div class="space-y-3 max-h-64 overflow-y-auto pt-2">
+                            ${g.posts.map(gp => `
+                                <div class="p-3 rounded-xl bg-gray-50 dark:bg-hello-darkHover space-y-2 text-xs">
+                                    <strong>${gp.author}:</strong>
+                                    <p>${gp.text}</p>
+                                    ${gp.media ? `<img src="${gp.media}" class="rounded-xl max-h-48 w-full object-cover">` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateGroupCover(e, groupId) {
+            const file = e.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                const g = state.groups.find(x => x.id === groupId);
+                if (g) {
+                    g.coverPhoto = url;
+                    renderActiveGroupDetails();
+                    alert("Group cover photo updated!");
+                }
+            }
+        }
+
+        function sendGroupPost() {
+            const input = document.getElementById('grp-msg-input');
+            const val = input ? input.value.trim() : '';
+            if (!val) return;
+            const g = state.groups.find(x => x.id === state.activeGroupId);
+            if (g) {
+                g.posts.unshift({ author: getCurrentUser().name, text: val, media: null });
+                input.value = '';
+                renderActiveGroupDetails();
+            }
+        }
+
+        function sendGroupPostWithMedia(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                const g = state.groups.find(x => x.id === state.activeGroupId);
+                if (g) {
+                    g.posts.unshift({ author: getCurrentUser().name, text: "Shared media in group", media: url });
+                    renderActiveGroupDetails();
+                    alert("Group media post published!");
+                }
+            }
+        }
+
+        function triggerEmergencySOS() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(pos => {
+                    const lat = pos.coords.latitude.toFixed(4);
+                    const lng = pos.coords.longitude.toFixed(4);
+                    const mapsLink = `https://maps.google.com/?q=${lat},${lng}`;
+                    const sosText = `🚨 EMERGENCY SOS ALERT! Live Location: Lat ${lat}, Lng ${lng}. [Open Maps](${mapsLink})`;
+                    
+                    const g = state.groups.find(x => x.id === state.activeGroupId);
+                    if (g) {
+                        g.posts.unshift({ author: `<span class="text-red-600 font-black">SOS EMERGENCY (${getCurrentUser().name})</span>`, text: sosText, media: null });
+                        renderActiveGroupDetails();
+                    }
+                    alert("Emergency SOS live GPS location broadcasted to group!");
+                }, err => {
+                    alert("Unable to retrieve live GPS location. Please allow browser location access.");
+                });
+            } else {
+                alert("Geolocation is not supported by your browser.");
+            }
+        }
+
+        function startGroupCall() {
+            alert("Starting group conference call...");
+        }
+
+        function addMemberToGroup() {
+            const name = prompt("Enter member name to add to group:");
+            if (name) {
+                const g = state.groups.find(x => x.id === state.activeGroupId);
+                if (g) {
+                    g.members.push(name);
+                    renderActiveGroupDetails();
+                    alert(`${name} added to group!`);
+                }
+            }
+        }
+
+        function removeGroupMember(name) {
+            const g = state.groups.find(x => x.id === state.activeGroupId);
+            if (g) {
+                g.members = g.members.filter(m => m !== name);
+                renderActiveGroupDetails();
+                alert(`${name} removed (people out) from group!`);
+            }
+        }
+
+        function openCreateGroupModal() {
+            document.getElementById('modal-create-group').classList.remove('hidden');
+        }
+
+        function closeCreateGroupModal() {
+            document.getElementById('modal-create-group').classList.add('hidden');
+        }
+
+        function saveGroup() {
+            const name = document.getElementById('group-name-input').value.trim();
+            if (name) {
+                state.groups.push({ 
+                    id: Date.now(), 
+                    name, 
+                    coverPhoto: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=1000",
+                    members: [getCurrentUser().name], 
+                    posts: [] 
+                });
+                closeCreateGroupModal();
+                renderGroupsHub();
+                alert("Group created successfully!");
+            }
+        }
+
+        // Requirement 7: Marketplace (Full Interactive FB Style Marketplace)
+        function renderMarketplace() {
+            const grid = document.getElementById('marketplace-grid');
+            if (!grid) return;
+            const search = document.getElementById('market-search').value.toLowerCase();
+            const cat = document.getElementById('market-cat').value;
+
+            const filtered = state.marketplace.filter(m => {
+                const matchTitle = m.title.toLowerCase().includes(search);
+                const matchCat = cat === 'ALL' || m.category === cat;
+                return matchTitle && matchCat;
+            });
+
+            grid.innerHTML = filtered.map(m => `
+                <div onclick="openMarketDetailModal(${m.id})" class="bg-white dark:bg-hello-darkCard rounded-2xl overflow-hidden shadow-sm border border-gray-200 dark:border-gray-800 flex flex-col justify-between cursor-pointer hover:shadow-md transition group">
+                    <div class="h-36 overflow-hidden">
+                        <img src="${m.image}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                    </div>
+                    <div class="p-3 space-y-1">
+                        <span class="text-[10px] font-extrabold text-emerald-600 uppercase">${m.category}</span>
+                        <h4 class="font-bold text-xs truncate group-hover:text-hello-blue transition">${m.title}</h4>
+                        <p class="font-black text-sm text-gray-900 dark:text-white">${m.price}</p>
+                    </div>
+                    <div class="p-2 border-t border-gray-100 dark:border-gray-800">
+                        <button class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-1.5 rounded-xl transition">View Item</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openMarketDetailModal(id) {
+            const m = state.marketplace.find(x => x.id === id);
+            if (!m) return;
+            document.getElementById('mview-img').src = m.image;
+            document.getElementById('mview-cat').innerText = m.category;
+            document.getElementById('mview-title').innerText = m.title;
+            document.getElementById('mview-price').innerText = m.price;
+            document.getElementById('mview-desc').innerText = m.desc || "No description provided.";
+            document.getElementById('mview-seller-name').innerText = m.seller;
+            document.getElementById('modal-market-detail').classList.remove('hidden');
+        }
+
+        function closeMarketDetailModal() {
+            document.getElementById('modal-market-detail').classList.add('hidden');
+        }
+
+        function contactSeller() {
+            const seller = document.getElementById('mview-seller-name').innerText;
+            alert(`Opening Messenger chat with seller ${seller}...`);
+            closeMarketDetailModal();
+            toggleMessengerDrawer();
+        }
+
+        function openAddProductModal() {
+            document.getElementById('modal-add-product').classList.remove('hidden');
+        }
+
+        function closeAddProductModal() {
+            document.getElementById('modal-add-product').classList.add('hidden');
+        }
+
+        function saveProduct() {
+            const title = document.getElementById('prod-title').value.trim();
+            const price = document.getElementById('prod-price').value.trim();
+            const category = document.getElementById('prod-cat').value;
+            const desc = document.getElementById('prod-desc').value.trim();
+            if (!title || !price) {
+                alert("Please fill in title and price.");
+                return;
+            }
+            state.marketplace.unshift({
+                id: Date.now(),
+                title,
+                price: price.startsWith('$') ? price : `$${price}`,
+                category,
+                desc,
+                image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400",
+                seller: getCurrentUser().name
+            });
+            closeAddProductModal();
+            renderMarketplace();
+            alert("Product listed successfully in Marketplace!");
+        }
+
+        // Requirements 1 & 8: Profile Info Editing for All Users
+        function switchProfileSubTab(tab) {
+            activeProfileSubTab = tab;
+            ['posts', 'about', 'friends', 'photos', 'videos'].forEach(t => {
+                const btn = document.getElementById(`psub-${t}`);
+                if (btn) {
+                    btn.className = t === tab ? "px-4 py-3 text-hello-blue border-b-4 border-hello-blue" : "px-4 py-3 hover:text-gray-900 dark:hover:text-white";
+                }
+            });
+            renderProfileSubTab(tab);
+        }
+
+        function renderProfileSubTab(tab) {
+            const content = document.getElementById('profile-subtab-content');
+            if (!content) return;
+            const user = getCurrentUser();
+
+            if (tab === 'posts') {
+                const myPosts = state.posts.filter(p => p.author === user.name);
+                content.innerHTML = myPosts.length ? myPosts.map(p => buildPostCard(p)).join('') : `<div class="bg-white dark:bg-hello-darkCard p-6 rounded-2xl text-center text-xs text-gray-500">No posts published yet.</div>`;
+            } else if (tab === 'about') {
+                content.innerHTML = `
+                    <div class="bg-white dark:bg-hello-darkCard rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-800 space-y-3 text-xs">
+                        <div class="flex justify-between items-center border-b border-gray-200 dark:border-gray-800 pb-2">
+                            <h3 class="font-extrabold text-sm">About ${user.name}</h3>
+                            <button onclick="openEditProfileModal()" class="text-hello-blue font-bold flex items-center gap-1 hover:underline">
+                                <i class="fa-solid fa-pen"></i> Edit Info
+                            </button>
+                        </div>
+                        <p><strong>Bio:</strong> ${user.bio}</p>
+                        <p><strong>Education:</strong> ${user.education}</p>
+                        <p><strong>Work:</strong> ${user.work}</p>
+                        <p><strong>Relationship:</strong> ${user.relationship}</p>
+                        <p><strong>Location:</strong> ${user.location}</p>
+                    </div>
+                `;
+            } else if (tab === 'friends') {
+                content.innerHTML = `
+                    <div class="bg-white dark:bg-hello-darkCard rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-800 space-y-3 text-xs">
+                        <h3 class="font-extrabold text-sm border-b pb-2">Friends (1.4K)</h3>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <div class="p-2 rounded-xl bg-gray-50 dark:bg-hello-darkHover flex items-center space-x-2">
+                                <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200" class="w-10 h-10 rounded-full object-cover">
+                                <span class="font-bold">Sarah Jenkins</span>
+                            </div>
+                            <div class="p-2 rounded-xl bg-gray-50 dark:bg-hello-darkHover flex items-center space-x-2">
+                                <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200" class="w-10 h-10 rounded-full object-cover">
+                                <span class="font-bold">Alex Rivera</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (tab === 'photos') {
+                content.innerHTML = `
+                    <div class="bg-white dark:bg-hello-darkCard rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-800 space-y-3 text-xs">
+                        <h3 class="font-extrabold text-sm border-b pb-2">Photos</h3>
+                        <div class="grid grid-cols-3 gap-2">
+                            <img src="${user.avatar}" class="w-full h-28 object-cover rounded-xl">
+                            <img src="${user.cover}" class="w-full h-28 object-cover rounded-xl">
+                            <img src="https://images.unsplash.com/photo-1518770660439-4636190af475?w=400" class="w-full h-28 object-cover rounded-xl">
+                        </div>
+                    </div>
+                `;
+            } else if (tab === 'videos') {
+                content.innerHTML = `
+                    <div class="bg-white dark:bg-hello-darkCard rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-800 space-y-3 text-xs">
+                        <h3 class="font-extrabold text-sm border-b pb-2">Videos & Reels</h3>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="bg-black rounded-xl overflow-hidden h-40 flex items-center justify-center text-white font-bold">Reel #1</div>
+                            <div class="bg-black rounded-xl overflow-hidden h-40 flex items-center justify-center text-white font-bold">Reel #2</div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Open & Save User Profile Editing (Req 8)
+        function openEditProfileModal() {
+            const user = getCurrentUser();
+            document.getElementById('edit-user-bio').value = user.bio || '';
+            document.getElementById('edit-user-edu').value = user.education || '';
+            document.getElementById('edit-user-work').value = user.work || '';
+            document.getElementById('edit-user-rel').value = user.relationship || 'Single';
+            document.getElementById('edit-user-loc').value = user.location || '';
+            document.getElementById('modal-edit-profile').classList.remove('hidden');
+        }
+
+        function closeEditProfileModal() {
+            document.getElementById('modal-edit-profile').classList.add('hidden');
+        }
+
+        function saveUserProfileDetails() {
+            const user = getCurrentUser();
+            user.bio = document.getElementById('edit-user-bio').value.trim();
+            user.education = document.getElementById('edit-user-edu').value.trim();
+            user.work = document.getElementById('edit-user-work').value.trim();
+            user.relationship = document.getElementById('edit-user-rel').value;
+            user.location = document.getElementById('edit-user-loc').value.trim();
+
+            closeEditProfileModal();
+            syncUserInterface();
+            renderProfileSubTab(activeProfileSubTab);
+            alert("Your profile information has been updated!");
+        }
+
+        function uploadAvatar(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                getCurrentUser().avatar = url;
+                document.getElementById('profile-avatar').src = url;
+                syncUserInterface();
+                alert("Profile picture updated!");
+            }
+        }
+
+        function uploadCover(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                getCurrentUser().cover = url;
+                document.getElementById('profile-cover').src = url;
+                alert("Cover photo updated!");
+            }
+        }
+
+        // Settings & Account Switching (Req 1 & 6)
+        function switchUserFromSettings(key) {
+            state.currentUserKey = key;
+            syncUserInterface();
+            renderProfileSubTab(activeProfileSubTab);
+            alert(`Switched active account to ${getCurrentUser().name}!`);
+        }
+
+        function syncUserInterface() {
+            const user = getCurrentUser();
+            document.getElementById('header-avatar-img').src = user.avatar;
+            document.getElementById('sidebar-avatar-img').src = user.avatar;
+            document.getElementById('sidebar-name-text').innerText = user.name;
+            document.getElementById('sidebar-role-badge').innerText = user.role;
+            document.getElementById('post-input-avatar').src = user.avatar;
+            document.getElementById('story-my-avatar').src = user.avatar;
+            document.getElementById('profile-avatar').src = user.avatar;
+            document.getElementById('profile-cover').src = user.cover;
+            document.getElementById('profile-name').innerHTML = `${user.name} <i class="fa-solid fa-circle-check text-hello-blue text-base"></i>`;
+
+            // Enforce Owner Privileges in Settings View (Requirement 1)
+            const ownerBioInput = document.getElementById('owner-bio-input');
+            const saveOwnerBtn = document.getElementById('save-owner-bio-btn');
+            const privilegeTitle = document.getElementById('owner-privilege-title');
+            const privilegeDesc = document.getElementById('owner-privilege-desc');
+            const ownerBadgeLabel = document.getElementById('owner-badge-label');
+
+            if (user.isOwner) {
+                ownerBioInput.disabled = false;
+                saveOwnerBtn.disabled = false;
+                saveOwnerBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                privilegeTitle.innerText = "Owner Security Protection Active";
+                privilegeDesc.innerText = "You are logged in as the official owner. You can edit platform creator settings.";
+                ownerBadgeLabel.innerText = "Owner Mode";
+            } else {
+                ownerBioInput.disabled = true;
+                saveOwnerBtn.disabled = true;
+                saveOwnerBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                privilegeTitle.innerText = "Restricted Mode (Non-Owner)";
+                privilegeDesc.innerText = `You are logged in as ${user.name}. Only the platform owner (Arit Mahmud) can modify creator settings.`;
+                ownerBadgeLabel.innerText = "Restricted";
+            }
+
+            // Sync Settings Owner Card
+            document.getElementById('settings-owner-avatar').src = ACCOUNTS.arit.avatar;
+            document.getElementById('settings-owner-name').innerHTML = `${ACCOUNTS.arit.name} <i class="fa-solid fa-circle-check text-yellow-300 text-lg"></i>`;
+            document.getElementById('settings-owner-bio').innerText = ACCOUNTS.arit.bio;
+            ownerBioInput.value = ACCOUNTS.arit.bio;
+            document.getElementById('settings-account-switch').value = state.currentUserKey;
+        }
+
+        function saveOwnerBio() {
+            if (!getCurrentUser().isOwner) {
+                alert("Access Denied! Only the platform owner can modify owner settings.");
+                return;
+            }
+            const bio = document.getElementById('owner-bio-input').value.trim();
+            if (bio) {
+                ACCOUNTS.arit.bio = bio;
+                syncUserInterface();
+                alert("Platform owner info updated!");
+            }
+        }
+
+        window.onload = function() {
+            renderFeedPosts();
+            renderStories();
+            renderSecretLog();
+            renderAnonymousHints();
+            updateBrowsingAnalysis();
+            renderFriendRequests();
+            syncUserInterface();
+        };
+    </script>
+</body>
+</html>
