@@ -94,20 +94,14 @@ class SpacesGovernanceViewModel(
           val now = System.currentTimeMillis()
           _liveClockMs.value = now
 
-          var hasActiveCountdown = false
           var nearestFutureTransitionMs = Long.MAX_VALUE
 
           for (match in matches) {
             when (MutualSecretLoveEngine.phaseOf(match, now)) {
-              MutualMatchPhase.SEALED_HIDDEN -> {
-                if (match.alertAtMs > now) {
-                  nearestFutureTransitionMs = minOf(nearestFutureTransitionMs, match.alertAtMs - now)
-                }
-              }
-              MutualMatchPhase.COUNTDOWN_24H -> {
-                hasActiveCountdown = true
-                if (!match.alert24hDispatched) {
-                  governanceRepository.dispatchMutual24hAlertIfNeeded(match)
+              MutualMatchPhase.SEALED_HIDDEN, MutualMatchPhase.COUNTDOWN_24H -> {
+                // Complete stealth before countdown officially unlocks: never emit 24h warning or surface match early.
+                if (match.revealAtMs > now) {
+                  nearestFutureTransitionMs = minOf(nearestFutureTransitionMs, match.revealAtMs - now)
                 }
               }
               MutualMatchPhase.UNLOCKED -> {
@@ -121,10 +115,10 @@ class SpacesGovernanceViewModel(
             }
           }
 
-          when {
-            hasActiveCountdown -> delay(1_000L)
-            nearestFutureTransitionMs < Long.MAX_VALUE -> delay(nearestFutureTransitionMs.coerceIn(1_000L, 30_000L))
-            else -> break
+          if (nearestFutureTransitionMs < Long.MAX_VALUE) {
+            delay(nearestFutureTransitionMs.coerceIn(1_000L, 30_000L))
+          } else {
+            break
           }
         }
       }

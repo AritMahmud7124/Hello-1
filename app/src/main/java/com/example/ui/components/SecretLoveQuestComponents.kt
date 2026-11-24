@@ -867,89 +867,9 @@ fun MutualMatchVaultCard(
 ) {
   val phase = MutualSecretLoveEngine.phaseOf(match, nowMs)
   when (phase) {
-    MutualMatchPhase.SEALED_HIDDEN -> {
-      // Strictly concealed: render nothing during the silent delay window so users have zero advance hint.
+    MutualMatchPhase.SEALED_HIDDEN, MutualMatchPhase.COUNTDOWN_24H -> {
+      // Complete stealth before countdown ends: render nothing until officially UNLOCKED.
       return
-    }
-
-    MutualMatchPhase.COUNTDOWN_24H -> {
-      val remainingMs = MutualSecretLoveEngine.remainingMsUntilReveal(match, nowMs)
-      val formatted = MutualSecretLoveEngine.formatCountdown24h(remainingMs)
-      val progress = (1f - (remainingMs.toFloat() / MutualSecretLoveEngine.ALERT_LEAD_MS.toFloat())).coerceIn(0f, 1f)
-
-      Surface(
-        shape = RoundedCornerShape(22.dp),
-        color = Color(0xFF280B1F),
-        border = BorderStroke(1.5.dp, Color(0xFFFF4D6D).copy(alpha = 0.78f)),
-        modifier = Modifier
-          .fillMaxWidth()
-          .testTag("mutual_match_countdown_${match.id}")
-      ) {
-        Column(
-          modifier = Modifier.padding(16.dp),
-          verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Surface(
-              color = Color(0xFFFF4D6D).copy(alpha = 0.22f),
-              shape = RoundedCornerShape(10.dp)
-            ) {
-              Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
-              ) {
-                Icon(
-                  imageVector = Icons.Rounded.Schedule,
-                  contentDescription = null,
-                  tint = Color(0xFFFF8FA3),
-                  modifier = Modifier.size(14.dp)
-                )
-                Text(
-                  text = "24H UNLOCK COUNTDOWN",
-                  style = MaterialTheme.typography.labelSmall,
-                  fontWeight = FontWeight.ExtraBold,
-                  color = Color(0xFFFFB3C1)
-                )
-              }
-            }
-            Text(
-              text = formatted,
-              style = MaterialTheme.typography.headlineSmall,
-              fontWeight = FontWeight.ExtraBold,
-              color = Color.White,
-              modifier = Modifier.testTag("mutual_countdown_timer_${match.id}")
-            )
-          }
-
-          Text(
-            text = MutualSecretLoveEngine.ALERT_MESSAGE,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = Color.White
-          )
-
-          LinearProgressIndicator(
-            progress = { progress },
-            color = Color(0xFFFF4D6D),
-            trackColor = Color.White.copy(alpha = 0.16f),
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(8.dp)
-              .clip(CircleShape)
-          )
-
-          Text(
-            text = "Mystery identity and selection order stay completely hidden until 00:00:00.",
-            style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFFE2E8F0)
-          )
-        }
-      }
     }
 
     MutualMatchPhase.UNLOCKED -> {

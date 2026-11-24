@@ -179,19 +179,17 @@ class GovernanceRepository(
     }
 
     // Never reveal mutual crush immediately or store who added first:
-    // Create a sealed delayed match with a hidden random revealAt between 7 and 14 days.
-    val mutualMatchId = if (isMutualMatch) {
+    // Create a sealed delayed match silently in the background.
+    if (isMutualMatch) {
       ensureMutualMatchRecord(uid, recipient.userId)
-    } else {
-      ""
     }
 
     SecretLoveSendOutcome(
       messageId = messageId,
       recipientId = recipient.userId,
       recipientName = safeRecipientName,
-      isMutualMatch = isMutualMatch,
-      mutualMatchId = mutualMatchId
+      isMutualMatch = false,
+      mutualMatchId = ""
     )
   }.onFailure { e ->
     if (e is CancellationException) throw e
@@ -255,7 +253,8 @@ class GovernanceRepository(
     if (isMutualMatch) {
       ensureMutualMatchRecord(uid, recipient.userId)
     }
-    isMutualMatch
+    // Complete stealth: never expose to caller/UI whether a mutual seal formed before revealAtMs
+    false
   }.onFailure { e ->
     if (e is CancellationException) throw e
     handleFirestoreError(e, OperationType.CREATE, "crush_signals")
@@ -264,19 +263,22 @@ class GovernanceRepository(
   suspend fun removeSecretCrush(recipientId: String): Result<Unit> = runCatching {
     val uid = requireUserId()
     val matchId = MutualSecretLoveEngine.sortedPairId(uid, recipientId)
-    val existingMatch = runCatching {
-      db.collection("mutual_crush_matches").document(matchId).get().await()
-    }.getOrNull()
-    if (existingMatch != null && existingMatch.exists()) {
-      val revealAtMs = existingMatch.getLong("revealAtMs") ?: Long.MAX_VALUE
-      require(System.currentTimeMillis() >= revealAtMs) {
-        "Mutual Secret Love is sealed until its countdown unlocks."
-      }
-    }
+
+    // Always allow silent opt-out at any time with zero lock/countdown warnings
+    // and without alerting or exposing anything to the other user.
     val batch = db.batch()
     batch.delete(db.collection("crush_signals").document("${uid}_$recipientId"))
     batch.delete(db.collection("users").document(uid).collection("secret_crushes").document(recipientId))
     batch.commit().await()
+
+    val existingMatch = runCatching {
+      db.collection("mutual_crush_matches").document(matchId).get().await()
+    }.getOrNull()
+    if (existingMatch != null && existingMatch.exists()) {
+      runCatching {
+        db.collection("mutual_crush_matches").document(matchId).delete().await()
+      }
+    }
     Unit
   }.onFailure { e ->
     if (e is CancellationException) throw e
@@ -395,7 +397,7 @@ class GovernanceRepository(
               "actorName" to "Secret Love",
               "type" to "crush_match",
               "title" to "Mutual Secret Love Unlocked! 💖",
-              "body" to "Your 24-hour countdown reached zero. Tap to reveal your mutual Secret Love!",
+              "body" to "Your Mutual Secret Love has officially unlocked. Tap to reveal!",
               "targetId" to match.id,
               "isRead" to false,
               "createdAt" to FieldValue.serverTimestamp()

@@ -1071,7 +1071,7 @@ fun ChatThreadScreen(
           }
         }
 
-        if (incognitoHideStatus || isDisappearing24h) {
+        if (incognitoHideStatus) {
           Surface(
             color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
             modifier = Modifier.fillMaxWidth().testTag("chat_incognito_banner")
@@ -1082,17 +1082,13 @@ fun ChatThreadScreen(
               horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
               Icon(
-                imageVector = if (isDisappearing24h) Icons.Rounded.Timer else Icons.Rounded.VisibilityOff,
+                imageVector = Icons.Rounded.VisibilityOff,
                 contentDescription = null,
                 modifier = Modifier.size(14.dp),
                 tint = MaterialTheme.colorScheme.onSecondaryContainer
               )
-              val parts = listOfNotNull(
-                if (incognitoHideStatus) "Incognito stealth (status & typing hidden)" else null,
-                if (isDisappearing24h) "24h disappearing messages ON" else null
-              )
               Text(
-                text = parts.joinToString(" · "),
+                text = "Incognito stealth (status & typing hidden)",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -1355,24 +1351,6 @@ fun ChatThreadScreen(
                       },
                       style = MaterialTheme.typography.bodyMedium
                     )
-                  }
-                  if (msg.expiresAtMs > 0L && !msg.isDeleted) {
-                    Row(
-                      verticalAlignment = Alignment.CenterVertically,
-                      horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                      Icon(
-                        Icons.Rounded.Timer,
-                        contentDescription = "Disappearing message",
-                        modifier = Modifier.size(11.dp),
-                        tint = if (isMine) Color.White.copy(alpha = 0.72f) else MaterialTheme.colorScheme.onSurfaceVariant
-                      )
-                      Text(
-                        text = "24h",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isMine) Color.White.copy(alpha = 0.72f) else MaterialTheme.colorScheme.onSurfaceVariant
-                      )
-                    }
                   }
                 }
               }
@@ -1656,7 +1634,7 @@ fun ChatThreadScreen(
                 input = it
                 viewModel.setTyping(conversationId, it.isNotBlank(), stealthHideStatus = incognitoHideStatus)
               },
-              placeholder = { Text(if (isDisappearing24h) "Disappearing message (24h)..." else "Message...") },
+              placeholder = { Text("Message...") },
               colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,

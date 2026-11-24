@@ -497,8 +497,13 @@ private fun AuthenticatedHelloShell(
   val friendUids = remember(friendships, uid) {
     friendships.flatMap { it.participantUids }.filter { it != uid }.distinct()
   }
-  val mutualUids = remember(mutualMatches, uid) {
-    mutualMatches.map { it.partnerUidFor(uid) }.filter { it.isNotBlank() && it != uid }.distinct()
+  val mutualClockMs by spacesVm.liveClockMs.collectAsStateWithLifecycle()
+  val mutualUids = remember(mutualMatches, mutualClockMs, uid) {
+    mutualMatches
+      .filter { com.example.data.model.MutualSecretLoveEngine.phaseOf(it, mutualClockMs) == com.example.data.model.MutualMatchPhase.UNLOCKED }
+      .map { it.partnerUidFor(uid) }
+      .filter { it.isNotBlank() && it != uid }
+      .distinct()
   }
   val discoverableUsersState by communityVm.discoverableUsers.collectAsStateWithLifecycle()
   val discoverableUsersList = (discoverableUsersState as? UiState.Success)?.data.orEmpty()
@@ -677,27 +682,6 @@ private fun AuthenticatedHelloShell(
                   }
                 },
                 actions = {
-                  if (incognitoAnyActive) {
-                    IconButton(
-                      onClick = { navigateSingleTop(HelloRoutes.SETTINGS) },
-                      modifier = Modifier.testTag("top_incognito_badge")
-                    ) {
-                      Surface(
-                        modifier = Modifier.size(36.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.secondaryContainer
-                      ) {
-                        Box(contentAlignment = Alignment.Center) {
-                          Icon(
-                            imageVector = Icons.Rounded.VisibilityOff,
-                            contentDescription = "Incognito mode active, tap to manage",
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(19.dp)
-                          )
-                        }
-                      }
-                    }
-                  }
                   IconButton(
                     onClick = { onThemeChange(if (isDark) ThemeMode.LIGHT else ThemeMode.DARK) },
                     modifier = Modifier.testTag("top_theme_toggle")

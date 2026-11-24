@@ -1095,6 +1095,11 @@ test("Mutual Secret Love matches enforce sorted pair, 7-14d revealAtMs, 24h aler
       createdAt: ts(),
     })
   );
+
+  // Silent Opt-Out: Charlie cannot delete the match, but Alice can silently delete her signal and the sealed mutual match BEFORE revealAtMs
+  await assertFails(charlieDb.collection("mutual_crush_matches").doc(matchId).delete());
+  await assertSucceeds(aliceDb.collection("crush_signals").doc(`${ALICE_UID}_${BOB_UID}`).delete());
+  await assertSucceeds(aliceDb.collection("mutual_crush_matches").doc(matchId).delete());
 });
 
 test("Groups and Pages enforce secure Add/Out for creator, admins, and self join/leave", async () => {

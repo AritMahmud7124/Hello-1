@@ -132,13 +132,9 @@ fun SecretLoveScreen(
   val allUsers = (usersState as? UiState.Success)?.data ?: emptyList()
   val recipients = allUsers.filter { it.userId != currentUserId && it.acceptSecretLove }
 
-  // Concealment rule: SEALED_HIDDEN mutual matches are NEVER surfaced to users.
-  // Only COUNTDOWN_24H (alert starts 24h before unlock) and UNLOCKED are visible.
+  // Complete stealth before countdown ends: only UNLOCKED matches are surfaced.
   val visibleMutualMatches = remember(myMutualMatches, liveClockMs) {
-    myMutualMatches.filter { MutualSecretLoveEngine.phaseOf(it, liveClockMs) != MutualMatchPhase.SEALED_HIDDEN }
-  }
-  val activeCountdownMatches = remember(visibleMutualMatches, liveClockMs) {
-    visibleMutualMatches.filter { MutualSecretLoveEngine.phaseOf(it, liveClockMs) == MutualMatchPhase.COUNTDOWN_24H }
+    myMutualMatches.filter { MutualSecretLoveEngine.phaseOf(it, liveClockMs) == MutualMatchPhase.UNLOCKED }
   }
 
   var selectedTab by remember { mutableIntStateOf(0) }
@@ -187,17 +183,6 @@ fun SecretLoveScreen(
           )
         }
       }
-    }
-
-    if (activeCountdownMatches.isNotEmpty() && selectedTab != 1) {
-      val featuredCountdown = activeCountdownMatches.first()
-      MutualMatchVaultCard(
-        match = featuredCountdown,
-        currentUserId = currentUserId,
-        nowMs = liveClockMs,
-        partnerProfile = null,
-        onCelebrate = {}
-      )
     }
 
     me?.let { profile ->
@@ -336,7 +321,7 @@ fun SecretLoveScreen(
               fontWeight = FontWeight.Bold
             )
             Text(
-              text = "Add your Secret Crush privately below. Nothing is shown during any silent wait—an alert only appears 24 hours before a mutual unlock, without revealing who added whom first.",
+              text = "Add your Secret Crush privately below. Mutual seals stay completely hidden until the countdown officially unlocks—and either person can opt out silently anytime.",
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -364,7 +349,7 @@ fun SecretLoveScreen(
                     textAlign = TextAlign.Center
                   )
                   Text(
-                    text = "Select someone privately below. You'll only receive a 24-hour unlock alert when a mutual vault is ready to open.",
+                    text = "Select someone privately below. Nothing is revealed until a mutual vault officially unlocks, and you can remove your pick quietly anytime.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center

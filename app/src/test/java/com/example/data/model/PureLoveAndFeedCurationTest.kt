@@ -302,5 +302,28 @@ class PureLoveAndFeedCurationTest {
     }
     assertEquals(listOf("m1", "m2"), visible.map { it.id })
   }
+
+  @Test
+  fun mutualSecretLove_completeStealthBeforeUnlock_hidesSealedAndCountdownMatches() {
+    val matchedAt = 1_750_000_000_000L
+    val schedule = MutualSecretLoveEngine.pickRandomRevealSchedule(matchedAt, randomFraction = 0.25)
+    val match = MutualCrushMatch(
+      id = "alice_bob",
+      participantUids = listOf("alice", "bob"),
+      matchedAtMs = schedule.matchedAtMs,
+      revealAtMs = schedule.revealAtMs,
+      alertAtMs = schedule.alertAtMs
+    )
+    fun visibleAt(nowMs: Long): List<MutualCrushMatch> =
+      listOf(match).filter { MutualSecretLoveEngine.phaseOf(it, nowMs) == MutualMatchPhase.UNLOCKED }
+
+    // Hidden while sealed
+    assertTrue(visibleAt(matchedAt + 1_000L).isEmpty())
+    // Hidden even inside final 24h window and 1ms before unlock
+    assertTrue(visibleAt(match.alertAtMs).isEmpty())
+    assertTrue(visibleAt(match.revealAtMs - 1L).isEmpty())
+    // Revealed ONLY once countdown officially unlocks
+    assertEquals(listOf("alice_bob"), visibleAt(match.revealAtMs).map { it.id })
+  }
 }
 

@@ -1211,9 +1211,10 @@ service cloud.firestore {
                        (incoming().unlockedNotified == existing().unlockedNotified ||
                         (existing().unlockedNotified == false && incoming().unlockedNotified == true && request.time.toMillis() >= existing().revealAtMs));
       allow delete: if isSignedIn() &&
-                       isValidId(matchId) &&
-                       request.auth.uid in existing().participantUids &&
-                       request.time.toMillis() >= existing().revealAtMs;
+                       isValidId(matchId) && (
+                         (resource == null && matchId.matches('^(' + request.auth.uid + '_.*|.*_' + request.auth.uid + ')$')) ||
+                         (resource != null && request.auth.uid in existing().participantUids)
+                       );
 
       match /private_messages/{msgId} {
         allow get, list: if isSignedIn() && isValidId(matchId) &&
