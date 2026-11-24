@@ -1,0 +1,6 @@
+{
+  "name": "Hello",
+  "description": "A modern Android social networking app featuring real-time feeds, stories, reels, messenger, groups with Emergency SOS, pages, events, marketplace, Secret Love, and owner governance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
