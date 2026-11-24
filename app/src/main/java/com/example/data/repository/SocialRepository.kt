@@ -823,6 +823,19 @@ class SocialRepository(
         throw e
       }
 
+  fun observeFollowerCount(targetId: String): Flow<Long> {
+    val cleanTarget = normalizeFollowTargetId(targetId)
+    if (cleanTarget.isBlank()) return kotlinx.coroutines.flow.flowOf(0L)
+    return db.collection("follows")
+      .whereEqualTo("targetUid", cleanTarget)
+      .snapshots()
+      .map { snap -> snap.size().toLong() }
+      .catch { e ->
+        handleFirestoreError(e, OperationType.LIST, "follows_count($cleanTarget)")
+        throw e
+      }
+  }
+
   suspend fun toggleFollowCreator(targetId: String, targetName: String): Result<Boolean> = runCatching {
     val uid = requireUserId()
     val cleanTarget = normalizeFollowTargetId(targetId)

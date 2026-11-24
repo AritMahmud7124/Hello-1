@@ -49,6 +49,7 @@ import com.example.data.model.PublicUser
 import com.example.data.model.UiState
 import com.example.ui.components.EmptyStateCard
 import com.example.ui.components.UserAvatar
+import com.example.ui.components.resolveLiveAuthor
 import com.example.ui.viewmodel.CommunityViewModel
 
 @Composable
@@ -63,6 +64,11 @@ fun FriendsScreen(
   val requests by viewModel.friendRequests.collectAsStateWithLifecycle()
   val friendships by viewModel.friendships.collectAsStateWithLifecycle()
   val blocked by viewModel.blockedUsers.collectAsStateWithLifecycle()
+  val usersById = remember(usersState, me) {
+    val map = (usersState as? UiState.Success)?.data.orEmpty().associateBy { it.userId }.toMutableMap()
+    if (me != null) map[me.userId] = me
+    map
+  }
 
   var query by remember { mutableStateOf("") }
   val blockedUids = remember(blocked) { blocked.map { it.blockedUid }.toSet() }
@@ -102,6 +108,7 @@ fun FriendsScreen(
         Text("Friend Requests (${incomingRequests.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
       }
       items(incomingRequests, key = { it.id }) { req ->
+        val resolvedSender = resolveLiveAuthor(req.fromUid, req.fromName, req.fromAvatar, usersById, me)
         Card(modifier = Modifier.fillMaxWidth()) {
           Row(
             modifier = Modifier
@@ -110,9 +117,9 @@ fun FriendsScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
           ) {
-            UserAvatar(name = req.fromName, photoUrl = req.fromAvatar, size = 44.dp)
+            UserAvatar(name = resolvedSender.displayName, photoUrl = resolvedSender.avatarUrl, size = 44.dp)
             Column(modifier = Modifier.weight(1f)) {
-              Text(req.fromName.ifBlank { "Member" }, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+              Text(resolvedSender.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
               Text("Wants to connect · Tap to view profile", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Button(

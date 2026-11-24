@@ -64,7 +64,9 @@ import androidx.compose.material.icons.rounded.PersonRemove
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.StopCircle
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Videocam
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -120,6 +122,7 @@ import com.example.ui.components.UserAvatar
 import com.example.ui.components.VideoPlayerBox
 import com.example.ui.components.VoiceNotePlayer
 import com.example.ui.components.formatTimestamp
+import com.example.ui.components.resolveLiveAuthor
 import com.example.ui.viewmodel.CommunityViewModel
 import com.google.firebase.firestore.FirebaseFirestore
 import java.io.File
@@ -161,6 +164,7 @@ fun MessengerScreen(
   viewModel: CommunityViewModel,
   me: PublicUser?,
   currentUserId: String,
+  incognitoActive: Boolean = false,
   onOpenThread: (String) -> Unit
 ) {
   val convState by viewModel.conversations.collectAsStateWithLifecycle()
@@ -212,6 +216,27 @@ fun MessengerScreen(
               color = HelloMagenta,
               modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
             )
+          }
+          if (incognitoActive) {
+            Surface(
+              shape = RoundedCornerShape(10.dp),
+              color = MaterialTheme.colorScheme.secondaryContainer,
+              modifier = Modifier.testTag("messenger_incognito_badge")
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+              ) {
+                Icon(Icons.Rounded.VisibilityOff, contentDescription = null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                Text(
+                  text = "Incognito",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.SemiBold,
+                  color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+              }
+            }
           }
         }
         Text(
@@ -438,7 +463,7 @@ fun MessengerScreen(
         val filteredChats = remember(allChats, searchQuery, selectedFilter, usersById, currentUserId) {
           allChats.filter { conv ->
             val otherUid = if (conv.isGroup) null else conv.participantUids.firstOrNull { it != currentUserId }
-            val title = if (conv.isGroup) conv.title else (conv.participantNames[otherUid] ?: usersById[otherUid]?.displayName ?: conv.title)
+            val title = if (conv.isGroup) conv.title else (usersById[otherUid]?.displayName?.ifBlank { null } ?: conv.participantNames[otherUid] ?: conv.title)
             val matchesQuery = searchQuery.isBlank() ||
               title.contains(searchQuery, true) ||
               conv.lastMessage.contains(searchQuery, true)
@@ -478,7 +503,7 @@ fun MessengerScreen(
               val displayTitle = if (conv.isGroup) {
                 conv.title.ifBlank { "Group Chat" }
               } else {
-                conv.participantNames[otherUid] ?: otherUser?.displayName ?: conv.title.ifBlank { "Direct Chat" }
+                otherUser?.displayName?.ifBlank { null } ?: conv.participantNames[otherUid] ?: conv.title.ifBlank { "Direct Chat" }
               }
               val isUnread = currentUserId !in conv.readByUids
               val otherTyping = conv.typingUids.any { it != currentUserId }
@@ -658,6 +683,9 @@ fun ChatThreadScreen(
   viewModel: CommunityViewModel,
   me: PublicUser?,
   currentUserId: String,
+  incognitoHideStatus: Boolean = false,
+  disappearingDefault24h: Boolean = false,
+  onToggleDisappearing24h: ((Boolean) -> Unit)? = null,
   onBack: () -> Unit,
   onOpenProfile: (String) -> Unit = {}
 ) {
@@ -666,12 +694,14 @@ fun ChatThreadScreen(
   val convState by viewModel.conversations.collectAsStateWithLifecycle()
   val usersState by viewModel.discoverableUsers.collectAsStateWithLifecycle()
   val allUsers = (usersState as? UiState.Success)?.data.orEmpty()
+  val usersById = remember(allUsers) { allUsers.associateBy { it.userId } }
   val isUploading by viewModel.isUploadingMedia.collectAsStateWithLifecycle()
   val conversation = (convState as? UiState.Success)?.data?.firstOrNull { it.id == conversationId }
   val messageFlow = remember(viewModel, conversationId) { viewModel.observeMessages(conversationId) }
   val rawMessages by messageFlow.collectAsStateWithLifecycle()
   val messages = remember(rawMessages) { rawMessages.distinctBy { it.id } }
 
+  var isDisappearing24h by remember(disappearingDefault24h) { mutableStateOf(disappearingDefault24h) }
   var input by remember { mutableStateOf("") }
   var lastHeartSendMs by remember { mutableLongStateOf(0L) }
   var pendingCropImageUri by remember { mutableStateOf<String?>(null) }
@@ -772,6 +802,7 @@ fun ChatThreadScreen(
         mediaUri = localUri,
         mediaType = "audio",
         fileName = "voice_${duration}s.m4a",
+        expiresAfterMs = if (isDisappearing24h) 86_400_000L else 0L,
         onMediaUploaded = { file.delete() }
       )
       recordedFile = null
@@ -863,46 +894,50 @@ fun ChatThreadScreen(
   }
 
   // Auto-clear typing indicator after 3 seconds of idle input
-  LaunchedEffect(conversationId, input) {
-    if (input.isNotBlank()) {
+  LaunchedEffect(conversationId, input, incognitoHideStatus) {
+    if (incognitoHideStatus) {
+      viewModel.setTyping(conversationId, false, stealthHideStatus = true)
+    } else if (input.isNotBlank()) {
       delay(3000L)
-      viewModel.setTyping(conversationId, false)
+      viewModel.setTyping(conversationId, false, stealthHideStatus = incognitoHideStatus)
     }
   }
 
   DisposableEffect(conversationId) {
     onDispose {
       releaseRecorder(deleteFile = true)
-      viewModel.setTyping(conversationId, false)
+      viewModel.setTyping(conversationId, false, stealthHideStatus = incognitoHideStatus)
     }
   }
 
   val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
     val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+    val expireMs = if (isDisappearing24h) 86_400_000L else 0L
     if (uri != null && conversation != null) {
       val mime = context.contentResolver.getType(uri).orEmpty()
       if (mime.startsWith("video")) {
-        viewModel.sendMessage(context, conversation, effectiveMe, "", mediaUri = uri.toString(), mediaType = "video")
+        viewModel.sendMessage(context, conversation, effectiveMe, "", mediaUri = uri.toString(), mediaType = "video", expiresAfterMs = expireMs)
       } else {
-        viewModel.sendMessage(context, conversation, effectiveMe, "", mediaUri = uri.toString(), mediaType = "image")
+        viewModel.sendMessage(context, conversation, effectiveMe, "", mediaUri = uri.toString(), mediaType = "image", expiresAfterMs = expireMs)
       }
     }
   }
   val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
     val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+    val expireMs = if (isDisappearing24h) 86_400_000L else 0L
     if (uri != null && conversation != null) {
-      viewModel.sendMessage(context, conversation, effectiveMe, "", mediaUri = uri.toString(), mediaType = "file", fileName = uri.lastPathSegment ?: "Document")
+      viewModel.sendMessage(context, conversation, effectiveMe, "", mediaUri = uri.toString(), mediaType = "file", fileName = uri.lastPathSegment ?: "Document", expiresAfterMs = expireMs)
     }
   }
 
   val otherUid = if (conversation?.isGroup == false) conversation.participantUids.firstOrNull { it != currentUserId } else null
-  val otherUser = otherUid?.let { id -> allUsers.firstOrNull { it.userId == id } }
+  val otherUser = otherUid?.let { id -> usersById[id] }
   val headerTitle = if (conversation == null) {
     "Chat"
   } else if (conversation.isGroup) {
     conversation.title
   } else {
-    conversation.participantNames[otherUid] ?: otherUser?.displayName ?: conversation.title
+    otherUser?.displayName?.ifBlank { null } ?: conversation.participantNames[otherUid] ?: conversation.title
   }
 
   val typingOthers = conversation?.typingUids?.filter { it != currentUserId }.orEmpty()
@@ -962,7 +997,7 @@ fun ChatThreadScreen(
               Text(headerTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
               val subtitle = when {
                 typingOthers.isNotEmpty() -> {
-                  val names = typingOthers.mapNotNull { conversation?.participantNames?.get(it) }.ifEmpty { listOf("Someone") }
+                  val names = typingOthers.mapNotNull { uid -> usersById[uid]?.displayName?.ifBlank { null } ?: conversation?.participantNames?.get(uid) }.ifEmpty { listOf("Someone") }
                   "${names.joinToString(", ")} typing..."
                 }
                 otherUser?.effectiveOnline == true -> if (otherUser.handle.isNotBlank()) "${otherUser.handle} · Active now" else "Active now"
@@ -1008,6 +1043,20 @@ fun ChatThreadScreen(
               Icon(Icons.Rounded.Person, contentDescription = "View profile")
             }
           }
+          IconButton(
+            onClick = {
+              val next = !isDisappearing24h
+              isDisappearing24h = next
+              onToggleDisappearing24h?.invoke(next)
+            },
+            modifier = Modifier.testTag("chat_disappearing_toggle")
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Timer,
+              contentDescription = if (isDisappearing24h) "24h disappearing messages ON" else "24h disappearing messages OFF",
+              tint = if (isDisappearing24h) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
           IconButton(onClick = { showThreadSearch = !showThreadSearch }) {
             Icon(Icons.Rounded.Search, contentDescription = "Filter messages")
           }
@@ -1019,6 +1068,36 @@ fun ChatThreadScreen(
             modifier = Modifier.testTag("chat_leave_button")
           ) {
             Icon(Icons.AutoMirrored.Rounded.ExitToApp, contentDescription = if (conversation?.isGroup == true) "Group Out" else "Leave chat")
+          }
+        }
+
+        if (incognitoHideStatus || isDisappearing24h) {
+          Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
+            modifier = Modifier.fillMaxWidth().testTag("chat_incognito_banner")
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              Icon(
+                imageVector = if (isDisappearing24h) Icons.Rounded.Timer else Icons.Rounded.VisibilityOff,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onSecondaryContainer
+              )
+              val parts = listOfNotNull(
+                if (incognitoHideStatus) "Incognito stealth (status & typing hidden)" else null,
+                if (isDisappearing24h) "24h disappearing messages ON" else null
+              )
+              Text(
+                text = parts.joinToString(" · "),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+              )
+            }
           }
         }
 
@@ -1101,7 +1180,13 @@ fun ChatThreadScreen(
           )
         }
 
-        val senderUser = if (isMine) null else allUsers.firstOrNull { it.userId == msg.senderId }
+        val senderAuthor = resolveLiveAuthor(
+          authorId = msg.senderId,
+          fallbackName = msg.senderName,
+          fallbackAvatar = "",
+          usersById = usersById,
+          me = me
+        )
         val (replyQuote, bodyText) = remember(msg.text) { parseQuotedMessage(msg.text) }
 
         if (showSessionHeader) {
@@ -1133,8 +1218,8 @@ fun ChatThreadScreen(
             if (!isMine) {
               if (isLastInGroup) {
                 UserAvatar(
-                  name = msg.senderName,
-                  photoUrl = senderUser?.photoUrl ?: "",
+                  name = senderAuthor.displayName,
+                  photoUrl = senderAuthor.avatarUrl,
                   size = 28.dp,
                   modifier = Modifier.padding(end = 8.dp, bottom = 2.dp)
                 )
@@ -1146,7 +1231,7 @@ fun ChatThreadScreen(
             Column(horizontalAlignment = if (isMine) Alignment.End else Alignment.Start) {
               if (!isMine && conversation?.isGroup == true && isFirstInGroup) {
                 Text(
-                  text = msg.senderName,
+                  text = senderAuthor.displayName,
                   style = MaterialTheme.typography.labelSmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
                   modifier = Modifier.padding(start = 8.dp, bottom = 2.dp)
@@ -1270,6 +1355,24 @@ fun ChatThreadScreen(
                       },
                       style = MaterialTheme.typography.bodyMedium
                     )
+                  }
+                  if (msg.expiresAtMs > 0L && !msg.isDeleted) {
+                    Row(
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                      Icon(
+                        Icons.Rounded.Timer,
+                        contentDescription = "Disappearing message",
+                        modifier = Modifier.size(11.dp),
+                        tint = if (isMine) Color.White.copy(alpha = 0.72f) else MaterialTheme.colorScheme.onSurfaceVariant
+                      )
+                      Text(
+                        text = "24h",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isMine) Color.White.copy(alpha = 0.72f) else MaterialTheme.colorScheme.onSurfaceVariant
+                      )
+                    }
                   }
                 }
               }
@@ -1395,8 +1498,9 @@ fun ChatThreadScreen(
             horizontalArrangement = Arrangement.SpaceBetween
           ) {
             Column(modifier = Modifier.weight(1f)) {
+              val replyName = if (target.senderId == currentUserId) "yourself" else resolveLiveAuthor(target.senderId, target.senderName, "", usersById, me).displayName
               Text(
-                text = "Replying to ${if (target.senderId == currentUserId) "yourself" else target.senderName}",
+                text = "Replying to $replyName",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = HelloIndigo
@@ -1550,9 +1654,9 @@ fun ChatThreadScreen(
               value = input,
               onValueChange = {
                 input = it
-                viewModel.setTyping(conversationId, it.isNotBlank())
+                viewModel.setTyping(conversationId, it.isNotBlank(), stealthHideStatus = incognitoHideStatus)
               },
-              placeholder = { Text("Message...") },
+              placeholder = { Text(if (isDisappearing24h) "Disappearing message (24h)..." else "Message...") },
               colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,
@@ -1586,9 +1690,10 @@ fun ChatThreadScreen(
                 onClick = {
                   val now = System.currentTimeMillis()
                   val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+                  val expireMs = if (isDisappearing24h) 86_400_000L else 0L
                   if (conversation != null && now - lastHeartSendMs > 450L) {
                     lastHeartSendMs = now
-                    viewModel.sendMessage(context, conversation, effectiveMe, "❤️")
+                    viewModel.sendMessage(context, conversation, effectiveMe, "❤️", expiresAfterMs = expireMs)
                   }
                 },
                 modifier = Modifier.size(40.dp).testTag("send_chat_button")
@@ -1605,19 +1710,20 @@ fun ChatThreadScreen(
                   .clickable {
                     val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
                     val textToSend = input
+                    val expireMs = if (isDisappearing24h) 86_400_000L else 0L
                     if (conversation != null && textToSend.isNotBlank()) {
                       input = ""
                       val quoteTarget = replyingTo
                       replyingTo = null
                       val payloadText = quoteTarget?.let { target ->
-                        val who = if (target.senderId == currentUserId) "You" else target.senderName
+                        val who = if (target.senderId == currentUserId) "You" else resolveLiveAuthor(target.senderId, target.senderName, "", usersById, me).displayName
                         val snippet = target.text.ifBlank { target.fileName.ifBlank { target.mediaType } }
                           .replace("\n", " ")
                           .take(65)
                         "↩ Replying to $who: \"$snippet\"\n${textToSend.trim()}"
                       } ?: textToSend
-                      viewModel.sendMessage(context, conversation, effectiveMe, payloadText)
-                      viewModel.setTyping(conversationId, false)
+                      viewModel.sendMessage(context, conversation, effectiveMe, payloadText, expiresAfterMs = expireMs)
+                      viewModel.setTyping(conversationId, false, stealthHideStatus = incognitoHideStatus)
                     }
                   }
                   .testTag("send_chat_button")
@@ -1645,15 +1751,17 @@ fun ChatThreadScreen(
       onDismiss = { pendingCropImageUri = null },
       onUseOriginal = {
         val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+        val expireMs = if (isDisappearing24h) 86_400_000L else 0L
         if (conversation != null) {
-          viewModel.sendMessage(context, conversation, effectiveMe, "", mediaUri = uriStr, mediaType = "image")
+          viewModel.sendMessage(context, conversation, effectiveMe, "", mediaUri = uriStr, mediaType = "image", expiresAfterMs = expireMs)
         }
         pendingCropImageUri = null
       },
       onCropped = { cropped ->
         val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
+        val expireMs = if (isDisappearing24h) 86_400_000L else 0L
         if (conversation != null) {
-          viewModel.sendMessage(context, conversation, effectiveMe, "", mediaUri = cropped, mediaType = "image")
+          viewModel.sendMessage(context, conversation, effectiveMe, "", mediaUri = cropped, mediaType = "image", expiresAfterMs = expireMs)
         }
         pendingCropImageUri = null
       }
@@ -1677,8 +1785,8 @@ fun ChatThreadScreen(
             )
           }
           items(conversation.participantUids, key = { it }) { memberUid ->
-            val userObj = allUsers.firstOrNull { it.userId == memberUid }
-            val memberName = conversation.participantNames[memberUid] ?: userObj?.displayName ?: "Member"
+            val userObj = usersById[memberUid]
+            val memberName = userObj?.displayName?.ifBlank { null } ?: conversation.participantNames[memberUid] ?: "Member"
             Row(
               modifier = Modifier.fillMaxWidth(),
               verticalAlignment = Alignment.CenterVertically,

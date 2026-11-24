@@ -1656,4 +1656,97 @@ test("WebRTC call signals, Page cover/avatar, Owner read-only Secret Love audit,
   );
 });
 
+test("Profile follower counts (/follows) and disappearing chat expiresAtMs validation", async () => {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const nowMs = Date.now();
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID, {
+    firebase: { sign_in_provider: "google.com" },
+    auth_time: nowSec - 10,
+  }).firestore();
+  const charlieDb = testEnv.authenticatedContext(CHARLIE_UID, {
+    firebase: { sign_in_provider: "google.com" },
+    auth_time: nowSec - 10,
+  }).firestore();
+  const anonDb = testEnv.unauthenticatedContext().firestore();
+
+  // 1. Alice follows Bob; Charlie (third party) can query Bob's followers count
+  await assertSucceeds(
+    aliceDb.collection("follows").doc(`${ALICE_UID}_${BOB_UID}`).set({
+      followerUid: ALICE_UID,
+      targetUid: BOB_UID,
+      targetName: "Bob",
+      createdAt: ts(),
+    })
+  );
+  await assertSucceeds(
+    charlieDb.collection("follows").where("targetUid", "==", BOB_UID).get()
+  );
+  await assertFails(
+    anonDb.collection("follows").where("targetUid", "==", BOB_UID).get()
+  );
+  await assertFails(
+    charlieDb.collection("follows").doc(`${ALICE_UID}_${CHARLIE_UID}`).set({
+      followerUid: ALICE_UID,
+      targetUid: CHARLIE_UID,
+      targetName: "Charlie",
+      createdAt: ts(),
+    })
+  );
+
+  // 2. Disappearing ChatMessage expiresAtMs rules
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().collection("conversations").doc("conv_disappear_1").set({
+      isGroup: false,
+      title: "Direct Chat",
+      participantUids: [ALICE_UID, BOB_UID],
+      typingUids: [],
+      readByUids: [ALICE_UID],
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+  });
+
+  await assertSucceeds(
+    aliceDb.collection("conversations").doc("conv_disappear_1").collection("messages").doc("msg_exp_ok").set({
+      conversationId: "conv_disappear_1",
+      senderId: ALICE_UID,
+      senderName: "Alice",
+      text: "Disappears in 24h",
+      mediaType: "none",
+      participantUids: [ALICE_UID, BOB_UID],
+      isDeleted: false,
+      expiresAtMs: nowMs + 86400000,
+      createdAt: ts(),
+    })
+  );
+
+  await assertFails(
+    aliceDb.collection("conversations").doc("conv_disappear_1").collection("messages").doc("msg_exp_neg").set({
+      conversationId: "conv_disappear_1",
+      senderId: ALICE_UID,
+      senderName: "Alice",
+      text: "Bad negative expiry",
+      mediaType: "none",
+      participantUids: [ALICE_UID, BOB_UID],
+      isDeleted: false,
+      expiresAtMs: -10,
+      createdAt: ts(),
+    })
+  );
+
+  await assertFails(
+    aliceDb.collection("conversations").doc("conv_disappear_1").collection("messages").doc("msg_exp_str").set({
+      conversationId: "conv_disappear_1",
+      senderId: ALICE_UID,
+      senderName: "Alice",
+      text: "Bad string expiry",
+      mediaType: "none",
+      participantUids: [ALICE_UID, BOB_UID],
+      isDeleted: false,
+      expiresAtMs: "24h",
+      createdAt: ts(),
+    })
+  );
+});
+
 

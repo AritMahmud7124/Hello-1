@@ -352,7 +352,7 @@ service cloud.firestore {
 
     function isValidMessage(data) {
       return data.keys().hasAll(['conversationId', 'senderId', 'senderName', 'mediaType', 'participantUids', 'isDeleted', 'createdAt']) &&
-             data.keys().hasOnly(['conversationId', 'senderId', 'senderName', 'text', 'mediaUri', 'mediaType', 'fileName', 'reactions', 'participantUids', 'isDeleted', 'createdAt']) &&
+             data.keys().hasOnly(['conversationId', 'senderId', 'senderName', 'text', 'mediaUri', 'mediaType', 'fileName', 'reactions', 'participantUids', 'isDeleted', 'expiresAtMs', 'createdAt']) &&
              isValidId(data.conversationId) &&
              isValidId(data.senderId) &&
              isValidString(data.senderName, 1, 80) &&
@@ -363,6 +363,7 @@ service cloud.firestore {
              (!('reactions' in data) || data.reactions is map) &&
              isValidUidList(data.participantUids, 50) &&
              data.isDeleted is bool &&
+             (!('expiresAtMs' in data) || (data.expiresAtMs is int && data.expiresAtMs >= 0)) &&
              isValidTimestamp(data.createdAt);
     }
 
@@ -836,17 +837,10 @@ service cloud.firestore {
       }
     }
 
-    // 5b. Follows (Reels & Creator Follows)
+    // 5b. Follows (Reels & Profile Creator Follows)
     match /follows/{followId} {
-      allow get: if isSignedIn() && isValidId(followId) && (
-        resource == null ||
-        existing().followerUid == request.auth.uid ||
-        existing().targetUid == request.auth.uid
-      );
-      allow list: if isSignedIn() && (
-        existing().followerUid == request.auth.uid ||
-        existing().targetUid == request.auth.uid
-      );
+      allow get: if isSignedIn() && isValidId(followId);
+      allow list: if isSignedIn();
       allow create: if isSignedIn() &&
                        isValidId(followId) &&
                        followId == request.auth.uid + '_' + incoming().targetUid &&

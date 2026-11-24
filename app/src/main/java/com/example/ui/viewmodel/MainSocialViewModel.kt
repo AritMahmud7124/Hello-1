@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 enum class FeedSortMode(val label: String) {
   LATEST("Latest"),
@@ -91,6 +92,11 @@ class MainSocialViewModel(
 
   private val _localLikedItemIds = MutableStateFlow<Set<String>>(emptySet())
   val localLikedItemIds: StateFlow<Set<String>> = _localLikedItemIds.asStateFlow()
+
+  private val _incognitoHideStatus = MutableStateFlow(false)
+  val incognitoHideStatus: StateFlow<Boolean> = _incognitoHideStatus.asStateFlow()
+
+  private val followerCountFlows = ConcurrentHashMap<String, StateFlow<Long>>()
 
   val currentUser: StateFlow<PublicUser?> = authRepository.observePublicUser(currentUserId)
     .catch { emit(null) }
@@ -419,10 +425,17 @@ class MainSocialViewModel(
     _actionMessage.value = null
   }
 
+  fun observeFollowerCount(targetUserId: String): StateFlow<Long> =
+    followerCountFlows.getOrPut(targetUserId) {
+      socialRepository.observeFollowerCount(targetUserId)
+        .catch { emit(0L) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), 0L)
+    }
+
   fun bootstrapProfile() {
     viewModelScope.launch {
       authRepository.ensureProfileReady()
-        .onSuccess { authRepository.setPresenceOnline(true) }
+        .onSuccess { authRepository.setPresenceOnline(!_incognitoHideStatus.value) }
         .onFailure { err ->
           _actionMessage.value = err.unwrapFirestoreMessage("Could not initialize your profile in Firestore.")
         }
@@ -789,7 +802,14 @@ class MainSocialViewModel(
 
   fun setAppForegroundOnline(isForeground: Boolean) {
     viewModelScope.launch {
-      authRepository.setPresenceOnline(isForeground)
+      authRepository.setPresenceOnline(isForeground && !_incognitoHideStatus.value)
+    }
+  }
+
+  fun setIncognitoHideStatus(hide: Boolean) {
+    _incognitoHideStatus.value = hide
+    viewModelScope.launch {
+      authRepository.setPresenceOnline(!hide)
     }
   }
 

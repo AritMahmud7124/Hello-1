@@ -320,8 +320,9 @@ class CommunityRepository(
       .whereArrayContains("participantUids", requireUserId())
       .snapshots()
       .map { snap ->
+        val nowMs = System.currentTimeMillis()
         snap.toObjects(ChatMessage::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
-          .filter { it.id.isNotBlank() }
+          .filter { it.id.isNotBlank() && (it.expiresAtMs <= 0L || it.expiresAtMs > nowMs) }
           .distinctBy { it.id }
           .sortedWith(
             compareBy<ChatMessage>(
@@ -343,12 +344,14 @@ class CommunityRepository(
     text: String,
     mediaUri: String = "",
     mediaType: String = "none",
-    fileName: String = ""
+    fileName: String = "",
+    expiresAtMs: Long = 0L
   ): Result<Unit> = runCatching {
     val uid = requireUserId()
     val msgRef = db.collection("conversations").document(conversation.id).collection("messages").document()
     val convRef = db.collection("conversations").document(conversation.id)
     val preview = when {
+      expiresAtMs > 0L -> "⏳ Disappearing message"
       text.isNotBlank() -> text.trim().take(200)
       mediaType == "image" -> "📷 Photo"
       mediaType == "video" -> "🎬 Video"
@@ -357,23 +360,24 @@ class CommunityRepository(
       else -> "Message"
     }
     val safeMediaType = if (mediaType in listOf("none", "image", "video", "file", "audio")) mediaType else "none"
+    val payload = buildMap<String, Any> {
+      put("conversationId", conversation.id)
+      put("senderId", uid)
+      put("senderName", sender.displayName.trim().ifBlank { "Member" }.take(80))
+      put("text", text.trim().take(2000))
+      put("mediaUri", mediaUri.trim().take(2000))
+      put("mediaType", safeMediaType)
+      put("fileName", fileName.trim().take(200))
+      put("reactions", emptyMap<String, String>())
+      put("participantUids", (conversation.participantUids + uid).distinct().take(50))
+      put("isDeleted", false)
+      if (expiresAtMs > 0L) {
+        put("expiresAtMs", expiresAtMs)
+      }
+      put("createdAt", FieldValue.serverTimestamp())
+    }
     val batch = db.batch()
-    batch.set(
-      msgRef,
-      mapOf(
-        "conversationId" to conversation.id,
-        "senderId" to uid,
-        "senderName" to sender.displayName.trim().ifBlank { "Member" }.take(80),
-        "text" to text.trim().take(2000),
-        "mediaUri" to mediaUri.trim().take(2000),
-        "mediaType" to safeMediaType,
-        "fileName" to fileName.trim().take(200),
-        "reactions" to emptyMap<String, String>(),
-        "participantUids" to (conversation.participantUids + uid).distinct().take(50),
-        "isDeleted" to false,
-        "createdAt" to FieldValue.serverTimestamp()
-      )
-    )
+    batch.set(msgRef, payload)
     batch.update(
       convRef,
       mapOf(

@@ -64,8 +64,10 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.SlowMotionVideo
 import androidx.compose.material.icons.rounded.Storefront
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VerifiedUser
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -141,6 +143,7 @@ import com.example.ui.components.SharePayload
 import com.example.ui.components.UserAvatar
 import com.example.ui.components.VideoPlayerBox
 import com.example.ui.components.formatTimestamp
+import com.example.ui.components.resolveLiveAuthor
 import com.example.ui.i18n.LocalAppStrings
 import com.example.ui.viewmodel.CommunityViewModel
 import com.example.ui.viewmodel.MainSocialViewModel
@@ -188,6 +191,9 @@ fun ProfileScreen(
   val usersState = communityVm?.discoverableUsers?.collectAsStateWithLifecycle()
   val conversations = (conversationsState?.value as? UiState.Success)?.data.orEmpty()
   val discoverableUsers = (usersState?.value as? UiState.Success)?.data.orEmpty()
+  val usersById = remember(discoverableUsers) { discoverableUsers.associateBy { it.userId } }
+  val liveFollowerCount by socialVm.observeFollowerCount(currentUserId).collectAsStateWithLifecycle()
+  val displayedFollowerCount = maxOf(me?.followersCount ?: 0L, liveFollowerCount)
   var tab by remember { mutableIntStateOf(0) }
   var showEditDialog by remember { mutableStateOf(false) }
   var commentPost by remember { mutableStateOf<Post?>(null) }
@@ -250,7 +256,7 @@ fun ProfileScreen(
             if (!me?.bio.isNullOrBlank()) {
               Text(me!!.bio, style = MaterialTheme.typography.bodyMedium)
             }
-            Text("$friendCount friends · ${me?.followersCount ?: 0} followers · ${myPosts.size} posts · ${myReels.size} reels", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            Text("$friendCount friends · $displayedFollowerCount followers · ${myPosts.size} posts · ${myReels.size} reels", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
               Button(onClick = { showEditDialog = true }, modifier = Modifier.weight(1f).testTag("edit_profile_button")) {
                 Icon(Icons.Rounded.Edit, null)
@@ -351,6 +357,8 @@ fun ProfileScreen(
         } else {
           items(myPosts, key = { it.id }) { post ->
             val reactions by socialVm.observePostReactions(post.id).collectAsStateWithLifecycle(initialValue = emptyList())
+            val liveName = me?.displayName?.ifBlank { null } ?: post.authorName
+            val liveAvatar = me?.photoUrl?.ifBlank { null } ?: post.authorAvatar
             PostCard(
               post = post,
               currentUserId = currentUserId,
@@ -358,11 +366,13 @@ fun ProfileScreen(
               isSaved = post.id in savedIds,
               allowShare = post.privacy == "public",
               authorOnline = me?.effectiveOnline == true,
+              displayAuthorName = liveName,
+              displayAuthorAvatar = liveAvatar,
               onReact = { e -> socialVm.reactToPost(post, e) },
               onCommentClick = { commentPost = post },
               onShare = { n -> socialVm.sharePost(post, n) },
               onShareClick = { shareTargetPost = post },
-              onToggleSave = { socialVm.toggleSave(post.id, "post", post.authorName, post.content) },
+              onToggleSave = { socialVm.toggleSave(post.id, "post", liveName, post.content) },
               onEdit = { c, p -> socialVm.editPost(post.id, c, p) },
               onDelete = { socialVm.deletePost(post.id) },
               onReport = { r -> socialVm.reportContent("post", post.id, r) }
@@ -381,6 +391,8 @@ fun ProfileScreen(
           }
         } else {
           items(myReels, key = { "my_reel_${it.id}" }) { reel ->
+            val liveMyName = me?.displayName?.ifBlank { null } ?: reel.authorName.ifBlank { "Hello Member" }
+            val liveMyAvatar = me?.photoUrl?.ifBlank { null } ?: reel.authorAvatar
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
               Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
@@ -389,15 +401,15 @@ fun ProfileScreen(
                   horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                   UserAvatar(
-                    name = reel.authorName.ifBlank { me?.displayName ?: "Member" },
-                    photoUrl = reel.authorAvatar.ifBlank { me?.photoUrl ?: "" },
+                    name = liveMyName,
+                    photoUrl = liveMyAvatar,
                     size = 38.dp,
                     isOnline = me?.effectiveOnline == true,
                     isVerifiedOwner = isVerifiedOwner
                   )
                   Column(modifier = Modifier.weight(1f)) {
                     Text(
-                      text = reel.authorName.ifBlank { me?.displayName ?: "Hello Member" },
+                      text = liveMyName,
                       style = MaterialTheme.typography.titleSmall,
                       fontWeight = FontWeight.Bold
                     )
@@ -602,13 +614,19 @@ fun ProfileScreen(
 
   commentPost?.let { post ->
     val comments by socialVm.observePostComments(post.id).collectAsStateWithLifecycle(initialValue = emptyList())
-    CommentsBottomSheet(comments = comments, onDismiss = { commentPost = null }, onSendComment = { t, p -> socialVm.addComment(post, t, p) })
+    CommentsBottomSheet(
+      comments = comments,
+      usersById = usersById,
+      me = me,
+      onDismiss = { commentPost = null },
+      onSendComment = { t, p -> socialVm.addComment(post, t, p) }
+    )
   }
 
   shareTargetPost?.let { post ->
     ShareOptionsBottomSheet(
       payload = SharePayload(
-        title = "Post by ${post.authorName}",
+        title = "Post by ${me?.displayName?.ifBlank { post.authorName } ?: post.authorName}",
         body = post.content.ifBlank { "Shared post on HELLO" },
         canRepostToFeed = true
       ),
@@ -668,6 +686,7 @@ fun UserProfileScreen(
   spacesVm: SpacesGovernanceViewModel? = null,
   vaultStorage: EncryptedVaultStorage? = null,
   integrityReport: DeviceIntegrityReport? = null,
+  incognitoPrivateViewing: Boolean = false,
   onBack: () -> Unit,
   onOpenChat: (String) -> Unit,
   onOpenStoryViewer: (Story) -> Unit,
@@ -694,9 +713,13 @@ fun UserProfileScreen(
   val profileState by socialVm.observePublicUserProfile(targetUserId).collectAsStateWithLifecycle(initialValue = UiState.Loading)
   val usersState by communityVm.discoverableUsers.collectAsStateWithLifecycle()
   val discoverableUsers = (usersState as? UiState.Success)?.data.orEmpty()
+  val usersById = remember(discoverableUsers) { discoverableUsers.associateBy { it.userId } }
   val cachedUser = remember(discoverableUsers, targetUserId) {
     discoverableUsers.firstOrNull { it.userId == targetUserId }
   }
+  val followingIds by socialVm.followingIds.collectAsStateWithLifecycle()
+  val liveFollowerCount by socialVm.observeFollowerCount(targetUserId).collectAsStateWithLifecycle()
+  val isFollowingTarget = targetUserId in followingIds
   val profilePosts by socialVm.observeProfilePosts(targetUserId).collectAsStateWithLifecycle(initialValue = emptyList())
   val storiesState by socialVm.stories.collectAsStateWithLifecycle()
   val savedHighlightsState by socialVm.savedHighlightStories.collectAsStateWithLifecycle()
@@ -759,6 +782,22 @@ fun UserProfileScreen(
               style = MaterialTheme.typography.labelSmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+          }
+        }
+        if (incognitoPrivateViewing) {
+          Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.padding(end = 4.dp).testTag("profile_incognito_badge")
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+              Icon(Icons.Rounded.VisibilityOff, contentDescription = null, modifier = Modifier.size(13.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+              Text("Incognito", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSecondaryContainer)
+            }
           }
         }
         Box {
@@ -889,8 +928,9 @@ fun UserProfileScreen(
                 Text(targetUser.bio, style = MaterialTheme.typography.bodyMedium)
               }
 
+              val displayedFollowerCount = maxOf(targetUser.followersCount, liveFollowerCount)
               Text(
-                text = "${targetUser.followersCount} followers · ${profilePosts.size} posts · ${activeUserStories.size} stories",
+                text = "$displayedFollowerCount followers · ${profilePosts.size} posts · ${activeUserStories.size} stories",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary
               )
@@ -963,6 +1003,29 @@ fun UserProfileScreen(
                     )
                     Spacer(Modifier.width(4.dp))
                     Text("Message")
+                  }
+                }
+                if (isFollowingTarget) {
+                  OutlinedButton(
+                    onClick = { socialVm.toggleFollowCreator(targetUserId, targetUser.displayName) },
+                    modifier = Modifier.fillMaxWidth().testTag("profile_follow_button")
+                  ) {
+                    Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Following · $displayedFollowerCount")
+                  }
+                } else {
+                  Button(
+                    onClick = { socialVm.toggleFollowCreator(targetUserId, targetUser.displayName) },
+                    colors = ButtonDefaults.buttonColors(
+                      containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                      contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth().testTag("profile_follow_button")
+                  ) {
+                    Icon(Icons.Rounded.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Follow")
                   }
                 }
               }
@@ -1056,11 +1119,13 @@ fun UserProfileScreen(
                   isSaved = post.id in savedIds,
                   allowShare = post.privacy == "public",
                   authorOnline = targetUser.effectiveOnline,
+                  displayAuthorName = targetUser.displayName,
+                  displayAuthorAvatar = targetUser.photoUrl,
                   onReact = { e -> socialVm.reactToPost(post, e) },
                   onCommentClick = { commentPost = post },
                   onShare = { n -> socialVm.sharePost(post, n) },
                   onShareClick = { shareTargetPost = post },
-                  onToggleSave = { socialVm.toggleSave(post.id, "post", post.authorName, post.content) },
+                  onToggleSave = { socialVm.toggleSave(post.id, "post", targetUser.displayName, post.content) },
                   onEdit = { c, p -> socialVm.editPost(post.id, c, p) },
                   onDelete = { socialVm.deletePost(post.id) },
                   onReport = { r -> socialVm.reportContent("post", post.id, r) }
@@ -1188,13 +1253,19 @@ fun UserProfileScreen(
 
   commentPost?.let { post ->
     val comments by socialVm.observePostComments(post.id).collectAsStateWithLifecycle(initialValue = emptyList())
-    CommentsBottomSheet(comments = comments, onDismiss = { commentPost = null }, onSendComment = { t, p -> socialVm.addComment(post, t, p) })
+    CommentsBottomSheet(
+      comments = comments,
+      usersById = usersById,
+      me = me,
+      onDismiss = { commentPost = null },
+      onSendComment = { t, p -> socialVm.addComment(post, t, p) }
+    )
   }
 
   shareTargetPost?.let { post ->
     ShareOptionsBottomSheet(
       payload = SharePayload(
-        title = "Post by ${post.authorName}",
+        title = "Post by ${targetUser?.displayName ?: post.authorName}",
         body = post.content.ifBlank { "Shared post on HELLO" },
         canRepostToFeed = true
       ),
@@ -1238,6 +1309,11 @@ fun SearchScreen(
 
   val me by socialVm.currentUser.collectAsStateWithLifecycle()
   val users = ((communityVm.discoverableUsers.collectAsStateWithLifecycle().value as? UiState.Success)?.data).orEmpty()
+  val usersById = remember(users, me) {
+    val map = users.associateBy { it.userId }.toMutableMap()
+    if (me != null) map[me!!.userId] = me!!
+    map
+  }
   val posts = ((socialVm.publicFeed.collectAsStateWithLifecycle().value as? UiState.Success)?.data).orEmpty()
   val groups by spacesVm.publicGroups.collectAsStateWithLifecycle()
   val pages = ((spacesVm.pages.collectAsStateWithLifecycle().value as? UiState.Success)?.data).orEmpty()
@@ -1477,10 +1553,11 @@ fun SearchScreen(
       if (scopeTab in listOf("All", "Posts") && mPosts.isNotEmpty()) {
         item(key = "sec_posts") { HelloSearchSectionHeader("Posts") }
         items(mPosts.take(10), key = { "p_${it.id}" }) { p ->
+          val resolvedAuthor = resolveLiveAuthor(p.authorId, p.authorName, p.authorAvatar, usersById, me)
           HelloSearchRow(
             icon = Icons.Rounded.Article,
             title = p.content.ifBlank { "Shared media post" },
-            subtitle = "Posted by ${p.authorName}",
+            subtitle = "Posted by ${resolvedAuthor.displayName}",
             onClick = {
               commitQueryIfNeeded()
               onOpenProfile(p.authorId)
@@ -1647,7 +1724,14 @@ fun SettingsScreen(
   strictDebugMode: Boolean = false,
   onStrictDebugModeChange: (Boolean) -> Unit = {},
   onReelsAutoAdvancePersist: (Boolean) -> Unit = {},
-  onReelsRegionPersist: (String) -> Unit = {}
+  onReelsRegionPersist: (String) -> Unit = {},
+  incognitoHideStatus: Boolean = false,
+  incognitoPrivateViewing: Boolean = false,
+  disappearingChat24h: Boolean = false,
+  onIncognitoMasterChange: (Boolean) -> Unit = {},
+  onIncognitoHideStatusChange: (Boolean) -> Unit = {},
+  onIncognitoPrivateViewingChange: (Boolean) -> Unit = {},
+  onDisappearingChat24hChange: (Boolean) -> Unit = {}
 ) {
   val context = LocalContext.current
   val vault = remember(context, vaultStorage) { vaultStorage ?: EncryptedVaultStorage(context) }
@@ -1739,6 +1823,139 @@ fun SettingsScreen(
             onCheckedChange = { socialVm.toggleShowOnlineStatus(it) },
             modifier = Modifier.testTag("settings_online_status_switch")
           )
+        }
+      }
+    }
+
+    item {
+      val incognitoAny = incognitoHideStatus || incognitoPrivateViewing || disappearingChat24h
+      Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Row(
+              modifier = Modifier.weight(1f).padding(end = 12.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+              Surface(
+                shape = CircleShape,
+                color = if (incognitoAny) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.size(40.dp)
+              ) {
+                Box(contentAlignment = Alignment.Center) {
+                  Icon(
+                    imageVector = Icons.Rounded.VisibilityOff,
+                    contentDescription = "Incognito and privacy mode",
+                    tint = if (incognitoAny) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                  )
+                }
+              }
+              Column {
+                Text(
+                  text = "Incognito & Privacy Mode",
+                  style = MaterialTheme.typography.titleSmall,
+                  fontWeight = FontWeight.Bold
+                )
+                Text(
+                  text = if (incognitoAny) {
+                    "Stealth protections active across chat, stories & presence."
+                  } else {
+                    "Hide typing/presence, view stories quietly, or auto-expire messages in 24h."
+                  },
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+            }
+            Switch(
+              checked = incognitoAny,
+              onCheckedChange = onIncognitoMasterChange,
+              modifier = Modifier.testTag("settings_incognito_master_switch")
+            )
+          }
+
+          HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+              Text("Hide Online & Typing Status", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+              Text(
+                "Keep your green dot offline and pause outgoing typing indicators.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+            Switch(
+              checked = incognitoHideStatus,
+              onCheckedChange = onIncognitoHideStatusChange,
+              modifier = Modifier.testTag("settings_incognito_hide_status_switch")
+            )
+          }
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+              Text("Private Story & Profile Viewing", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+              Text(
+                "Browse stories without incrementing view counts.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+            Switch(
+              checked = incognitoPrivateViewing,
+              onCheckedChange = onIncognitoPrivateViewingChange,
+              modifier = Modifier.testTag("settings_incognito_private_viewing_switch")
+            )
+          }
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(Icons.Rounded.Timer, contentDescription = null, modifier = Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary)
+                Text("Disappearing Chat (24h Default)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+              }
+              Text(
+                "New messages sent in Messenger automatically expire after 24 hours.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+            Switch(
+              checked = disappearingChat24h,
+              onCheckedChange = onDisappearingChat24hChange,
+              modifier = Modifier.testTag("settings_incognito_disappearing_chat_switch")
+            )
+          }
+
+          Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Text(
+              text = "Safety guardrail: Blocking & reporting remain active inside Incognito mode so privacy options cannot be used for harassment or spam.",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+            )
+          }
         }
       }
     }

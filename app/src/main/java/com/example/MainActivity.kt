@@ -47,6 +47,7 @@ import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SlowMotionVideo
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -450,6 +451,10 @@ private fun AuthenticatedHelloShell(
   val searchHistory by appPrefs.searchHistory.collectAsStateWithLifecycle(initialValue = emptyList())
   val reelsAutoAdvancePref by appPrefs.reelsAutoAdvance.collectAsStateWithLifecycle(initialValue = true)
   val reelsRegionPref by appPrefs.reelsRegion.collectAsStateWithLifecycle(initialValue = "GLOBAL")
+  val incognitoHideStatus by appPrefs.incognitoHideStatus.collectAsStateWithLifecycle(initialValue = false)
+  val incognitoPrivateViewing by appPrefs.incognitoPrivateViewing.collectAsStateWithLifecycle(initialValue = false)
+  val disappearingChat24h by appPrefs.disappearingChat24h.collectAsStateWithLifecycle(initialValue = false)
+  val incognitoAnyActive by appPrefs.incognitoAnyActive.collectAsStateWithLifecycle(initialValue = false)
   val prefsScope = rememberCoroutineScope()
 
   LaunchedEffect(reelsAutoAdvancePref, reelsRegionPref) {
@@ -457,6 +462,10 @@ private fun AuthenticatedHelloShell(
       autoAdvance = reelsAutoAdvancePref,
       regionCode = reelsRegionPref
     )
+  }
+
+  LaunchedEffect(incognitoHideStatus) {
+    socialVm.setIncognitoHideStatus(incognitoHideStatus)
   }
 
   val seenNotificationIds = remember(uid) { mutableSetOf<String>() }
@@ -668,6 +677,27 @@ private fun AuthenticatedHelloShell(
                   }
                 },
                 actions = {
+                  if (incognitoAnyActive) {
+                    IconButton(
+                      onClick = { navigateSingleTop(HelloRoutes.SETTINGS) },
+                      modifier = Modifier.testTag("top_incognito_badge")
+                    ) {
+                      Surface(
+                        modifier = Modifier.size(36.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.secondaryContainer
+                      ) {
+                        Box(contentAlignment = Alignment.Center) {
+                          Icon(
+                            imageVector = Icons.Rounded.VisibilityOff,
+                            contentDescription = "Incognito mode active, tap to manage",
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(19.dp)
+                          )
+                        }
+                      }
+                    }
+                  }
                   IconButton(
                     onClick = { onThemeChange(if (isDark) ThemeMode.LIGHT else ThemeMode.DARK) },
                     modifier = Modifier.testTag("top_theme_toggle")
@@ -906,6 +936,7 @@ private fun AuthenticatedHelloShell(
                 viewModel = communityVm,
                 me = me,
                 currentUserId = uid,
+                incognitoActive = incognitoAnyActive,
                 onOpenThread = { convId -> navController.navigate(HelloRoutes.chatThread(convId)) }
               )
             }
@@ -919,6 +950,11 @@ private fun AuthenticatedHelloShell(
                 viewModel = communityVm,
                 me = me,
                 currentUserId = uid,
+                incognitoHideStatus = incognitoHideStatus,
+                disappearingDefault24h = disappearingChat24h,
+                onToggleDisappearing24h = { enabled ->
+                  prefsScope.launch { appPrefs.setDisappearingChat24h(enabled) }
+                },
                 onBack = { navController.popBackStack() },
                 onOpenProfile = openUserProfile
               )
@@ -1028,6 +1064,7 @@ private fun AuthenticatedHelloShell(
                 spacesVm = spacesVm,
                 vaultStorage = vaultStorage,
                 integrityReport = integrityReport,
+                incognitoPrivateViewing = incognitoPrivateViewing,
                 onBack = { navController.popBackStack() },
                 onOpenChat = { convId -> navController.navigate(HelloRoutes.chatThread(convId)) },
                 onOpenStoryViewer = { story -> activeStory = story },
@@ -1081,6 +1118,21 @@ private fun AuthenticatedHelloShell(
                 },
                 onReelsRegionPersist = { regionCode ->
                   prefsScope.launch { appPrefs.setReelsRegion(regionCode) }
+                },
+                incognitoHideStatus = incognitoHideStatus,
+                incognitoPrivateViewing = incognitoPrivateViewing,
+                disappearingChat24h = disappearingChat24h,
+                onIncognitoMasterChange = { enabled ->
+                  prefsScope.launch { appPrefs.setIncognitoModeAll(enabled) }
+                },
+                onIncognitoHideStatusChange = { enabled ->
+                  prefsScope.launch { appPrefs.setIncognitoHideStatus(enabled) }
+                },
+                onIncognitoPrivateViewingChange = { enabled ->
+                  prefsScope.launch { appPrefs.setIncognitoPrivateViewing(enabled) }
+                },
+                onDisappearingChat24hChange = { enabled ->
+                  prefsScope.launch { appPrefs.setDisappearingChat24h(enabled) }
                 }
               )
             }
@@ -1141,6 +1193,7 @@ private fun AuthenticatedHelloShell(
         communityVm = communityVm,
         me = me,
         currentUserId = uid,
+        incognitoPrivateViewing = incognitoPrivateViewing,
         onOpenProfile = { targetUid ->
           if (targetUid.isNotBlank()) {
             if (targetUid == uid) {

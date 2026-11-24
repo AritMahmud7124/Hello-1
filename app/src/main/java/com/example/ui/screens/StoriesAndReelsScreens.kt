@@ -198,6 +198,7 @@ import com.example.ui.components.buildPhotoFilterColorMatrix
 import com.example.ui.components.formatSongSec
 import com.example.ui.components.formatTimestamp
 import com.example.ui.components.parseHexColorSafe
+import com.example.ui.components.resolveLiveAuthor
 import com.example.ui.i18n.LocalAppStrings
 import com.example.ui.viewmodel.CommunityViewModel
 import com.example.ui.viewmodel.MainSocialViewModel
@@ -269,6 +270,8 @@ fun StoriesScreen(
   onOpenViewer: (Story) -> Unit
 ) {
   val context = LocalContext.current
+  val me by viewModel.currentUser.collectAsStateWithLifecycle()
+  val usersById = remember(discoverableUsers) { discoverableUsers.associateBy { it.userId } }
   val storiesState by viewModel.stories.collectAsStateWithLifecycle()
   val isUploading by viewModel.isUploadingMedia.collectAsStateWithLifecycle()
   var showCreateStory by remember { mutableStateOf(false) }
@@ -340,6 +343,13 @@ fun StoriesScreen(
             items(visibleStories, key = { it.id }) { story ->
               val storyGradient = remember(story.backgroundHex) { storyGradientForHex(story.backgroundHex) }
               val isFresh = remember(story.createdAt) { isStoryFresh24h(story) }
+              val storyAuthor = resolveLiveAuthor(
+                authorId = story.authorId,
+                fallbackName = story.authorName,
+                fallbackAvatar = story.authorAvatar,
+                usersById = usersById,
+                me = me
+              )
               Card(
                 modifier = Modifier
                   .height(238.dp)
@@ -355,7 +365,7 @@ fun StoriesScreen(
                   if (story.mediaUri.isNotBlank() && story.mediaType == "image") {
                     AsyncImage(
                       model = story.mediaUri,
-                      contentDescription = story.caption.ifBlank { "${story.authorName}'s story photo" },
+                      contentDescription = story.caption.ifBlank { "${storyAuthor.displayName}'s story photo" },
                       modifier = Modifier.fillMaxSize(),
                       contentScale = ContentScale.Crop
                     )
@@ -379,10 +389,10 @@ fun StoriesScreen(
                       horizontalArrangement = Arrangement.spacedBy(6.dp),
                       modifier = Modifier.align(Alignment.TopStart).fillMaxWidth()
                     ) {
-                      UserAvatar(name = story.authorName, photoUrl = story.authorAvatar, size = 30.dp)
+                      UserAvatar(name = storyAuthor.displayName, photoUrl = storyAuthor.avatarUrl, size = 30.dp)
                       Column(modifier = Modifier.weight(1f)) {
                         Text(
-                          story.authorName,
+                          storyAuthor.displayName,
                           color = Color.White,
                           style = MaterialTheme.typography.labelMedium,
                           fontWeight = FontWeight.Bold,
@@ -2143,6 +2153,7 @@ fun StoryViewerDialog(
   communityVm: CommunityViewModel? = null,
   me: PublicUser? = null,
   currentUserId: String = "",
+  incognitoPrivateViewing: Boolean = false,
   onOpenProfile: ((String) -> Unit)? = null,
   onDismiss: () -> Unit
 ) {
@@ -2188,8 +2199,8 @@ fun StoryViewerDialog(
     }
   }
 
-  LaunchedEffect(activeStory.id) {
-    if (activeStory.authorId != currentUserId && currentUserId.isNotBlank()) {
+  LaunchedEffect(activeStory.id, incognitoPrivateViewing) {
+    if (!incognitoPrivateViewing && activeStory.authorId != currentUserId && currentUserId.isNotBlank()) {
       viewModel.markStoryViewed(activeStory.id, activeStory.category)
     }
     progress = 0f
@@ -2203,7 +2214,7 @@ fun StoryViewerDialog(
         progress += stepPerTick
       }
     }
-    if (activeStory.authorId != currentUserId) {
+    if (!incognitoPrivateViewing && activeStory.authorId != currentUserId) {
       viewModel.trackEngagement(activeStory.id, activeStory.category, EngagementSignal.FULL_WATCH)
     }
     goToNextStory()
@@ -2229,6 +2240,14 @@ fun StoryViewerDialog(
   val usersState = communityVm?.discoverableUsers?.collectAsStateWithLifecycle()
   val conversations = (conversationsState?.value as? UiState.Success)?.data.orEmpty()
   val discoverableUsers = (usersState?.value as? UiState.Success)?.data.orEmpty()
+  val usersById = remember(discoverableUsers) { discoverableUsers.associateBy { it.userId } }
+  val activeStoryAuthor = resolveLiveAuthor(
+    authorId = activeStory.authorId,
+    fallbackName = activeStory.authorName,
+    fallbackAvatar = activeStory.authorAvatar,
+    usersById = usersById,
+    me = me
+  )
 
   Dialog(
     onDismissRequest = onDismiss,
@@ -2258,7 +2277,9 @@ fun StoryViewerDialog(
           modifier = Modifier.fillMaxSize(),
           cornerRadius = 24.dp,
           onVideoEnded = {
-            viewModel.trackEngagement(activeStory.id, activeStory.category, EngagementSignal.FULL_WATCH)
+            if (!incognitoPrivateViewing && activeStory.authorId != currentUserId) {
+              viewModel.trackEngagement(activeStory.id, activeStory.category, EngagementSignal.FULL_WATCH)
+            }
             goToNextStory()
           }
         )
@@ -2294,7 +2315,9 @@ fun StoryViewerDialog(
             cornerRadius = 24.dp,
             showMediaController = false,
             onVideoEnded = {
-              viewModel.trackEngagement(activeStory.id, activeStory.category, EngagementSignal.FULL_WATCH)
+              if (!incognitoPrivateViewing && activeStory.authorId != currentUserId) {
+                viewModel.trackEngagement(activeStory.id, activeStory.category, EngagementSignal.FULL_WATCH)
+              }
               goToNextStory()
             }
           )
@@ -2515,17 +2538,32 @@ fun StoryViewerDialog(
               )
               .padding(vertical = 2.dp)
           ) {
-            UserAvatar(name = activeStory.authorName, photoUrl = activeStory.authorAvatar, size = 38.dp)
+            UserAvatar(name = activeStoryAuthor.displayName, photoUrl = activeStoryAuthor.avatarUrl, size = 38.dp)
             Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
               Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(activeStory.authorName, color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(activeStoryAuthor.displayName, color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Icon(
                   imageVector = if (activeStory.privacy == "friends") Icons.Rounded.Group else Icons.Rounded.Public,
                   contentDescription = activeStory.privacy,
                   tint = Color.White.copy(alpha = 0.8f),
                   modifier = Modifier.size(13.dp)
                 )
+                if (incognitoPrivateViewing) {
+                  Surface(
+                    color = Color.Black.copy(alpha = 0.55f),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.4f)),
+                    modifier = Modifier.testTag("story_incognito_badge")
+                  ) {
+                    Text(
+                      text = "Incognito",
+                      color = Color.White,
+                      style = MaterialTheme.typography.labelSmall,
+                      modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                  }
+                }
               }
               val effectiveHighlight = remember(activeStory.id, activeStory.isSavedHighlight) {
                 mutableStateOf(activeStory.isSavedHighlight)
@@ -2691,10 +2729,17 @@ fun StoryViewerDialog(
                   verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                   items(sortedReactions, key = { it.id }) { r ->
+                    val reactAuthor = resolveLiveAuthor(
+                      authorId = r.userId,
+                      fallbackName = r.userName,
+                      fallbackAvatar = "",
+                      usersById = usersById,
+                      me = me
+                    )
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                       Text(r.emoji, style = MaterialTheme.typography.titleMedium)
                       Column(modifier = Modifier.weight(1f)) {
-                        Text(r.userName.ifBlank { "Member" }, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text(reactAuthor.displayName, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                         if (r.replyText.isNotBlank()) {
                           Text(r.replyText, color = Color.White.copy(alpha = 0.94f), style = MaterialTheme.typography.bodySmall)
                         }
@@ -2825,7 +2870,7 @@ fun StoryViewerDialog(
   if (showShareSheet) {
     ShareOptionsBottomSheet(
       payload = SharePayload(
-        title = "${activeStory.authorName}'s HELLO Story",
+        title = "${activeStoryAuthor.displayName}'s HELLO Story",
         body = activeStory.caption.ifBlank { "Check out this Story on HELLO!" },
         canRepostToFeed = true
       ),
@@ -2835,9 +2880,9 @@ fun StoryViewerDialog(
       onDismiss = { showShareSheet = false },
       onRepostToFeed = { note ->
         val composed = if (note.isBlank()) {
-          "Shared ${activeStory.authorName}'s story: ${activeStory.caption}"
+          "Shared ${activeStoryAuthor.displayName}'s story: ${activeStory.caption}"
         } else {
-          "$note\n\n— Story by ${activeStory.authorName}: ${activeStory.caption}"
+          "$note\n\n— Story by ${activeStoryAuthor.displayName}: ${activeStory.caption}"
         }
         viewModel.createPost(context, composed, activeStory.mediaUri, activeStory.mediaType.takeIf { it in listOf("image", "video") } ?: "none", "public", emptyList())
       },
@@ -3072,6 +3117,7 @@ fun ReelsScreen(
   val usersState = communityVm?.discoverableUsers?.collectAsStateWithLifecycle()
   val conversations = (conversationsState?.value as? UiState.Success)?.data.orEmpty()
   val discoverableUsers = (usersState?.value as? UiState.Success)?.data.orEmpty()
+  val usersById = remember(discoverableUsers) { discoverableUsers.associateBy { it.userId } }
 
   var showCreateReel by remember { mutableStateOf(false) }
   var showCategoryMenu by remember { mutableStateOf(false) }
@@ -3530,6 +3576,17 @@ fun ReelsScreen(
                     "yt_" + item.authorName.trim().lowercase().replace(Regex("[^a-z0-9]"), "_").take(40).trim('_').ifBlank { "creator" }
                   }
                 }
+                val liveCreator = if (item.authorId.isNotBlank()) {
+                  resolveLiveAuthor(
+                    authorId = item.authorId,
+                    fallbackName = item.authorName,
+                    fallbackAvatar = item.authorAvatar,
+                    usersById = usersById,
+                    me = me
+                  )
+                } else null
+                val displayAuthorName = liveCreator?.displayName ?: item.authorName
+                val displayAuthorAvatar = liveCreator?.avatarUrl ?: item.authorAvatar
                 val isOwnReel = effectiveCurrentUid.isNotBlank() && item.authorId == effectiveCurrentUid
                 val isFollowingCreator = followTargetId in followingIds
 
@@ -3555,10 +3612,10 @@ fun ReelsScreen(
                         .border(1.5.dp, Color.White.copy(alpha = 0.72f), CircleShape),
                       contentAlignment = Alignment.Center
                     ) {
-                      UserAvatar(name = item.authorName, photoUrl = item.authorAvatar, size = 36.dp)
+                      UserAvatar(name = displayAuthorName, photoUrl = displayAuthorAvatar, size = 36.dp)
                     }
                     Text(
-                      text = item.authorName,
+                      text = displayAuthorName,
                       color = Color.White,
                       style = MaterialTheme.typography.titleSmall.copy(shadow = textShadow),
                       fontWeight = FontWeight.Bold,
@@ -3576,7 +3633,7 @@ fun ReelsScreen(
                         .clip(RoundedCornerShape(50))
                         .clickable {
                           haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                          viewModel.toggleFollowCreator(followTargetId, item.authorName)
+                          viewModel.toggleFollowCreator(followTargetId, displayAuthorName)
                         }
                         .testTag("reel_follow_button")
                     ) {
@@ -3917,6 +3974,8 @@ fun ReelsScreen(
     val comments by viewModel.observeReelComments(reel.id).collectAsStateWithLifecycle(initialValue = emptyList())
     CommentsBottomSheet(
       comments = comments,
+      usersById = usersById,
+      me = me,
       onDismiss = { commentReel = null },
       onSendComment = { text, _ ->
         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -3927,9 +3986,14 @@ fun ReelsScreen(
 
   shareItemTarget?.let { item ->
     val shareLink = if (item.youtubeVideoId.isNotBlank()) "\nhttps://youtube.com/shorts/${item.youtubeVideoId}" else ""
+    val shareAuthorName = if (item.authorId.isNotBlank()) {
+      resolveLiveAuthor(item.authorId, item.authorName, item.authorAvatar, usersById, me).displayName
+    } else {
+      item.authorName
+    }
     ShareOptionsBottomSheet(
       payload = SharePayload(
-        title = "${item.category} Reel by ${item.authorName}",
+        title = "${item.category} Reel by $shareAuthorName",
         body = "${item.caption}$shareLink",
         canRepostToFeed = true
       ),
@@ -3939,9 +4003,9 @@ fun ReelsScreen(
       onDismiss = { shareItemTarget = null },
       onRepostToFeed = { note ->
         val composed = if (note.isBlank()) {
-          "Shared ${item.category} Reel by ${item.authorName}: ${item.caption}$shareLink"
+          "Shared ${item.category} Reel by $shareAuthorName: ${item.caption}$shareLink"
         } else {
-          "$note\n\n— ${item.category} Reel by ${item.authorName}: ${item.caption}$shareLink"
+          "$note\n\n— ${item.category} Reel by $shareAuthorName: ${item.caption}$shareLink"
         }
         viewModel.createPost(context, composed, item.videoUri, if (item.videoUri.isNotBlank()) "video" else "none", "public", emptyList())
         item.nativeReel?.let { viewModel.shareReel(it.id) }

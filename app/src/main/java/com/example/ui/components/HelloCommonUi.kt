@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.media.MediaPlayer
 import android.net.Uri
@@ -14,6 +15,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.MediaController
+import android.widget.Toast
 import android.widget.VideoView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.runtime.DisposableEffect
@@ -128,6 +130,7 @@ import com.example.data.media.FirestoreMediaStore
 import com.example.data.model.Comment
 import com.example.data.model.Post
 import com.example.data.model.PostReaction
+import com.example.data.model.PublicUser
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.ui.theme.HelloCoral
 import com.example.ui.theme.HelloEmerald
@@ -137,6 +140,74 @@ import com.google.firebase.Timestamp
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlinx.coroutines.delay
+
+data class ResolvedAuthor(
+  val displayName: String,
+  val avatarUrl: String,
+  val isOnline: Boolean = false
+)
+
+fun resolveLiveAuthor(
+  authorId: String,
+  fallbackName: String,
+  fallbackAvatar: String,
+  usersById: Map<String, PublicUser>,
+  me: PublicUser? = null
+): ResolvedAuthor {
+  val liveUser = when {
+    authorId.isNotBlank() && me != null && authorId == me.userId -> me
+    authorId.isNotBlank() -> usersById[authorId]
+    else -> null
+  }
+  val resolvedName = liveUser?.displayName?.ifBlank { null }
+    ?: fallbackName.ifBlank { null }
+    ?: "Hello Member"
+  val resolvedAvatar = liveUser?.photoUrl?.ifBlank { null }
+    ?: fallbackAvatar
+  return ResolvedAuthor(
+    displayName = resolvedName,
+    avatarUrl = resolvedAvatar,
+    isOnline = liveUser?.effectiveOnline == true
+  )
+}
+
+fun openLocationInGoogleMaps(
+  context: Context,
+  latitude: Double,
+  longitude: Double,
+  label: String = "HELLO SOS"
+) {
+  if (latitude == 0.0 && longitude == 0.0) {
+    Toast.makeText(context, "No GPS coordinates shared for this alert.", Toast.LENGTH_SHORT).show()
+    return
+  }
+  val encodedLabel = Uri.encode(label.ifBlank { "HELLO SOS" })
+  val geoUri = Uri.parse("geo:$latitude,$longitude?q=$latitude,$longitude($encodedLabel)")
+  val pm = context.packageManager
+
+  val googleMapsIntent = Intent(Intent.ACTION_VIEW, geoUri).apply {
+    setPackage("com.google.android.apps.maps")
+  }
+  if (googleMapsIntent.resolveActivity(pm) != null) {
+    val launched = runCatching { context.startActivity(googleMapsIntent) }.isSuccess
+    if (launched) return
+  }
+
+  val genericGeoIntent = Intent(Intent.ACTION_VIEW, geoUri)
+  if (genericGeoIntent.resolveActivity(pm) != null) {
+    val launched = runCatching { context.startActivity(genericGeoIntent) }.isSuccess
+    if (launched) return
+  }
+
+  val webMapsUri = Uri.parse("https://www.google.com/maps/search/?api=1&query=$latitude,$longitude")
+  val webIntent = Intent(Intent.ACTION_VIEW, webMapsUri)
+  if (webIntent.resolveActivity(pm) != null) {
+    val launched = runCatching { context.startActivity(webIntent) }.isSuccess
+    if (launched) return
+  }
+
+  Toast.makeText(context, "Unable to open Google Maps or browser on this device.", Toast.LENGTH_SHORT).show()
+}
 
 @Composable
 fun HelloBrandLogo(modifier: Modifier = Modifier, size: Dp = 36.dp) {
@@ -894,9 +965,13 @@ fun PostCard(
   modifier: Modifier = Modifier,
   allowShare: Boolean = true,
   authorOnline: Boolean = false,
+  displayAuthorName: String = post.authorName,
+  displayAuthorAvatar: String = post.authorAvatar,
   onShareClick: (() -> Unit)? = null,
   onAuthorClick: (() -> Unit)? = null
 ) {
+  val resolvedAuthorName = displayAuthorName.ifBlank { post.authorName }.ifBlank { "Hello Member" }
+  val resolvedAuthorAvatar = displayAuthorAvatar.ifBlank { post.authorAvatar }
   var showMenu by remember { mutableStateOf(false) }
   var showReactionBar by remember { mutableStateOf(false) }
   var showEditDialog by remember { mutableStateOf(false) }
@@ -930,11 +1005,11 @@ fun PostCard(
             .padding(vertical = 2.dp),
           verticalAlignment = Alignment.CenterVertically
         ) {
-          UserAvatar(name = post.authorName, photoUrl = post.authorAvatar, size = 44.dp, isOnline = authorOnline)
+          UserAvatar(name = resolvedAuthorName, photoUrl = resolvedAuthorAvatar, size = 44.dp, isOnline = authorOnline)
           Spacer(Modifier.width(12.dp))
           Column(modifier = Modifier.weight(1f)) {
             Text(
-              text = post.authorName.ifBlank { "Hello Member" },
+              text = resolvedAuthorName,
               style = MaterialTheme.typography.titleMedium,
               fontWeight = FontWeight.SemiBold,
               maxLines = 1,
@@ -1251,7 +1326,7 @@ fun PostCard(
             onClick = {
               val sendIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, "${post.authorName} on HELLO:\n${post.content}")
+                putExtra(Intent.EXTRA_TEXT, "$resolvedAuthorName on HELLO:\n${post.content}")
               }
               cardContext.startActivity(Intent.createChooser(sendIntent, "Share via"))
               showShareDialog = false
@@ -1302,6 +1377,8 @@ fun PostCard(
 @Composable
 fun CommentsBottomSheet(
   comments: List<Comment>,
+  usersById: Map<String, PublicUser> = emptyMap(),
+  me: PublicUser? = null,
   onDismiss: () -> Unit,
   onSendComment: (text: String, parentCommentId: String) -> Unit
 ) {
@@ -1372,6 +1449,13 @@ fun CommentsBottomSheet(
         ) {
           items(displayRoots, key = { it.id }) { comment ->
             val replies = comments.filter { it.parentCommentId == comment.id && comment.parentCommentId.isBlank() }
+            val commentAuthor = resolveLiveAuthor(
+              authorId = comment.authorId,
+              fallbackName = comment.authorName,
+              fallbackAvatar = comment.authorAvatar,
+              usersById = usersById,
+              me = me
+            )
             Column(
               modifier = Modifier
                 .fillMaxWidth()
@@ -1380,9 +1464,14 @@ fun CommentsBottomSheet(
                 .padding(12.dp)
             ) {
               Row(verticalAlignment = Alignment.CenterVertically) {
-                UserAvatar(name = comment.authorName, photoUrl = comment.authorAvatar, size = 30.dp)
+                UserAvatar(
+                  name = commentAuthor.displayName,
+                  photoUrl = commentAuthor.avatarUrl,
+                  size = 30.dp,
+                  isOnline = commentAuthor.isOnline
+                )
                 Spacer(Modifier.width(8.dp))
-                Text(comment.authorName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text(commentAuthor.displayName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
                 Text(formatTimestamp(comment.createdAt), style = MaterialTheme.typography.labelSmall)
               }
@@ -1400,6 +1489,13 @@ fun CommentsBottomSheet(
                   verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                   replies.forEach { rep ->
+                    val replyAuthor = resolveLiveAuthor(
+                      authorId = rep.authorId,
+                      fallbackName = rep.authorName,
+                      fallbackAvatar = rep.authorAvatar,
+                      usersById = usersById,
+                      me = me
+                    )
                     Surface(
                       shape = RoundedCornerShape(10.dp),
                       color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
@@ -1410,9 +1506,9 @@ fun CommentsBottomSheet(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                       ) {
-                        UserAvatar(name = rep.authorName, photoUrl = rep.authorAvatar, size = 20.dp)
+                        UserAvatar(name = replyAuthor.displayName, photoUrl = replyAuthor.avatarUrl, size = 20.dp)
                         Text(
-                          text = "${rep.authorName}: ${rep.text}",
+                          text = "${replyAuthor.displayName}: ${rep.text}",
                           style = MaterialTheme.typography.bodySmall
                         )
                       }
@@ -1426,9 +1522,16 @@ fun CommentsBottomSheet(
       }
 
       if (replyingTo != null) {
+        val targetAuthor = resolveLiveAuthor(
+          authorId = replyingTo!!.authorId,
+          fallbackName = replyingTo!!.authorName,
+          fallbackAvatar = replyingTo!!.authorAvatar,
+          usersById = usersById,
+          me = me
+        )
         Row(verticalAlignment = Alignment.CenterVertically) {
           Text(
-            "Replying to ${replyingTo!!.authorName}",
+            "Replying to ${targetAuthor.displayName}",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.weight(1f)

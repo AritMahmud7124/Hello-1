@@ -1,6 +1,7 @@
 package com.example.data.model
 
 import com.example.data.repository.FeedCurator
+import com.example.ui.components.resolveLiveAuthor
 import com.google.firebase.Timestamp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -239,6 +240,67 @@ class PureLoveAndFeedCurationTest {
     assertEquals("Sunlit Dreams", story.musicTitle)
     assertEquals("HELLO Studio", story.musicArtist)
     assertEquals(28L, story.musicEndSec)
+  }
+
+  @Test
+  fun resolveLiveAuthor_prioritizesMeAndUsersById_andFallsBackGracefully() {
+    val oldSnapshotName = "Old Name"
+    val oldSnapshotAvatar = "https://old.example/a.png"
+    val liveAlice = PublicUser(
+      userId = "u_alice",
+      displayName = "Alice Updated",
+      photoUrl = "https://new.example/alice.png",
+      isOnline = true,
+      showOnlineStatus = true
+    )
+    val staleAliceInMap = PublicUser(
+      userId = "u_alice",
+      displayName = "Alice Stale",
+      photoUrl = "https://stale.example/alice.png",
+      isOnline = false
+    )
+    val liveBob = PublicUser(
+      userId = "u_bob",
+      displayName = "Bob Live",
+      photoUrl = "https://new.example/bob.png",
+      isOnline = true,
+      showOnlineStatus = false
+    )
+    val usersById = mapOf("u_alice" to staleAliceInMap, "u_bob" to liveBob)
+
+    // 1. Current user resolves from `me` first (immediate local optimistic reflection)
+    val fromMe = resolveLiveAuthor("u_alice", oldSnapshotName, oldSnapshotAvatar, usersById, me = liveAlice)
+    assertEquals("Alice Updated", fromMe.displayName)
+    assertEquals("https://new.example/alice.png", fromMe.avatarUrl)
+    assertTrue(fromMe.isOnline)
+
+    // 2. Other user resolves from live users_public map & respects stealth showOnlineStatus=false
+    val fromMap = resolveLiveAuthor("u_bob", oldSnapshotName, oldSnapshotAvatar, usersById, me = liveAlice)
+    assertEquals("Bob Live", fromMap.displayName)
+    assertEquals("https://new.example/bob.png", fromMap.avatarUrl)
+    assertFalse(fromMap.isOnline)
+
+    // 3. Missing/loading profile falls back to snapshot then "Hello Member"
+    val fromSnapshotFallback = resolveLiveAuthor("u_unknown", oldSnapshotName, oldSnapshotAvatar, usersById, me = liveAlice)
+    assertEquals(oldSnapshotName, fromSnapshotFallback.displayName)
+    assertEquals(oldSnapshotAvatar, fromSnapshotFallback.avatarUrl)
+
+    val fromBlankFallback = resolveLiveAuthor("u_unknown", "", "", usersById, me = liveAlice)
+    assertEquals("Hello Member", fromBlankFallback.displayName)
+    assertEquals("", fromBlankFallback.avatarUrl)
+  }
+
+  @Test
+  fun chatMessage_disappearingExpiry_filtersExpiredWhileKeepingPermanent() {
+    val nowMs = 1_750_000_000_000L
+    val permanentMsg = ChatMessage(id = "m1", text = "Forever", expiresAtMs = 0L)
+    val activeDisappearingMsg = ChatMessage(id = "m2", text = "Fresh 24h", expiresAtMs = nowMs + 60_000L)
+    val expiredDisappearingMsg = ChatMessage(id = "m3", text = "Expired 24h", expiresAtMs = nowMs - 1_000L)
+
+    val visible = listOf(permanentMsg, activeDisappearingMsg, expiredDisappearingMsg).filter { msg ->
+      msg.expiresAtMs <= 0L || msg.expiresAtMs > nowMs
+    }
+    assertEquals(listOf("m1", "m2"), visible.map { it.id })
   }
 }
 

@@ -88,6 +88,9 @@ fun ShareOptionsBottomSheet(
   val recentFriends = remember(discoverableUsers, currentUserId) {
     discoverableUsers.filter { it.userId != currentUserId }.take(12)
   }
+  val usersById = remember(discoverableUsers) {
+    discoverableUsers.associateBy { it.userId }
+  }
 
   ModalBottomSheet(onDismissRequest = onDismiss) {
     Column(
@@ -168,12 +171,15 @@ fun ShareOptionsBottomSheet(
         if (conversations.isNotEmpty() && onSendToConversation != null) {
           LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(conversations.take(10), key = { it.id }) { conv ->
-              val name = if (conv.isGroup) {
-                conv.title.ifBlank { "Group" }
-              } else {
-                val otherUid = conv.participantUids.firstOrNull { it != currentUserId }
-                conv.participantNames[otherUid] ?: conv.title.ifBlank { "Friend" }
-              }
+              val otherUid = if (conv.isGroup) "" else conv.participantUids.firstOrNull { it != currentUserId }.orEmpty()
+              val resolvedOther = if (conv.isGroup) null else resolveLiveAuthor(
+                authorId = otherUid,
+                fallbackName = conv.participantNames[otherUid] ?: conv.title.ifBlank { "Friend" },
+                fallbackAvatar = "",
+                usersById = usersById
+              )
+              val name = if (conv.isGroup) conv.title.ifBlank { "Group" } else resolvedOther?.displayName ?: "Friend"
+              val avatar = if (conv.isGroup) "" else resolvedOther?.avatarUrl.orEmpty()
               Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
@@ -183,7 +189,7 @@ fun ShareOptionsBottomSheet(
                     onDismiss()
                   }
               ) {
-                UserAvatar(name = name, photoUrl = "", size = 48.dp)
+                UserAvatar(name = name, photoUrl = avatar, size = 48.dp, isOnline = if (!conv.isGroup) usersById[otherUid]?.effectiveOnline == true else false)
                 Spacer(Modifier.height(4.dp))
                 Text(name, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
               }

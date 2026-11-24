@@ -210,6 +210,7 @@ data class ChatMessage(
   val reactions: Map<String, String> = emptyMap(),
   val participantUids: List<String> = emptyList(),
   @get:PropertyName("isDeleted") @field:PropertyName("isDeleted") val isDeleted: Boolean = false,
+  val expiresAtMs: Long = 0L,
   @ServerTimestamp val createdAt: Timestamp? = null
 )
 

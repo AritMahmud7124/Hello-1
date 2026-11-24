@@ -41,6 +41,9 @@ class AppPreferences(private val context: Context) {
   private val searchHistoryKey = stringPreferencesKey("search_history_json")
   private val reelsAutoAdvanceKey = booleanPreferencesKey("reels_auto_advance")
   private val reelsRegionKey = stringPreferencesKey("reels_feed_region")
+  private val incognitoHideStatusKey = booleanPreferencesKey("incognito_hide_status")
+  private val incognitoPrivateViewingKey = booleanPreferencesKey("incognito_private_viewing")
+  private val disappearingChat24hKey = booleanPreferencesKey("disappearing_chat_24h")
 
   val themeMode: Flow<ThemeMode> = context.helloPrefsDataStore.data.map { prefs ->
     ThemeMode.fromValue(prefs[themeKey])
@@ -62,6 +65,24 @@ class AppPreferences(private val context: Context) {
     prefs[reelsRegionKey] ?: "GLOBAL"
   }
 
+  val incognitoHideStatus: Flow<Boolean> = context.helloPrefsDataStore.data.map { prefs ->
+    prefs[incognitoHideStatusKey] ?: false
+  }
+
+  val incognitoPrivateViewing: Flow<Boolean> = context.helloPrefsDataStore.data.map { prefs ->
+    prefs[incognitoPrivateViewingKey] ?: false
+  }
+
+  val disappearingChat24h: Flow<Boolean> = context.helloPrefsDataStore.data.map { prefs ->
+    prefs[disappearingChat24hKey] ?: false
+  }
+
+  val incognitoAnyActive: Flow<Boolean> = context.helloPrefsDataStore.data.map { prefs ->
+    (prefs[incognitoHideStatusKey] == true) ||
+      (prefs[incognitoPrivateViewingKey] == true) ||
+      (prefs[disappearingChat24hKey] == true)
+  }
+
   suspend fun setThemeMode(mode: ThemeMode) {
     context.helloPrefsDataStore.edit { it[themeKey] = mode.value }
   }
@@ -76,6 +97,26 @@ class AppPreferences(private val context: Context) {
 
   suspend fun setReelsRegion(regionCode: String) {
     context.helloPrefsDataStore.edit { it[reelsRegionKey] = regionCode.trim().uppercase().ifBlank { "GLOBAL" } }
+  }
+
+  suspend fun setIncognitoModeAll(enabled: Boolean) {
+    context.helloPrefsDataStore.edit { prefs ->
+      prefs[incognitoHideStatusKey] = enabled
+      prefs[incognitoPrivateViewingKey] = enabled
+      prefs[disappearingChat24hKey] = enabled
+    }
+  }
+
+  suspend fun setIncognitoHideStatus(enabled: Boolean) {
+    context.helloPrefsDataStore.edit { it[incognitoHideStatusKey] = enabled }
+  }
+
+  suspend fun setIncognitoPrivateViewing(enabled: Boolean) {
+    context.helloPrefsDataStore.edit { it[incognitoPrivateViewingKey] = enabled }
+  }
+
+  suspend fun setDisappearingChat24h(enabled: Boolean) {
+    context.helloPrefsDataStore.edit { it[disappearingChat24hKey] = enabled }
   }
 
   suspend fun addSearchHistory(query: String) {

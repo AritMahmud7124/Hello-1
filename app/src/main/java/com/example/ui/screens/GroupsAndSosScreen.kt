@@ -105,6 +105,8 @@ import com.example.ui.components.PostCard
 import com.example.ui.components.ShareOptionsBottomSheet
 import com.example.ui.components.SharePayload
 import com.example.ui.components.formatTimestamp
+import com.example.ui.components.openLocationInGoogleMaps
+import com.example.ui.components.resolveLiveAuthor
 import com.example.ui.viewmodel.CommunityViewModel
 import com.example.ui.viewmodel.MainSocialViewModel
 import com.example.ui.viewmodel.SpacesGovernanceViewModel
@@ -326,6 +328,7 @@ fun GroupDetailScreen(
   val me by socialVm.currentUser.collectAsStateWithLifecycle()
   val usersState by communityVm.discoverableUsers.collectAsStateWithLifecycle()
   val allUsers = (usersState as? UiState.Success)?.data.orEmpty()
+  val usersById = remember(allUsers) { allUsers.associateBy { it.userId } }
   val feedState by socialVm.publicFeed.collectAsStateWithLifecycle()
   val myPosts by socialVm.myPosts.collectAsStateWithLifecycle()
   val sharedFriendsPosts by socialVm.friendsSharedPosts.collectAsStateWithLifecycle()
@@ -621,6 +624,7 @@ fun GroupDetailScreen(
                 ) {
                   sosAlerts.forEach { alert ->
                     val hasCoords = alert.shareLiveLocation && alert.status == "active" && (alert.latitude != 0.0 || alert.longitude != 0.0)
+                    val alertSenderName = resolveLiveAuthor(alert.senderId, alert.senderName, "", usersById, me).displayName
                     Card(
                       colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                       modifier = Modifier.fillMaxWidth()
@@ -632,7 +636,7 @@ fun GroupDetailScreen(
                           verticalAlignment = Alignment.CenterVertically
                         ) {
                           Text(
-                            "${alert.senderName} · ${alert.status.uppercase()}",
+                            "$alertSenderName · ${alert.status.uppercase()}",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.weight(1f)
@@ -654,15 +658,30 @@ fun GroupDetailScreen(
                             "Location sharing: OFF (text alert only)"
                           },
                           style = MaterialTheme.typography.labelMedium,
-                          color = MaterialTheme.colorScheme.onSurfaceVariant
+                          color = if (hasCoords) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                          modifier = if (hasCoords) {
+                            Modifier.clickable {
+                              openLocationInGoogleMaps(
+                                context = context,
+                                latitude = alert.latitude,
+                                longitude = alert.longitude,
+                                label = "$alertSenderName SOS"
+                              )
+                            }
+                          } else Modifier
                         )
                         if (hasCoords) {
                           OutlinedButton(
                             onClick = {
-                              val geo = Uri.parse("geo:${alert.latitude},${alert.longitude}?q=${alert.latitude},${alert.longitude}(HELLO%20SOS)")
-                              runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, geo)) }
+                              openLocationInGoogleMaps(
+                                context = context,
+                                latitude = alert.latitude,
+                                longitude = alert.longitude,
+                                label = "$alertSenderName SOS"
+                              )
                             },
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.testTag("open_sos_map_${alert.id}")
                           ) {
                             Icon(Icons.Rounded.Map, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
@@ -698,11 +717,13 @@ fun GroupDetailScreen(
       } else {
         items(groupPosts, key = { it.id }) { post ->
           val reactions by socialVm.observePostReactions(post.id).collectAsStateWithLifecycle(initialValue = emptyList())
-          val isAuthorOnline = if (post.authorId == currentUserId) {
-            me?.effectiveOnline == true
-          } else {
-            allUsers.firstOrNull { it.userId == post.authorId }?.effectiveOnline == true
-          }
+          val postAuthor = resolveLiveAuthor(
+            authorId = post.authorId,
+            fallbackName = post.authorName,
+            fallbackAvatar = post.authorAvatar,
+            usersById = usersById,
+            me = me
+          )
           PostCard(
             post = post,
             currentUserId = currentUserId,
@@ -712,9 +733,11 @@ fun GroupDetailScreen(
             onCommentClick = { activeCommentPost = post },
             onShare = { note -> if (!isPrivateGroup) socialVm.sharePost(post, note) },
             allowShare = !isPrivateGroup && post.privacy == "public",
-            authorOnline = isAuthorOnline,
+            authorOnline = postAuthor.isOnline,
+            displayAuthorName = postAuthor.displayName,
+            displayAuthorAvatar = postAuthor.avatarUrl,
             onShareClick = { if (!isPrivateGroup) sharePostTarget = post },
-            onToggleSave = { socialVm.toggleSave(post.id, "post", post.authorName, post.content) },
+            onToggleSave = { socialVm.toggleSave(post.id, "post", postAuthor.displayName, post.content) },
             onEdit = { c, p ->
               val safePrivacy = if (isPrivateGroup && p == "public") "friends" else p
               socialVm.editPost(post.id, c, safePrivacy)
@@ -928,6 +951,8 @@ fun GroupDetailScreen(
       val comments by socialVm.observePostComments(post.id).collectAsStateWithLifecycle(initialValue = emptyList())
       CommentsBottomSheet(
         comments = comments,
+        usersById = usersById,
+        me = me,
         onDismiss = { activeCommentPost = null },
         onSendComment = { text, parentId -> socialVm.addComment(post, text, parentId) }
       )
@@ -935,9 +960,10 @@ fun GroupDetailScreen(
 
     if (!isPrivateGroup) {
       sharePostTarget?.let { post ->
+        val shareAuthor = resolveLiveAuthor(post.authorId, post.authorName, post.authorAvatar, usersById, me)
         ShareOptionsBottomSheet(
           payload = SharePayload(
-            title = "Group Post by ${post.authorName}",
+            title = "Group Post by ${shareAuthor.displayName}",
             body = post.content.ifBlank { "Shared from ${group.name}" },
             canRepostToFeed = true
           ),
@@ -1242,6 +1268,17 @@ private fun EmergencySosDialog(
           Column(modifier = Modifier.weight(1f)) {
             Text("Share live GPS location", style = MaterialTheme.typography.titleSmall)
             Text(gpsStatus, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (consentLocation && (lat != 0.0 || lon != 0.0)) {
+              TextButton(
+                onClick = { openLocationInGoogleMaps(context, lat, lon, "My SOS Location") },
+                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 2.dp),
+                modifier = Modifier.testTag("preview_sos_google_maps_button")
+              ) {
+                Icon(Icons.Rounded.Map, contentDescription = null, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Open in Google Maps")
+              }
+            }
           }
           Switch(
             checked = consentLocation,
@@ -1314,6 +1351,7 @@ fun SosHubScreen(
   val me by socialVm.currentUser.collectAsStateWithLifecycle()
   val usersState by communityVm.discoverableUsers.collectAsStateWithLifecycle()
   val allUsers = (usersState as? UiState.Success)?.data.orEmpty()
+  val usersById = remember(allUsers) { allUsers.associateBy { it.userId } }
 
   val sosGroups = remember(myGroups) { myGroups.filter { it.sosEnabled } }
   var selectedSosGroup by remember { mutableStateOf<Group?>(null) }
@@ -1589,26 +1627,40 @@ fun SosHubScreen(
 
             activeAlerts.forEach { alert ->
               val hasCoords = alert.shareLiveLocation && (alert.latitude != 0.0 || alert.longitude != 0.0)
+              val alertSenderName = resolveLiveAuthor(alert.senderId, alert.senderName, "", usersById, me).displayName
               Surface(
                 color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
               ) {
                 Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                  Text("${alert.senderName} · LIVE PRIVATE SOS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                  Text("$alertSenderName · LIVE PRIVATE SOS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                   Text(alert.message, style = MaterialTheme.typography.bodySmall)
                   if (hasCoords) {
                     Text(
                       text = "GPS (private): %.4f, %.4f".format(alert.latitude, alert.longitude),
                       style = MaterialTheme.typography.labelSmall,
-                      color = MaterialTheme.colorScheme.onSurfaceVariant
+                      color = MaterialTheme.colorScheme.primary,
+                      modifier = Modifier.clickable {
+                        openLocationInGoogleMaps(
+                          context = context,
+                          latitude = alert.latitude,
+                          longitude = alert.longitude,
+                          label = "$alertSenderName SOS"
+                        )
+                      }
                     )
                     OutlinedButton(
                       onClick = {
-                        val geo = Uri.parse("geo:${alert.latitude},${alert.longitude}?q=${alert.latitude},${alert.longitude}(HELLO%20SOS)")
-                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, geo)) }
+                        openLocationInGoogleMaps(
+                          context = context,
+                          latitude = alert.latitude,
+                          longitude = alert.longitude,
+                          label = "$alertSenderName SOS"
+                        )
                       },
-                      contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                      contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                      modifier = Modifier.testTag("open_sos_hub_map_${alert.id}")
                     ) {
                       Icon(Icons.Rounded.Map, contentDescription = null, modifier = Modifier.size(15.dp))
                       Spacer(Modifier.width(4.dp))

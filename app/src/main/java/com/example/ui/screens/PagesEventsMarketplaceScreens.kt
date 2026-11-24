@@ -102,6 +102,7 @@ import com.example.ui.components.ShareOptionsBottomSheet
 import com.example.ui.components.SharePayload
 import com.example.ui.components.UserAvatar
 import com.example.ui.components.formatTimestamp
+import com.example.ui.components.resolveLiveAuthor
 import com.example.ui.i18n.LocalAppStrings
 import com.example.ui.viewmodel.CommunityViewModel
 import com.example.ui.viewmodel.MainSocialViewModel
@@ -1095,6 +1096,11 @@ fun MarketplaceScreen(
   val usersState by communityVm.discoverableUsers.collectAsStateWithLifecycle()
   val conversations = (conversationsState as? UiState.Success)?.data.orEmpty()
   val discoverableUsers = (usersState as? UiState.Success)?.data.orEmpty()
+  val usersById = remember(discoverableUsers, me) {
+    val map = discoverableUsers.associateBy { it.userId }.toMutableMap()
+    if (me != null) map[me.userId] = me
+    map
+  }
   val isUploading by spacesVm.isUploadingMedia.collectAsStateWithLifecycle()
 
   var query by remember { mutableStateOf("") }
@@ -1417,9 +1423,10 @@ fun MarketplaceScreen(
           Text("${item.category} · ${item.condition}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
           if (item.description.isNotBlank()) Text(item.description, style = MaterialTheme.typography.bodyMedium)
           Text("Location: ${item.locationText.ifBlank { "Local pickup" }}", style = MaterialTheme.typography.bodySmall)
+          val resolvedSeller = resolveLiveAuthor(item.sellerId, item.sellerName, item.sellerAvatar, usersById, me)
           Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            UserAvatar(name = item.sellerName, photoUrl = item.sellerAvatar, size = 32.dp)
-            Text("Seller: ${item.sellerName}", style = MaterialTheme.typography.labelLarge)
+            UserAvatar(name = resolvedSeller.displayName, photoUrl = resolvedSeller.avatarUrl, size = 32.dp)
+            Text("Seller: ${resolvedSeller.displayName}", style = MaterialTheme.typography.labelLarge)
           }
           Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(

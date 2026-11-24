@@ -101,6 +101,7 @@ import com.example.ui.components.SharePayload
 import com.example.ui.components.SongPickerAndTrimmerDialog
 import com.example.ui.components.UserAvatar
 import com.example.ui.components.formatSongSec
+import com.example.ui.components.resolveLiveAuthor
 import com.example.ui.viewmodel.CommunityViewModel
 import com.example.ui.viewmodel.FeedSortMode
 import com.example.ui.viewmodel.MainSocialViewModel
@@ -305,6 +306,13 @@ fun HomeScreen(
           }
           items(stories, key = { it.id }) { story ->
             val cardGradient = remember(story.backgroundHex) { storyGradientForHex(story.backgroundHex) }
+            val storyAuthor = resolveLiveAuthor(
+              authorId = story.authorId,
+              fallbackName = story.authorName,
+              fallbackAvatar = story.authorAvatar,
+              usersById = usersById,
+              me = me
+            )
             Surface(
               shape = RoundedCornerShape(14.dp),
               color = MaterialTheme.colorScheme.surfaceVariant,
@@ -319,7 +327,7 @@ fun HomeScreen(
                 if (story.mediaUri.isNotBlank() && story.mediaType == "image") {
                   AsyncImage(
                     model = story.mediaUri,
-                    contentDescription = "${story.authorName}'s story",
+                    contentDescription = "${storyAuthor.displayName}'s story",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                   )
@@ -370,8 +378,8 @@ fun HomeScreen(
                   contentAlignment = Alignment.Center
                 ) {
                   UserAvatar(
-                    name = story.authorName,
-                    photoUrl = story.authorAvatar,
+                    name = storyAuthor.displayName,
+                    photoUrl = storyAuthor.avatarUrl,
                     size = 28.dp
                   )
                 }
@@ -399,7 +407,7 @@ fun HomeScreen(
 
                 // Bottom Author Name
                 Text(
-                  text = story.authorName.ifBlank { "Story" },
+                  text = storyAuthor.displayName.ifBlank { "Story" },
                   style = MaterialTheme.typography.labelSmall,
                   fontWeight = FontWeight.SemiBold,
                   color = Color.White,
@@ -508,6 +516,13 @@ fun HomeScreen(
         } else {
           items(combinedPosts, key = { it.id }) { post ->
             val reactions by viewModel.observePostReactions(post.id).collectAsStateWithLifecycle(initialValue = emptyList())
+            val postAuthor = resolveLiveAuthor(
+              authorId = post.authorId,
+              fallbackName = post.authorName,
+              fallbackAvatar = post.authorAvatar,
+              usersById = usersById,
+              me = me
+            )
             PostCard(
               post = post,
               currentUserId = currentUserId,
@@ -517,13 +532,11 @@ fun HomeScreen(
               onCommentClick = { activeCommentPost = post },
               onShare = { note -> viewModel.sharePost(post, note) },
               allowShare = post.privacy == "public",
-              authorOnline = if (post.authorId == currentUserId) {
-                me?.effectiveOnline == true
-              } else {
-                usersById[post.authorId]?.effectiveOnline == true
-              },
+              authorOnline = postAuthor.isOnline,
+              displayAuthorName = postAuthor.displayName,
+              displayAuthorAvatar = postAuthor.avatarUrl,
               onShareClick = { shareTargetPost = post },
-              onToggleSave = { viewModel.toggleSave(post.id, "post", post.authorName, post.content) },
+              onToggleSave = { viewModel.toggleSave(post.id, "post", postAuthor.displayName, post.content) },
               onEdit = { content, privacy -> viewModel.editPost(post.id, content, privacy) },
               onDelete = { viewModel.deletePost(post.id) },
               onReport = { reason -> viewModel.reportContent("post", post.id, reason) },
@@ -559,15 +572,24 @@ fun HomeScreen(
     val comments by viewModel.observePostComments(post.id).collectAsStateWithLifecycle(initialValue = emptyList())
     CommentsBottomSheet(
       comments = comments,
+      usersById = usersById,
+      me = me,
       onDismiss = { activeCommentPost = null },
       onSendComment = { text, parentId -> viewModel.addComment(post, text, parentId) }
     )
   }
 
   shareTargetPost?.let { post ->
+    val shareAuthor = resolveLiveAuthor(
+      authorId = post.authorId,
+      fallbackName = post.authorName,
+      fallbackAvatar = post.authorAvatar,
+      usersById = usersById,
+      me = me
+    )
     ShareOptionsBottomSheet(
       payload = SharePayload(
-        title = "Post by ${post.authorName}",
+        title = "Post by ${shareAuthor.displayName}",
         body = post.content.ifBlank { "Shared media post on HELLO" },
         canRepostToFeed = true
       ),

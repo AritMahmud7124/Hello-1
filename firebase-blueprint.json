@@ -219,6 +219,7 @@
         "reactions": { "type": "object" },
         "participantUids": { "type": "array" },
         "isDeleted": { "type": "boolean" },
+        "expiresAtMs": { "type": "integer" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["conversationId", "senderId", "senderName", "mediaType", "participantUids", "isDeleted", "createdAt"]

@@ -221,6 +221,7 @@ class CommunityViewModel(
     mediaUri: String = "",
     mediaType: String = "none",
     fileName: String = "",
+    expiresAfterMs: Long = 0L,
     onMediaUploaded: () -> Unit = {}
   ) {
     if (text.isBlank() && mediaUri.isBlank()) return
@@ -237,13 +238,16 @@ class CommunityViewModel(
         ""
       }
       onMediaUploaded()
-      communityRepository.sendMessage(conversation, sender, text, uploadedUrl, mediaType, fileName)
+      val expiresAtMs = if (expiresAfterMs > 0L) System.currentTimeMillis() + expiresAfterMs else 0L
+      communityRepository.sendMessage(conversation, sender, text, uploadedUrl, mediaType, fileName, expiresAtMs)
         .onFailure { _statusMessage.value = it.localizedMessage ?: "Message failed" }
     }
   }
 
-  fun setTyping(conversationId: String, isTyping: Boolean) {
-    viewModelScope.launch { communityRepository.setTypingStatus(conversationId, isTyping) }
+  fun setTyping(conversationId: String, isTyping: Boolean, stealthHideStatus: Boolean = false) {
+    viewModelScope.launch {
+      communityRepository.setTypingStatus(conversationId, isTyping && !stealthHideStatus)
+    }
   }
 
   fun markRead(conversationId: String) {
