@@ -103,6 +103,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.calls.HelloCallRuntimeState
+import com.example.calls.IncomingCallListenerService
 import com.example.data.model.Story
 import com.example.data.model.UiState
 import com.example.data.preferences.AppPreferences
@@ -160,23 +162,42 @@ import kotlinx.coroutines.launch
 
 class MainActivity : FragmentActivity() {
   private var pendingNotificationRoute by mutableStateOf<String?>(null)
+  private var pendingAnswerCallId by mutableStateOf<String?>(null)
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
     pendingNotificationRoute = intent?.getStringExtra(HelloFirebaseMessagingService.EXTRA_ROUTE)
+    pendingAnswerCallId = intent?.getStringExtra(IncomingCallListenerService.EXTRA_ANSWER_CALL_ID)
     setContent {
       HelloRootApp(
         pendingRoute = pendingNotificationRoute,
-        onPendingRouteConsumed = { pendingNotificationRoute = null }
+        onPendingRouteConsumed = { pendingNotificationRoute = null },
+        pendingAnswerCallId = pendingAnswerCallId,
+        onPendingAnswerCallConsumed = { pendingAnswerCallId = null }
       )
     }
+  }
+
+  override fun onStart() {
+    super.onStart()
+    HelloCallRuntimeState.setForeground(true)
+    IncomingCallListenerService.clearRingingNotification(this)
+  }
+
+  override fun onStop() {
+    HelloCallRuntimeState.setForeground(false)
+    super.onStop()
   }
 
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     setIntent(intent)
     pendingNotificationRoute = intent.getStringExtra(HelloFirebaseMessagingService.EXTRA_ROUTE)
+    val answerId = intent.getStringExtra(IncomingCallListenerService.EXTRA_ANSWER_CALL_ID)
+    if (!answerId.isNullOrBlank()) {
+      pendingAnswerCallId = answerId
+    }
   }
 }
 
@@ -192,7 +213,9 @@ private data class PrimaryNavItem(
 @Composable
 fun HelloRootApp(
   pendingRoute: String? = null,
-  onPendingRouteConsumed: () -> Unit = {}
+  onPendingRouteConsumed: () -> Unit = {},
+  pendingAnswerCallId: String? = null,
+  onPendingAnswerCallConsumed: () -> Unit = {}
 ) {
   val context = LocalContext.current
   val appPrefs = remember(context) { AppPreferences(context.applicationContext) }
@@ -238,6 +261,9 @@ fun HelloRootApp(
   HelloTheme(darkTheme = isDark) {
     val user = firebaseUser
     if (user == null) {
+      LaunchedEffect(Unit) {
+        IncomingCallListenerService.stop(context.applicationContext)
+      }
       AuthScreen(
         authRepository = authRepository,
         onAuthenticated = {},
@@ -337,6 +363,8 @@ fun HelloRootApp(
             socialRepository = socialRepository,
             pendingRoute = pendingRoute,
             onPendingRouteConsumed = onPendingRouteConsumed,
+            pendingAnswerCallId = pendingAnswerCallId,
+            onPendingAnswerCallConsumed = onPendingAnswerCallConsumed,
             appPrefs = appPrefs,
             themeMode = themeMode,
             isDark = isDark,
@@ -366,6 +394,8 @@ private fun AuthenticatedHelloShell(
   socialRepository: SocialRepository,
   pendingRoute: String?,
   onPendingRouteConsumed: () -> Unit,
+  pendingAnswerCallId: String?,
+  onPendingAnswerCallConsumed: () -> Unit,
   appPrefs: AppPreferences,
   themeMode: ThemeMode,
   isDark: Boolean,
@@ -409,6 +439,7 @@ private fun AuthenticatedHelloShell(
 
   LaunchedEffect(uid) {
     socialVm.bootstrapProfile()
+    IncomingCallListenerService.start(context.applicationContext, uid)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
       ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
     ) {
@@ -434,7 +465,10 @@ private fun AuthenticatedHelloShell(
   DisposableEffect(lifecycleOwner, uid) {
     val observer = LifecycleEventObserver { _, event ->
       when (event) {
-        Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME -> socialVm.setAppForegroundOnline(true)
+        Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME -> {
+          socialVm.setAppForegroundOnline(true)
+          IncomingCallListenerService.start(context.applicationContext, uid)
+        }
         Lifecycle.Event.ON_STOP -> socialVm.setAppForegroundOnline(false)
         else -> Unit
       }
@@ -469,18 +503,20 @@ private fun AuthenticatedHelloShell(
     socialVm.setIncognitoHideStatus(incognitoHideStatus)
   }
 
-  val seenNotificationIds = remember(uid) { mutableSetOf<String>() }
   var notifBaselineLoaded by remember(uid) { mutableStateOf(false) }
   LaunchedEffect(notifState, privateUser) {
     val state = notifState as? UiState.Success ?: return@LaunchedEffect
     if (!notifBaselineLoaded) {
-      seenNotificationIds.addAll(state.data.map { it.id })
+      HelloCallRuntimeState.handledNotifIds.addAll(state.data.mapNotNull { it.id.takeIf(String::isNotBlank) })
       notifBaselineLoaded = true
     } else {
       state.data.forEach { notif ->
-        if (notif.id.isNotBlank() && notif.id !in seenNotificationIds) {
-          seenNotificationIds.add(notif.id)
-          if (!notif.isRead && HelloFirebaseMessagingService.isTypeEnabled(privateUser, notif.type)) {
+        if (notif.id.isNotBlank() && notif.id !in HelloCallRuntimeState.handledNotifIds) {
+          HelloCallRuntimeState.handledNotifIds.add(notif.id)
+          val isCallSyntheticMessage = notif.type == "message" &&
+            (notif.title.contains("Incoming Audio Call", ignoreCase = true) ||
+              notif.title.contains("Incoming Video Call", ignoreCase = true))
+          if (!notif.isRead && !isCallSyntheticMessage && HelloFirebaseMessagingService.isTypeEnabled(privateUser, notif.type)) {
             HelloFirebaseMessagingService.showLocalNotification(
               context = context,
               title = notif.title,
@@ -1197,6 +1233,24 @@ private fun AuthenticatedHelloShell(
     val activeCalls by communityVm.activeCalls.collectAsStateWithLifecycle()
     val usersStateForCall by communityVm.discoverableUsers.collectAsStateWithLifecycle()
     val allUsersForCall = (usersStateForCall as? UiState.Success)?.data.orEmpty()
+
+    LaunchedEffect(pendingAnswerCallId) {
+      val answerId = pendingAnswerCallId
+      if (!answerId.isNullOrBlank()) {
+        IncomingCallListenerService.clearRingingNotification(context)
+        communityVm.answerMessengerCall(answerId)
+        onPendingAnswerCallConsumed()
+      }
+    }
+
+    LaunchedEffect(activeCalls.isNotEmpty()) {
+      val hostActivity = context.findFragmentActivity()
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 && hostActivity != null) {
+        hostActivity.setShowWhenLocked(activeCalls.isNotEmpty())
+        hostActivity.setTurnScreenOn(activeCalls.isNotEmpty())
+      }
+    }
+
     activeCalls.firstOrNull()?.let { liveCall ->
       val callSignals by remember(liveCall.id) {
         communityVm.observeCallSignals(liveCall.id)

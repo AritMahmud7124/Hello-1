@@ -20,4 +20,6 @@ debug.keystore
 .build-outputs/
 *.apk
 *.aab
+*.jks
+*.keystore
 **/build/

@@ -27,8 +27,9 @@
 # Keep all Firestore & domain data models (required for DocumentSnapshot.toObject & batch writes)
 -keep class com.example.data.model.** { *; }
 
-# Keep FCM service class
--keep class com.example.notifications.HelloFirebaseMessagingService { *; }
+# Keep FCM service, background call listener, and notification receivers
+-keep class com.example.notifications.** { *; }
+-keep class com.example.calls.** { *; }
 
 # Keep AndroidX Biometric, Security Crypto & Google Tink internals
 -keep class androidx.biometric.** { *; }

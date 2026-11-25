@@ -136,9 +136,9 @@ fun MessengerCallOverlay(
     }
   }
 
-  // Request caller permissions automatically on start if not yet granted
-  LaunchedEffect(call.id, isCaller, isVideoCall) {
-    if (isCaller) {
+  // Request audio/camera permissions automatically for caller or after notification accept
+  LaunchedEffect(call.id, isCaller, isIncomingRinging, isVideoCall) {
+    if (isCaller || !isIncomingRinging) {
       val needed = buildList {
         if (!hasAudioPerm) add(Manifest.permission.RECORD_AUDIO)
         if (isVideoCall && !hasCameraPerm) add(Manifest.permission.CAMERA)
