@@ -46,6 +46,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ExitToApp
@@ -67,6 +68,7 @@ import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PersonRemove
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.StopCircle
@@ -107,6 +109,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -953,6 +956,41 @@ fun ChatThreadScreen(
     }
   }
 
+  var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+  var showAttachMenu by remember { mutableStateOf(false) }
+  val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+    val captured = pendingCameraUri
+    pendingCameraUri = null
+    if (saved && captured != null) {
+      pendingCropImageUri = captured.toString()
+    }
+  }
+  fun startCameraIntent() {
+    runCatching {
+      val photoFile = File(context.cacheDir, "chat_cam_${System.currentTimeMillis()}.jpg")
+      val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
+      pendingCameraUri = uri
+      takePictureLauncher.launch(uri)
+    }.onFailure {
+      pendingCameraUri = null
+      mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+    }
+  }
+  val cameraPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    if (granted) {
+      startCameraIntent()
+    } else {
+      mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+    }
+  }
+  fun launchCameraCapture() {
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+      startCameraIntent()
+    } else {
+      cameraPermLauncher.launch(Manifest.permission.CAMERA)
+    }
+  }
+
   val otherUid = if (conversation?.isGroup == false) conversation.participantUids.firstOrNull { it != currentUserId } else null
   val otherUser = otherUid?.let { id -> usersById[id] }
   val headerTitle = if (conversation == null) {
@@ -1645,65 +1683,77 @@ fun ChatThreadScreen(
         }
       }
     } else {
-      // Clean Pill Composer - flush directly above IME keyboard
+      // Clean Pill Composer matching screenshot layout
       Box(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 10.dp, vertical = 6.dp)
+          .padding(horizontal = 12.dp, vertical = 8.dp)
       ) {
         Surface(
-          shape = RoundedCornerShape(28.dp),
-          color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
+          shape = RoundedCornerShape(32.dp),
+          color = MaterialTheme.colorScheme.surfaceContainerHigh,
+          tonalElevation = 2.dp,
           modifier = Modifier.fillMaxWidth()
         ) {
           Row(
             modifier = Modifier
               .fillMaxWidth()
-              .padding(horizontal = 6.dp, vertical = 3.dp),
+              .padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
           ) {
             Box(
               modifier = Modifier
-                .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                 .clip(CircleShape)
-                .clickable { mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
-                .testTag("chat_media_picker_button"),
+                .clickable { launchCameraCapture() }
+                .testTag("chat_camera_button"),
               contentAlignment = Alignment.Center
             ) {
-              Box(
-                modifier = Modifier
-                  .size(36.dp)
-                  .clip(CircleShape)
-                  .background(accentBrush),
-                contentAlignment = Alignment.Center
+              Surface(
+                modifier = Modifier.size(40.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
               ) {
-                Icon(Icons.Rounded.PhotoLibrary, contentDescription = "Send photo or video", tint = Color.White, modifier = Modifier.size(18.dp))
+                Box(contentAlignment = Alignment.Center) {
+                  Icon(
+                    imageVector = Icons.Rounded.PhotoCamera,
+                    contentDescription = "Take photo",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(20.dp)
+                  )
+                }
               }
             }
 
-            IconButton(
-              onClick = { filePicker.launch(arrayOf("*/*")) },
-              modifier = Modifier.size(40.dp).testTag("chat_file_picker_button")
+            Box(
+              modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 8.dp, vertical = 10.dp),
+              contentAlignment = Alignment.CenterStart
             ) {
-              Icon(Icons.Rounded.AttachFile, contentDescription = "Send file", tint = MaterialTheme.colorScheme.primary)
+              if (input.isEmpty()) {
+                Text(
+                  text = "Message...",
+                  style = MaterialTheme.typography.bodyLarge,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                )
+              }
+              BasicTextField(
+                value = input,
+                onValueChange = {
+                  input = it
+                  viewModel.setTyping(conversationId, it.isNotBlank(), stealthHideStatus = incognitoHideStatus)
+                },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                  color = MaterialTheme.colorScheme.onSurface
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .testTag("chat_message_input")
+              )
             }
-
-            OutlinedTextField(
-              value = input,
-              onValueChange = {
-                input = it
-                viewModel.setTyping(conversationId, it.isNotBlank(), stealthHideStatus = incognitoHideStatus)
-              },
-              placeholder = { Text("Message...") },
-              colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-                focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent
-              ),
-              modifier = Modifier.weight(1f).testTag("chat_message_input"),
-              singleLine = true
-            )
 
             if (input.isBlank()) {
               IconButton(
@@ -1714,10 +1764,51 @@ fun ChatThreadScreen(
                     recordAudioLauncher.launch(Manifest.permission.RECORD_AUDIO)
                   }
                 },
-                modifier = Modifier.size(40.dp).testTag("record_voice_note_button")
+                modifier = Modifier.size(48.dp).testTag("record_voice_note_button")
               ) {
-                Icon(Icons.Rounded.Mic, contentDescription = "Record voice note")
+                Icon(
+                  imageVector = Icons.Rounded.Mic,
+                  contentDescription = "Record voice note",
+                  tint = MaterialTheme.colorScheme.onSurface,
+                  modifier = Modifier.size(22.dp)
+                )
               }
+
+              Box {
+                IconButton(
+                  onClick = { showAttachMenu = true },
+                  modifier = Modifier.size(48.dp).testTag("chat_file_picker_button")
+                ) {
+                  Icon(
+                    imageVector = Icons.Rounded.AttachFile,
+                    contentDescription = "Attach photo, video, or file",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(22.dp)
+                  )
+                }
+                DropdownMenu(
+                  expanded = showAttachMenu,
+                  onDismissRequest = { showAttachMenu = false }
+                ) {
+                  DropdownMenuItem(
+                    text = { Text("Photo & Video") },
+                    leadingIcon = { Icon(Icons.Rounded.PhotoLibrary, contentDescription = null) },
+                    onClick = {
+                      showAttachMenu = false
+                      mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                    }
+                  )
+                  DropdownMenuItem(
+                    text = { Text("Document / File") },
+                    leadingIcon = { Icon(Icons.Rounded.Description, contentDescription = null) },
+                    onClick = {
+                      showAttachMenu = false
+                      filePicker.launch(arrayOf("*/*"))
+                    }
+                  )
+                }
+              }
+
               IconButton(
                 onClick = {
                   val now = System.currentTimeMillis()
@@ -1728,17 +1819,23 @@ fun ChatThreadScreen(
                     viewModel.sendMessage(context, conversation, effectiveMe, "❤️", expiresAfterMs = expireMs)
                   }
                 },
-                modifier = Modifier.size(40.dp).testTag("send_chat_button")
+                modifier = Modifier.size(48.dp).testTag("send_chat_button")
               ) {
-                Icon(Icons.Rounded.Favorite, contentDescription = "Send heart", tint = HelloRose)
+                Icon(
+                  imageVector = Icons.Rounded.Favorite,
+                  contentDescription = "Send heart",
+                  tint = HelloRose,
+                  modifier = Modifier.size(24.dp)
+                )
               }
             } else {
               Surface(
-                shape = RoundedCornerShape(20.dp),
+                shape = CircleShape,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
-                  .padding(end = 4.dp)
-                  .clip(RoundedCornerShape(20.dp))
+                  .padding(end = 2.dp)
+                  .size(44.dp)
+                  .clip(CircleShape)
                   .clickable {
                     val effectiveMe = me ?: PublicUser(userId = currentUserId, displayName = "Hello Member")
                     val textToSend = input
@@ -1760,13 +1857,13 @@ fun ChatThreadScreen(
                   }
                   .testTag("send_chat_button")
               ) {
-                Row(
-                  modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                  verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                  Text("Send", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                  Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(15.dp))
+                Box(contentAlignment = Alignment.Center) {
+                  Icon(
+                    Icons.AutoMirrored.Rounded.Send,
+                    contentDescription = "Send",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(20.dp)
+                  )
                 }
               }
             }
