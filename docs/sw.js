@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hello-web-v9';
+const CACHE_NAME = 'hello-web-v10';
 const SHELL_ASSETS = [
   './',
   './index.html',

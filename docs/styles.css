@@ -610,7 +610,8 @@ html.light .error-box { color: #BE123C; }
 }
 .preview-wrap img, .preview-wrap video {
   width: 100%;
-  max-height: 260px;
+  height: auto;
+  max-height: 520px;
   object-fit: contain;
   display: block;
   background: #050711;
@@ -695,12 +696,17 @@ html.light .error-box { color: #BE123C; }
 }
 .post-media {
   width: 100%;
-  max-height: 480px;
-  object-fit: cover;
+  height: auto;
+  display: block;
+  object-fit: contain;
   border-radius: 14px;
   margin-bottom: 10px;
   background: var(--elevated);
   cursor: pointer;
+}
+video.post-media {
+  max-height: 620px;
+  background: #000;
 }
 .media-loading-box {
   width: 100%;
@@ -1082,6 +1088,15 @@ html.light .screenshot-pill {
   border-radius: 12px;
   background: var(--elevated);
   margin-bottom: 8px;
+}
+.profile-photo-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+  border-radius: 12px;
+  background: var(--elevated);
+  cursor: pointer;
 }
 .profile-cover {
   height: 170px;

@@ -858,7 +858,7 @@ fun CreatePostDialog(
                   contentDescription = "Selected photo",
                   cornerRadius = 14.dp,
                   minHeight = 160.dp,
-                  maxHeight = 360.dp,
+                  maxHeight = 560.dp,
                   enableFullscreenViewer = true
                 )
                 Row(

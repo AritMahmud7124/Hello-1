@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.hellosocial.kxqmpz"
     minSdk = 24
     targetSdk = 36
-    versionCode = 7
-    versionName = "1.8.5"
+    versionCode = 8
+    versionName = "1.8.6"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

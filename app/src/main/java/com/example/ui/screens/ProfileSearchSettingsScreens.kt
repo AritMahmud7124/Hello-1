@@ -503,7 +503,7 @@ fun ProfileScreen(
                 contentDescription = post.content.ifBlank { "Profile photo" },
                 cornerRadius = 16.dp,
                 minHeight = 180.dp,
-                maxHeight = 540.dp
+                maxHeight = 720.dp
               )
             }
           }

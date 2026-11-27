@@ -320,9 +320,7 @@ fun FullPhotoImage(
     .fillMaxWidth()
     .then(
       if (naturalAspect != null) {
-        Modifier
-          .heightIn(min = 120.dp, max = maxHeight)
-          .aspectRatio(naturalAspect!!.coerceIn(0.5f, 2.2f))
+        Modifier.aspectRatio(naturalAspect!!.coerceIn(0.35f, 3.0f), matchHeightConstraintsFirst = false)
       } else {
         Modifier.heightIn(min = minHeight, max = maxHeight)
       }
@@ -1139,7 +1137,7 @@ fun PostCard(
               contentDescription = "Post photo",
               cornerRadius = 16.dp,
               minHeight = 180.dp,
-              maxHeight = 560.dp
+              maxHeight = 720.dp
             )
             if (postAudioCtrl != null) {
               Box(
