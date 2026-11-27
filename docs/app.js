@@ -46,7 +46,8 @@ import {
   bindFeatureEvents
 } from './features.js';
 
-const APK_URL = 'https://github.com/AritMahmud7124/Hello-1/releases/download/v1.8.3/hello-social-v1.8.3.apk';
+const WEBSITE_URL = 'https://aritmahmud7124.github.io/Hello-1/';
+const APK_URL = 'https://github.com/AritMahmud7124/Hello-1/releases/download/v1.8.4/hello-social-v1.8.4.apk';
 const AUTH_SETTINGS_URL = 'https://console.firebase.google.com/project/gen-lang-client-0583025546/authentication/settings';
 const FIRESTORE_DB_ID = 'ai-studio-android-hello-982e615a-60df-4ad0-a009-d7f68361be02';
 
@@ -205,6 +206,7 @@ const state = {
   showCreatePageModal: false,
   showCreateEventModal: false,
   showNewGroupChatModal: false,
+  showGetAppModal: false,
   isUploading: false,
   uploadLabel: '',
   statusBanner: '',
@@ -267,6 +269,12 @@ window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   state.deferredPrompt = e;
   render();
+});
+
+window.addEventListener('appinstalled', () => {
+  state.deferredPrompt = null;
+  state.showGetAppModal = false;
+  showBanner('HELLO Desktop / Laptop App installed! Launch it anytime from your Start Menu or Applications.');
 });
 
 const mediaCache = new Map();
@@ -610,15 +618,37 @@ function updateRingtone(ringing) {
   }
 }
 
-async function installLaptopApp() {
+function isStandaloneApp() {
+  return Boolean(window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator.standalone === true);
+}
+
+function openGetAppModal() {
+  state.showGetAppModal = true;
+  render();
+}
+
+async function triggerNativeDesktopInstall() {
   if (state.deferredPrompt) {
     state.deferredPrompt.prompt();
     const choice = await state.deferredPrompt.userChoice;
     state.deferredPrompt = null;
-    if (choice?.outcome === 'accepted') showBanner('HELLO Desktop App is installing.');
-    render();
+    if (choice?.outcome === 'accepted') {
+      state.showGetAppModal = false;
+      showBanner('HELLO Desktop / Laptop App is installing!');
+    } else {
+      render();
+    }
   } else {
-    showBanner('In Chrome or Edge, click the Install icon in the address bar (or Menu → Apps → Install HELLO).');
+    state.showGetAppModal = true;
+    render();
+  }
+}
+
+async function installLaptopApp() {
+  if (state.deferredPrompt) {
+    await triggerNativeDesktopInstall();
+  } else {
+    openGetAppModal();
   }
 }
 
@@ -1344,7 +1374,7 @@ function renderLanding() {
       </div>
       <div class="top-actions">
         <button class="icon-btn" id="themeToggleBtn" title="Toggle Theme">${iconSvg(state.theme === 'dark' ? 'sun' : 'moon', 18)}</button>
-        <button class="btn btn-secondary" id="installLaptopBtnTop">${iconSvg('laptop', 17)}<span>Install App</span></button>
+        <button class="btn btn-secondary open-get-app-btn" id="installLaptopBtnTop">${iconSvg('laptop', 17)}<span>Website &amp; Laptop App</span></button>
         <a class="btn btn-primary" href="${APK_URL}" target="_blank" rel="noopener noreferrer">${iconSvg('phone', 17)}<span>Android APK</span></a>
       </div>
     </header>
@@ -1352,9 +1382,9 @@ function renderLanding() {
       <div class="auth-shell">
         <section style="display:flex;flex-direction:column;gap:14px;">
           <div class="security-pill">${iconSvg('shield', 15)}<span>Verified Firebase Auth & Encrypted Cloud Sync</span></div>
-          <h1 class="auth-headline">HELLO on Phone, Tablet & Laptop.</h1>
+          <h1 class="auth-headline">HELLO on Phone, Website &amp; Laptop.</h1>
           <p class="auth-desc">
-            The exact same HELLO experience — real-time Messenger, Voice Notes, Calls, Stories, Reels, Secret Love, Groups, Pages, Events & Marketplace synced directly with your mobile app.
+            Use HELLO directly on this official website, install it as a native Desktop / Laptop App on Windows, Mac &amp; Linux, or download the Android APK — everything stays synced in real time.
           </p>
           <div class="feature-list">
             <div class="feature-chip">${iconSvg('chat', 18)}<span>Live Messenger & Calls</span></div>
@@ -1363,8 +1393,9 @@ function renderLanding() {
             <div class="feature-chip">${iconSvg('shop', 18)}<span>Marketplace & Groups</span></div>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">
-            <button class="btn btn-violet" id="installLaptopBtnHero">${iconSvg('laptop', 17)}<span>Install on Desktop / Laptop</span></button>
-            <a class="btn btn-secondary" href="${APK_URL}" target="_blank" rel="noopener noreferrer">${iconSvg('phone', 17)}<span>Download Android APK (v1.8.3)</span></a>
+            <button class="btn btn-violet open-get-app-btn" id="installLaptopBtnHero">${iconSvg('laptop', 17)}<span>Install on Desktop / Laptop</span></button>
+            <button class="btn btn-secondary copy-website-url-btn" type="button">${iconSvg('share', 16)}<span>Copy Website Link</span></button>
+            <a class="btn btn-secondary" href="${APK_URL}" target="_blank" rel="noopener noreferrer">${iconSvg('phone', 17)}<span>Download Android APK (v1.8.4)</span></a>
           </div>
         </section>
 
@@ -2019,11 +2050,12 @@ function renderCenterStage() {
 
         <div class="card" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
           <div>
-            <div style="font-weight:700;">HELLO Desktop & Android App</div>
-            <div class="muted">Install directly on your laptop or download Android APK v1.8.3</div>
+            <div style="font-weight:700;">HELLO Website, Laptop &amp; Android App</div>
+            <div class="muted">Install on your laptop, copy the website link, or download Android APK v1.8.4</div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-violet" id="installLaptopBtnHub">${iconSvg('laptop', 16)}<span>Install Desktop App</span></button>
+            <button class="btn btn-violet open-get-app-btn" id="installLaptopBtnHub">${iconSvg('laptop', 16)}<span>Website &amp; Laptop App</span></button>
+            <button class="btn btn-secondary copy-website-url-btn" type="button">${iconSvg('share', 15)}<span>Copy Website</span></button>
             <a class="btn btn-secondary" href="${APK_URL}" target="_blank" rel="noopener noreferrer">${iconSvg('phone', 16)}<span>Android APK</span></a>
             <button class="btn btn-secondary" id="signOutBtnHub">${iconSvg('logout', 16)}<span>Sign Out</span></button>
           </div>
@@ -2645,6 +2677,63 @@ function renderModals() {
         </div>
       </div>
     `;
+  } else if (state.showGetAppModal) {
+    const installed = isStandaloneApp();
+    const ready = Boolean(state.deferredPrompt);
+    html += `
+      <div class="modal-backdrop" id="modalBackdrop">
+        <div class="modal-card" style="max-width:540px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              ${renderBrandTile(34)}
+              <div>
+                <h3 style="margin:0;">HELLO Website, Laptop &amp; Android</h3>
+                <div class="muted" style="font-size:12px;">Use HELLO on any device with real-time sync</div>
+              </div>
+            </div>
+            <button class="icon-btn close-modals-btn" style="width:34px;height:34px;">${iconSvg('close', 18)}</button>
+          </div>
+
+          <div style="padding:14px;border-radius:14px;background:var(--elevated);border:1px solid var(--border);display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+              <strong>💻 Laptop / Desktop App (Windows · Mac · Linux)</strong>
+              <span class="badge">${installed ? 'Installed ✓' : (ready ? '1-Click Ready' : 'Browser Install')}</span>
+            </div>
+            <div class="muted" style="font-size:13px;line-height:1.45;">
+              ${installed
+                ? 'You are already running the installed HELLO Desktop App.'
+                : (ready
+                  ? 'Click below to install HELLO as a standalone app on your laptop Start Menu / Dock.'
+                  : 'In Chrome or Edge on laptop: click the Install icon in the right of the address bar, or open ⋮ Menu → Cast, save, and share → Install page as app. On Mac Safari: File → Add to Dock.')}
+            </div>
+            ${!installed ? `
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                ${ready ? `<button class="btn btn-violet" id="triggerNativePwaBtn">${iconSvg('laptop', 16)}<span>Install Desktop / Laptop App Now</span></button>` : ''}
+                <button class="btn btn-secondary copy-website-url-btn" type="button">${iconSvg('share', 15)}<span>Copy Link for Laptop Browser</span></button>
+              </div>
+            ` : ''}
+          </div>
+
+          <div style="padding:14px;border-radius:14px;background:var(--elevated);border:1px solid var(--border);display:flex;flex-direction:column;gap:8px;">
+            <strong>🌐 Official HELLO Website</strong>
+            <div style="padding:8px 10px;border-radius:10px;background:var(--bg);font-size:12.5px;word-break:break-all;border:1px solid var(--border);">${esc(WEBSITE_URL)}</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-primary copy-website-url-btn" type="button">${iconSvg('check', 15)}<span>Copy Website Link</span></button>
+              <button class="btn btn-secondary" id="shareWebsiteModalBtn" type="button">${iconSvg('share', 15)}<span>Share Link</span></button>
+              <a class="btn btn-secondary" href="${WEBSITE_URL}" target="_blank" rel="noopener noreferrer">Open Tab</a>
+            </div>
+          </div>
+
+          <div style="padding:14px;border-radius:14px;background:var(--elevated);border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div>
+              <strong>📱 Android Phone App (APK)</strong>
+              <div class="muted" style="font-size:12px;">Latest Android release v1.8.4</div>
+            </div>
+            <a class="btn btn-primary" href="${APK_URL}" target="_blank" rel="noopener noreferrer">${iconSvg('phone', 16)}<span>Download APK</span></a>
+          </div>
+        </div>
+      </div>
+    `;
   } else {
     html += renderFeatureModals();
   }
@@ -2697,6 +2786,7 @@ function renderShell() {
           </button>
 
           <div class="top-actions">
+            <button class="btn btn-secondary open-get-app-btn" id="openGetAppTopBtn" title="Website, Laptop & Android Download" style="padding:6px 12px;min-height:36px;font-size:12.5px;">${iconSvg('laptop', 16)}<span>App &amp; Laptop</span></button>
             <button class="icon-btn" id="themeToggleBtn" title="Day / Night Mode">${iconSvg(state.theme === 'dark' ? 'sun' : 'moon', 19)}</button>
             <button class="icon-btn ${state.tab === 'search' ? 'active' : ''}" data-tab="search" title="Search HELLO">${iconSvg('search', 19)}</button>
             <button class="icon-btn ${state.tab === 'messenger' ? 'active' : ''}" data-tab="messenger" title="Messenger">
@@ -2753,6 +2843,7 @@ function renderShell() {
                 <button class="side-item" data-tab="events"><span class="side-item-left">${iconSvg('event', 18)}<span>Events</span></span></button>
                 <button class="side-item" data-tab="saved"><span class="side-item-left">${iconSvg('bookmark', 18)}<span>Saved Items</span></span></button>
                 <button class="side-item" data-tab="settings"><span class="side-item-left">${iconSvg('user', 18)}<span>Settings & Privacy</span></span></button>
+                <button class="side-item open-get-app-btn" id="openGetAppSideBtn"><span class="side-item-left">${iconSvg('laptop', 18)}<span>Website &amp; Laptop App</span></span></button>
                 ${isAdminUser() ? `<button class="side-item" data-tab="owner_dashboard"><span class="side-item-left">${iconSvg('verified', 18)}<span>Owner Dashboard</span></span></button>` : ''}
               </div>
             </aside>
@@ -2903,6 +2994,7 @@ function closeAllModals() {
   state.showCreatePageModal = false;
   state.showCreateEventModal = false;
   state.showNewGroupChatModal = false;
+  state.showGetAppModal = false;
   state.editPostTarget = null;
   state.reportTarget = null;
   state.shareTarget = null;
@@ -2923,9 +3015,30 @@ function bindEvents() {
       if (b) b.textContent = `Copied "${state.unauthorizedDomain}"`;
     }
   });
-  document.getElementById('installLaptopBtnTop')?.addEventListener('click', installLaptopApp);
-  document.getElementById('installLaptopBtnHero')?.addEventListener('click', installLaptopApp);
-  document.getElementById('installLaptopBtnHub')?.addEventListener('click', installLaptopApp);
+  document.querySelectorAll('.open-get-app-btn').forEach((btn) => {
+    btn.addEventListener('click', openGetAppModal);
+  });
+  document.getElementById('triggerNativePwaBtn')?.addEventListener('click', triggerNativeDesktopInstall);
+  document.querySelectorAll('.copy-website-url-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      navigator.clipboard?.writeText(WEBSITE_URL);
+      showBanner(`Official Website link copied: ${WEBSITE_URL}`);
+    });
+  });
+  document.getElementById('shareWebsiteModalBtn')?.addEventListener('click', async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'HELLO Social App — Website, Laptop & Android',
+          text: 'Open HELLO on Website or install it on your Laptop & Phone:',
+          url: WEBSITE_URL
+        });
+        return;
+      } catch (_) {}
+    }
+    navigator.clipboard?.writeText(WEBSITE_URL);
+    showBanner(`Official Website link copied: ${WEBSITE_URL}`);
+  });
   document.getElementById('signOutBtnHub')?.addEventListener('click', () => signOut(auth));
   document.getElementById('dismissBannerBtn')?.addEventListener('click', () => { state.statusBanner = ''; render(); });
 
@@ -3608,7 +3721,8 @@ initFeatures({
   },
   helpers: {
     esc, fmtTime, showBanner, avatarHtml, mediaImgHtml, mediaVideoHtml, mediaSrc,
-    iconSvg, resolveAuthor, isValidId, render, openOrCreateDm, selectConversation
+    iconSvg, resolveAuthor, isValidId, render, openOrCreateDm, selectConversation,
+    openGetAppModal, websiteUrl: WEBSITE_URL, apkUrl: APK_URL
   }
 });
 

@@ -136,6 +136,7 @@ import com.example.ui.components.CommentsBottomSheet
 import com.example.ui.components.CropAspect
 import com.example.ui.components.EmptyStateCard
 import com.example.ui.components.FullPhotoImage
+import com.example.ui.components.HelloWebsiteAndLaptopCard
 import com.example.ui.components.ImageCropDialog
 import com.example.ui.components.PostCard
 import com.example.ui.components.ShareOptionsBottomSheet
@@ -2468,6 +2469,10 @@ fun SettingsScreen(
           }
         }
       }
+    }
+
+    item {
+      HelloWebsiteAndLaptopCard()
     }
 
     item {

@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -86,6 +87,7 @@ import com.example.data.model.OwnerConfig
 import com.example.data.model.PublicUser
 import com.example.data.model.UiState
 import com.example.ui.components.EmptyStateCard
+import com.example.ui.components.HelloWebsiteAndLaptopCard
 import com.example.ui.components.UserAvatar
 import com.example.ui.components.formatTimestamp
 import com.example.ui.navigation.HelloRoutes
@@ -439,6 +441,9 @@ fun HubMenuScreen(
             Text(tile.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
           }
         }
+      }
+      item(span = { GridItemSpan(maxLineSpan) }) {
+        HelloWebsiteAndLaptopCard(modifier = Modifier.padding(top = 4.dp))
       }
     }
   }

@@ -29,10 +29,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.LaptopMac
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -42,6 +44,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -71,7 +74,9 @@ import com.example.security.AuthRateLimiter
 import com.example.security.DeviceIntegrityChecker
 import com.example.security.EncryptedVaultStorage
 import com.example.security.RateLimitState
+import com.example.ui.components.HELLO_WEBSITE_URL
 import com.example.ui.components.HelloBrandLogo
+import com.example.ui.components.openExternalUrl
 import com.example.ui.theme.HelloAmber
 import com.example.ui.theme.HelloCoral
 import com.example.ui.theme.HelloTheme
@@ -209,6 +214,7 @@ internal fun AuthScreenContent(
   onGoogleSignInClick: () -> Unit,
   rateLimitState: RateLimitState? = null
 ) {
+  val context = LocalContext.current
   var activeLegalSheet by remember { mutableStateOf<AuthLegalType?>(null) }
   val isLockedOut = rateLimitState?.isLockedOut == true
 
@@ -343,6 +349,26 @@ internal fun AuthScreenContent(
           enabled = !isLockedOut,
           onClick = onGoogleSignInClick
         )
+
+        TextButton(
+          onClick = { openExternalUrl(context, HELLO_WEBSITE_URL) },
+          modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .testTag("auth_open_website_button")
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.LaptopMac,
+            contentDescription = null,
+            tint = Color(0xFF94A3B8),
+            modifier = Modifier.size(16.dp)
+          )
+          Spacer(Modifier.width(6.dp))
+          Text(
+            text = "Open HELLO Website & Laptop App",
+            style = MaterialTheme.typography.labelLarge,
+            color = Color(0xFFCBD5E1)
+          )
+        }
       }
 
       // Muted Legal Footer Anchored Cleanly at Bottom

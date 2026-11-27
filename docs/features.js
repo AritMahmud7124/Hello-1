@@ -1348,7 +1348,10 @@ export function renderSettingsTab() {
       </div>
 
       <div class="card" style="display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:center;">
-        <button class="btn btn-violet" id="installLaptopBtnSettings">${iconSvg('laptop', 16)}<span>Install Desktop App</span></button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-violet" id="installLaptopBtnSettings">${iconSvg('laptop', 16)}<span>Website &amp; Laptop App</span></button>
+          <a class="btn btn-secondary" href="${esc(helpers.apkUrl || '')}" target="_blank" rel="noopener noreferrer">${iconSvg('phone', 16)}<span>Android APK</span></a>
+        </div>
         <button class="btn btn-danger" id="signOutBtnSettings">${iconSvg('logout', 16)}<span>Sign Out</span></button>
       </div>
     </div>
@@ -2028,8 +2031,8 @@ export function bindFeatureEvents() {
       await upsertPrivateUser({ [k]: !cur }).catch(() => {});
     });
   });
-  document.getElementById('installLaptopBtnSettings')?.addEventListener('click', () => document.getElementById('installLaptopBtnHub')?.click());
-  document.getElementById('signOutBtnSettings')?.addEventListener('click', () => document.getElementById('signOutBtnHub')?.click());
+  document.getElementById('installLaptopBtnSettings')?.addEventListener('click', () => helpers.openGetAppModal?.());
+  document.getElementById('signOutBtnSettings')?.addEventListener('click', () => ctx.auth.signOut());
 
   // Owner Dashboard
   document.querySelectorAll('[data-owner-tab]').forEach((b) => {

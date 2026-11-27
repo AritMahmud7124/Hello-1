@@ -1,6 +1,8 @@
 package com.example.ui.components
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.media.MediaPlayer
@@ -57,14 +59,19 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Group
+import androidx.compose.material.icons.rounded.LaptopMac
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Refresh
@@ -1566,3 +1573,237 @@ fun CommentsBottomSheet(
     }
   }
 }
+
+const val HELLO_WEBSITE_URL = "https://aritmahmud7124.github.io/Hello-1/"
+const val HELLO_RELEASES_URL = "https://github.com/AritMahmud7124/Hello-1/releases/latest"
+
+fun openExternalUrl(context: Context, url: String) {
+  runCatching {
+    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+  }.onFailure {
+    Toast.makeText(context, "Could not open browser for $url", Toast.LENGTH_SHORT).show()
+  }
+}
+
+fun copyTextToClipboard(context: Context, label: String, text: String, toastMsg: String) {
+  val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+  cm?.setPrimaryClip(ClipData.newPlainText(label, text))
+  Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
+}
+
+fun shareHelloLinks(context: Context) {
+  val shareText = buildString {
+    append("HELLO Social App — Website, Laptop & Android:\n\n")
+    append("🌐 Official Website & Laptop App:\n$HELLO_WEBSITE_URL\n\n")
+    append("📱 Android APK Download:\n$HELLO_RELEASES_URL")
+  }
+  val intent = Intent(Intent.ACTION_SEND).apply {
+    type = "text/plain"
+    putExtra(Intent.EXTRA_SUBJECT, "HELLO App — Website, Laptop & Android")
+    putExtra(Intent.EXTRA_TEXT, shareText)
+  }
+  runCatching {
+    context.startActivity(Intent.createChooser(intent, "Share HELLO Website & App"))
+  }.onFailure {
+    copyTextToClipboard(context, "HELLO Links", shareText, "HELLO links copied to clipboard.")
+  }
+}
+
+@Composable
+fun HelloWebsiteAndLaptopCard(
+  modifier: Modifier = Modifier
+) {
+  val context = LocalContext.current
+  var showDesktopGuide by remember { mutableStateOf(false) }
+
+  Card(
+    modifier = modifier
+      .fillMaxWidth()
+      .testTag("hello_website_laptop_card"),
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+  ) {
+    Column(
+      modifier = Modifier.padding(16.dp),
+      verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+      ) {
+        Surface(
+          shape = RoundedCornerShape(14.dp),
+          color = MaterialTheme.colorScheme.primaryContainer,
+          modifier = Modifier.size(44.dp)
+        ) {
+          Box(contentAlignment = Alignment.Center) {
+            Icon(
+              imageVector = Icons.Rounded.LaptopMac,
+              contentDescription = "Website and Laptop App",
+              tint = MaterialTheme.colorScheme.onPrimaryContainer,
+              modifier = Modifier.size(24.dp)
+            )
+          }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+          Text(
+            text = "Website & Laptop App",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+          )
+          Text(
+            text = "Use HELLO on browser, install on Windows/Mac/Linux laptops, or share APK.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+      }
+
+      Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        modifier = Modifier
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(12.dp))
+          .clickable {
+            copyTextToClipboard(
+              context,
+              "HELLO Website",
+              HELLO_WEBSITE_URL,
+              "Website link copied! Open on your laptop browser."
+            )
+          }
+      ) {
+        Row(
+          modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Public,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp)
+          )
+          Text(
+            text = HELLO_WEBSITE_URL,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+          )
+          Icon(
+            imageVector = Icons.Rounded.ContentCopy,
+            contentDescription = "Copy website link",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(17.dp)
+          )
+        }
+      }
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+      ) {
+        Button(
+          onClick = { openExternalUrl(context, HELLO_WEBSITE_URL) },
+          modifier = Modifier
+            .weight(1f)
+            .testTag("open_hello_website_button")
+        ) {
+          Icon(Icons.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+          Spacer(Modifier.width(6.dp))
+          Text("Open Website", maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        OutlinedButton(
+          onClick = { showDesktopGuide = true },
+          modifier = Modifier
+            .weight(1f)
+            .testTag("laptop_install_guide_button")
+        ) {
+          Icon(Icons.Rounded.LaptopMac, contentDescription = null, modifier = Modifier.size(16.dp))
+          Spacer(Modifier.width(6.dp))
+          Text("Laptop App", maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+      }
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+      ) {
+        OutlinedButton(
+          onClick = { openExternalUrl(context, HELLO_RELEASES_URL) },
+          modifier = Modifier
+            .weight(1f)
+            .testTag("download_latest_apk_button")
+        ) {
+          Icon(Icons.Rounded.PhoneAndroid, contentDescription = null, modifier = Modifier.size(16.dp))
+          Spacer(Modifier.width(6.dp))
+          Text("Android APK", maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        OutlinedButton(
+          onClick = { shareHelloLinks(context) },
+          modifier = Modifier
+            .weight(1f)
+            .testTag("share_hello_links_button")
+        ) {
+          Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+          Spacer(Modifier.width(6.dp))
+          Text("Share Links", maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+      }
+    }
+  }
+
+  if (showDesktopGuide) {
+    AlertDialog(
+      onDismissRequest = { showDesktopGuide = false },
+      title = { Text("Install HELLO on Laptop / Desktop") },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Text(
+            text = "1. Open the official HELLO website on your laptop in Chrome or Edge:\n$HELLO_WEBSITE_URL",
+            style = MaterialTheme.typography.bodySmall
+          )
+          Text(
+            text = "2. Click \"Install on Desktop / Laptop\" on the page, or click the Install icon in Chrome/Edge's address bar (or Menu → Cast, save, and share → Install HELLO).",
+            style = MaterialTheme.typography.bodySmall
+          )
+          Text(
+            text = "3. Sign in with your same Google account — your chats, Reels, Stories, Secret Love & SOS sync live.",
+            style = MaterialTheme.typography.bodySmall
+          )
+        }
+      },
+      confirmButton = {
+        Button(onClick = {
+          copyTextToClipboard(
+            context,
+            "HELLO Website",
+            HELLO_WEBSITE_URL,
+            "Website link copied! Paste it in Chrome or Edge on your laptop."
+          )
+          showDesktopGuide = false
+        }) {
+          Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+          Spacer(Modifier.width(6.dp))
+          Text("Copy Laptop Link")
+        }
+      },
+      dismissButton = {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+          TextButton(onClick = {
+            shareHelloLinks(context)
+            showDesktopGuide = false
+          }) {
+            Text("Send to PC")
+          }
+          TextButton(onClick = { showDesktopGuide = false }) {
+            Text("Close")
+          }
+        }
+      }
+    )
+  }
+}
+
