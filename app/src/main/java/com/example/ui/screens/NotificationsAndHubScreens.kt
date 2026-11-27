@@ -414,6 +414,9 @@ fun HubMenuScreen(
       verticalArrangement = Arrangement.spacedBy(10.dp),
       contentPadding = PaddingValues(bottom = 16.dp)
     ) {
+      item(span = { GridItemSpan(maxLineSpan) }) {
+        HelloWebsiteAndLaptopCard()
+      }
       items(tiles, key = { it.route }) { tile ->
         Card(
           modifier = Modifier
@@ -441,9 +444,6 @@ fun HubMenuScreen(
             Text(tile.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
           }
         }
-      }
-      item(span = { GridItemSpan(maxLineSpan) }) {
-        HelloWebsiteAndLaptopCard(modifier = Modifier.padding(top = 4.dp))
       }
     }
   }

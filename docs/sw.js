@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hello-web-v7';
+const CACHE_NAME = 'hello-web-v8';
 const SHELL_ASSETS = [
   './',
   './index.html',
@@ -29,7 +29,7 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET' || !req.url.startsWith(self.location.origin)) return;
   event.respondWith(
-    fetch(req)
+    fetch(req, { cache: 'no-store' })
       .then((res) => {
         const clone = res.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));

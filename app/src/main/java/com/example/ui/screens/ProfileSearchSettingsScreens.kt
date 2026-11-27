@@ -1755,6 +1755,10 @@ fun SettingsScreen(
     item { Text(strings.settings, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) }
 
     item {
+      HelloWebsiteAndLaptopCard()
+    }
+
+    item {
       val showOnline = me?.showOnlineStatus != false
       Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Row(
@@ -2469,10 +2473,6 @@ fun SettingsScreen(
           }
         }
       }
-    }
-
-    item {
-      HelloWebsiteAndLaptopCard()
     }
 
     item {

@@ -47,7 +47,7 @@ import {
 } from './features.js';
 
 const WEBSITE_URL = 'https://aritmahmud7124.github.io/Hello-1/';
-const APK_URL = 'https://github.com/AritMahmud7124/Hello-1/releases/download/v1.8.4/hello-social-v1.8.4.apk';
+const APK_URL = 'https://github.com/AritMahmud7124/Hello-1/releases/download/v1.8.5/hello-social-v1.8.5.apk';
 const AUTH_SETTINGS_URL = 'https://console.firebase.google.com/project/gen-lang-client-0583025546/authentication/settings';
 const FIRESTORE_DB_ID = 'ai-studio-android-hello-982e615a-60df-4ad0-a009-d7f68361be02';
 
@@ -262,7 +262,16 @@ const state = {
 if (state.theme === 'light') document.documentElement.classList.add('light');
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  let swReloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!swReloaded) {
+      swReloaded = true;
+      window.location.reload();
+    }
+  });
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
+    reg.update().catch(() => {});
+  }).catch(() => {});
 }
 
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -620,6 +629,43 @@ function updateRingtone(ringing) {
 
 function isStandaloneApp() {
   return Boolean(window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator.standalone === true);
+}
+
+async function copyTextSafe(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (_) {}
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch (_) {
+    return false;
+  }
+}
+
+function downloadLaptopShortcutFile() {
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta http-equiv="refresh" content="0; url=${WEBSITE_URL}"><title>HELLO App Launcher</title></head><body style="font-family:sans-serif;background:#0B0E1E;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;"><p>Opening HELLO... <a href="${WEBSITE_URL}" style="color:#FF5A5F;">Click here if not redirected</a></p><script>window.location.replace("${WEBSITE_URL}");</script></body></html>`;
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'HELLO-Laptop-Shortcut.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+  showBanner('Downloaded HELLO-Laptop-Shortcut.html — double-click it on your laptop to open HELLO anytime!');
 }
 
 function openGetAppModal() {
@@ -1395,7 +1441,7 @@ function renderLanding() {
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">
             <button class="btn btn-violet open-get-app-btn" id="installLaptopBtnHero">${iconSvg('laptop', 17)}<span>Install on Desktop / Laptop</span></button>
             <button class="btn btn-secondary copy-website-url-btn" type="button">${iconSvg('share', 16)}<span>Copy Website Link</span></button>
-            <a class="btn btn-secondary" href="${APK_URL}" target="_blank" rel="noopener noreferrer">${iconSvg('phone', 17)}<span>Download Android APK (v1.8.4)</span></a>
+            <a class="btn btn-secondary" href="${APK_URL}" target="_blank" rel="noopener noreferrer">${iconSvg('phone', 17)}<span>Download Android APK (v1.8.5)</span></a>
           </div>
         </section>
 
@@ -1428,6 +1474,7 @@ function renderLanding() {
         </section>
       </div>
     </main>
+    ${renderModals()}
   `;
 }
 
@@ -2051,7 +2098,7 @@ function renderCenterStage() {
         <div class="card" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
           <div>
             <div style="font-weight:700;">HELLO Website, Laptop &amp; Android App</div>
-            <div class="muted">Install on your laptop, copy the website link, or download Android APK v1.8.4</div>
+            <div class="muted">Install on your laptop, copy the website link, or download Android APK v1.8.5</div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-violet open-get-app-btn" id="installLaptopBtnHub">${iconSvg('laptop', 16)}<span>Website &amp; Laptop App</span></button>
@@ -2693,6 +2740,7 @@ function renderModals() {
             </div>
             <button class="icon-btn close-modals-btn" style="width:34px;height:34px;">${iconSvg('close', 18)}</button>
           </div>
+          ${state.statusBanner ? `<div class="${state.statusIsError ? 'error-box' : 'notice-box'}">${esc(state.statusBanner)}</div>` : ''}
 
           <div style="padding:14px;border-radius:14px;background:var(--elevated);border:1px solid var(--border);display:flex;flex-direction:column;gap:8px;">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
@@ -2709,7 +2757,8 @@ function renderModals() {
             ${!installed ? `
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 ${ready ? `<button class="btn btn-violet" id="triggerNativePwaBtn">${iconSvg('laptop', 16)}<span>Install Desktop / Laptop App Now</span></button>` : ''}
-                <button class="btn btn-secondary copy-website-url-btn" type="button">${iconSvg('share', 15)}<span>Copy Link for Laptop Browser</span></button>
+                <button class="btn btn-primary" id="downloadLaptopShortcutBtn" type="button">${iconSvg('laptop', 16)}<span>Download Laptop Shortcut</span></button>
+                <button class="btn btn-secondary copy-website-url-btn" type="button">${iconSvg('share', 15)}<span>Copy Website Link</span></button>
               </div>
             ` : ''}
           </div>
@@ -2727,7 +2776,7 @@ function renderModals() {
           <div style="padding:14px;border-radius:14px;background:var(--elevated);border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
             <div>
               <strong>📱 Android Phone App (APK)</strong>
-              <div class="muted" style="font-size:12px;">Latest Android release v1.8.4</div>
+              <div class="muted" style="font-size:12px;">Latest Android release v1.8.5</div>
             </div>
             <a class="btn btn-primary" href="${APK_URL}" target="_blank" rel="noopener noreferrer">${iconSvg('phone', 16)}<span>Download APK</span></a>
           </div>
@@ -3019,10 +3068,11 @@ function bindEvents() {
     btn.addEventListener('click', openGetAppModal);
   });
   document.getElementById('triggerNativePwaBtn')?.addEventListener('click', triggerNativeDesktopInstall);
+  document.getElementById('downloadLaptopShortcutBtn')?.addEventListener('click', downloadLaptopShortcutFile);
   document.querySelectorAll('.copy-website-url-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      navigator.clipboard?.writeText(WEBSITE_URL);
-      showBanner(`Official Website link copied: ${WEBSITE_URL}`);
+    btn.addEventListener('click', async () => {
+      const ok = await copyTextSafe(WEBSITE_URL);
+      showBanner(ok ? `Official Website link copied: ${WEBSITE_URL}` : `Website URL: ${WEBSITE_URL}`);
     });
   });
   document.getElementById('shareWebsiteModalBtn')?.addEventListener('click', async () => {
@@ -3036,7 +3086,7 @@ function bindEvents() {
         return;
       } catch (_) {}
     }
-    navigator.clipboard?.writeText(WEBSITE_URL);
+    await copyTextSafe(WEBSITE_URL);
     showBanner(`Official Website link copied: ${WEBSITE_URL}`);
   });
   document.getElementById('signOutBtnHub')?.addEventListener('click', () => signOut(auth));
