@@ -628,7 +628,7 @@ function updateRingtone(ringing) {
 }
 
 function isStandaloneApp() {
-  return Boolean(window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator.standalone === true);
+  return Boolean(window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator?.standalone === true);
 }
 
 async function copyTextSafe(text) {
@@ -1892,50 +1892,6 @@ function renderCenterStage() {
     `;
   }
 
-  if (state.tab === 'groups') {
-    if (state.activeGroupId) {
-      const grp = state.groups.find((g) => g.id === state.activeGroupId);
-      if (grp) {
-        const joined = (grp.memberUids || []).includes(uid);
-        const grpPosts = state.posts.filter((p) => p.groupId === grp.id);
-        return `
-          <div style="display:flex;flex-direction:column;gap:14px;">
-            <div class="card">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-                <div style="display:flex;align-items:center;gap:10px;">
-                  <button class="icon-btn" id="backToGroupsBtn">${iconSvg('back', 18)}</button>
-                  <div>
-                    <h2 style="margin:0;">${esc(grp.name)}</h2>
-                    <div class="muted">${esc(grp.category || 'Community')} · ${esc(grp.privacy)} · ${(grp.memberUids || []).length} members</div>
-                  </div>
-                </div>
-                ${grp.creatorId === uid ? `<span class="badge">Group Admin</span>` : `<button class="btn ${joined ? 'btn-secondary' : 'btn-primary'} join-group-btn" data-group-id="${esc(grp.id)}">${joined ? 'Joined (Leave)' : 'Join Group'}</button>`}
-              </div>
-              ${grp.description ? `<div style="margin-top:10px;font-size:14px;">${esc(grp.description)}</div>` : ''}
-            </div>
-            ${joined ? `
-              <div class="card composer">
-                <textarea id="postDraftInput" rows="2" placeholder="Share something with ${esc(grp.name)}...">${esc(state.postDraft)}</textarea>
-                ${state.postMediaPreview ? `
-                  <div class="preview-wrap">
-                    ${state.postMediaFile?.type?.startsWith('video/') ? `<video controls src="${esc(state.postMediaPreview)}"></video>` : `<img src="${esc(state.postMediaPreview)}" alt="Preview" />`}
-                    <button class="preview-remove-btn" id="clearPostMediaBtn" type="button">${iconSvg('close', 16)}</button>
-                  </div>
-                ` : ''}
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px;">
-                  <button class="btn btn-secondary" id="pickPostMediaBtn" type="button">${iconSvg('photo', 16)}<span>${state.postMediaFile ? 'Change Photo/Video' : 'Photo / Video'}</span></button>
-                  <button class="btn btn-primary" id="publishGroupPostBtn" data-group-id="${esc(grp.id)}" ${state.isUploading ? 'disabled' : ''}>${state.isUploading ? 'Uploading...' : 'Post to Group'}</button>
-                </div>
-              </div>
-            ` : ''}
-            <div class="feed-list">
-              ${grpPosts.length === 0 ? `<div class="card muted">No posts in this group yet.</div>` : grpPosts.map((p) => renderPostCard(p)).join('')}
-            </div>
-          </div>
-        `;
-      }
-    }
-
   if (state.tab === 'sos') return renderSosTab();
   if (state.tab === 'settings') return renderSettingsTab();
   if (state.tab === 'owner_profile') return renderOwnerProfileTab();
@@ -2084,17 +2040,6 @@ function renderCenterStage() {
           <span class="badge">View Profile</span>
         </div>
 
-        <h3 style="margin:4px 0 0;">Explore HELLO (A to Z)</h3>
-        <div class="hub-grid">
-          ${tiles.map(([tKey, ic, title, sub]) => `
-            <button class="hub-tile" data-tab="${tKey}">
-              ${iconSvg(ic, 24)}
-              <div style="font-weight:800;font-size:14.5px;margin-top:2px;">${title}</div>
-              <div class="muted" style="font-size:12px;">${sub}</div>
-            </button>
-          `).join('')}
-        </div>
-
         <div class="card" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
           <div>
             <div style="font-weight:700;">HELLO Website, Laptop &amp; Android App</div>
@@ -2106,6 +2051,17 @@ function renderCenterStage() {
             <a class="btn btn-secondary" href="${APK_URL}" target="_blank" rel="noopener noreferrer">${iconSvg('phone', 16)}<span>Android APK</span></a>
             <button class="btn btn-secondary" id="signOutBtnHub">${iconSvg('logout', 16)}<span>Sign Out</span></button>
           </div>
+        </div>
+
+        <h3 style="margin:4px 0 0;">Explore HELLO (A to Z)</h3>
+        <div class="hub-grid">
+          ${tiles.map(([tKey, ic, title, sub]) => `
+            <button class="hub-tile" data-tab="${tKey}">
+              ${iconSvg(ic, 24)}
+              <div style="font-weight:800;font-size:14.5px;margin-top:2px;">${title}</div>
+              <div class="muted" style="font-size:12px;">${sub}</div>
+            </button>
+          `).join('')}
         </div>
       </div>
     `;
