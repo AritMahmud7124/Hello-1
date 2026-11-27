@@ -1,9 +1,10 @@
-const CACHE_NAME = 'hello-web-v4';
+const CACHE_NAME = 'hello-web-v5';
 const SHELL_ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './features.js',
   './manifest.webmanifest',
   './hello-logo.png',
   './icon-192.png',

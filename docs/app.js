@@ -3,6 +3,7 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  reauthenticateWithPopup,
   signOut,
   onAuthStateChanged
 } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js';
@@ -26,6 +27,24 @@ import {
   arrayRemove,
   writeBatch
 } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js';
+import {
+  REACTIONS,
+  STORY_REACTIONS,
+  REEL_CATEGORIES,
+  initFeatures,
+  isVerifiedOwnerUser,
+  isAdminUser,
+  stopFeatureSubListeners,
+  setTypingState,
+  openStoryWithTracking,
+  renderSosTab,
+  renderSecretLoveFull,
+  renderSettingsTab,
+  renderOwnerProfileTab,
+  renderOwnerDashboardTab,
+  renderFeatureModals,
+  bindFeatureEvents
+} from './features.js';
 
 const APK_URL = 'https://github.com/AritMahmud7124/Hello-1/releases/download/v1.8.3/hello-social-v1.8.3.apk';
 const AUTH_SETTINGS_URL = 'https://console.firebase.google.com/project/gen-lang-client-0583025546/authentication/settings';
@@ -189,7 +208,53 @@ const state = {
   isUploading: false,
   uploadLabel: '',
   statusBanner: '',
-  statusIsError: false
+  statusIsError: false,
+  privateUser: null,
+  blockedNamesById: {},
+  globalSettings: null,
+  ownerConfig: null,
+  ownerSubTab: 'overview',
+  lastReauthAt: 0,
+  reports: [],
+  admins: [],
+  ownerUsers: [],
+  ownerSignals: [],
+  ownerMatches: [],
+  sosAlertsByGroup: {},
+  secretCrushes: [],
+  mutualMatches: [],
+  devotionTrials: [],
+  secretSendRecipientUid: '',
+  questTierDays: 7,
+  devotionReflectionDraft: '',
+  secretMoodEmoji: '❤️',
+  secretNoteDraft: '',
+  privateChatMatchId: null,
+  privateMatchMsgs: [],
+  privateMatchDraft: '',
+  maskModalMatchId: null,
+  reelFilter: 'All',
+  reelCommentsById: {},
+  openReelCommentsId: null,
+  storyFilter: 'all',
+  storyPrivacy: 'public',
+  storyReactionsById: {},
+  reactionsByPost: {},
+  myReactionByPost: {},
+  reactionPickerPostId: null,
+  disappearing24h: false,
+  incognitoHideStatus: localStorage.getItem('hello_incog_status') === '1',
+  incognitoPrivateViewing: localStorage.getItem('hello_incog_view') === '1',
+  recentSearches: (() => { try { return JSON.parse(localStorage.getItem('hello_recent_searches') || '[]'); } catch (_) { return []; } })(),
+  searchScope: 'all',
+  profileTab: 'posts',
+  editPostTarget: null,
+  reportTarget: null,
+  shareTarget: null,
+  manageGroupModal: null,
+  sosModalGroup: null,
+  grpSosEnabled: true,
+  activeMsgEmojiId: null
 };
 
 if (state.theme === 'light') document.documentElement.classList.add('light');
@@ -609,14 +674,99 @@ async function ensureWebProfile(firebaseUser) {
 }
 
 let unsubs = [];
+let sosUnsubs = {};
+let adminUnsubs = [];
+
+function clearSosSubs() {
+  Object.values(sosUnsubs).forEach((arr) => arr.forEach((u) => { try { u(); } catch (_) {} }));
+  sosUnsubs = {};
+}
+
+function clearAdminSubs() {
+  adminUnsubs.forEach((u) => { try { u(); } catch (_) {} });
+  adminUnsubs = [];
+}
+
 function clearSubs() {
   unsubs.forEach((u) => { try { u(); } catch (_) {} });
   unsubs = [];
+  clearSosSubs();
+  clearAdminSubs();
+  stopFeatureSubListeners();
   updateRingtone(false);
 }
 
 function logSubErr(label) {
   return (err) => console.warn(`Listener [${label}]:`, err?.code || err?.message);
+}
+
+function refreshGovernanceListeners(uid) {
+  clearAdminSubs();
+  const isOwner = isVerifiedOwnerUser();
+  const isAdmin = isAdminUser();
+  if (isAdmin) {
+    adminUnsubs.push(onSnapshot(query(collection(db, 'reports'), limit(80)), (snap) => {
+      state.reports = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      render();
+    }, logSubErr('reports')));
+  }
+  if (isOwner) {
+    adminUnsubs.push(onSnapshot(collection(db, 'admins'), (snap) => {
+      state.admins = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      render();
+    }, logSubErr('admins')));
+    adminUnsubs.push(onSnapshot(query(collection(db, 'users'), limit(80)), (snap) => {
+      state.ownerUsers = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      render();
+    }, logSubErr('owner_users')));
+    adminUnsubs.push(onSnapshot(query(collection(db, 'crush_signals'), limit(80)), (snap) => {
+      state.ownerSignals = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      render();
+    }, logSubErr('owner_signals')));
+    adminUnsubs.push(onSnapshot(query(collection(db, 'mutual_crush_matches'), limit(80)), (snap) => {
+      state.ownerMatches = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      render();
+    }, logSubErr('owner_matches')));
+  } else if (uid) {
+    adminUnsubs.push(onSnapshot(doc(db, 'admins', uid), (snap) => {
+      if (snap.exists()) {
+        state.admins = [{ id: snap.id, ...snap.data() }];
+        render();
+      }
+    }, logSubErr('my_admin_doc')));
+  }
+}
+
+function syncSosGroupListeners(uid) {
+  const joinedIds = new Set(state.groupsMine.map((g) => g.id));
+  Object.keys(sosUnsubs).forEach((gid) => {
+    if (!joinedIds.has(gid)) {
+      sosUnsubs[gid].forEach((u) => { try { u(); } catch (_) {} });
+      delete sosUnsubs[gid];
+      delete state.sosAlertsByGroup[gid];
+    }
+  });
+  joinedIds.forEach((gid) => {
+    if (sosUnsubs[gid]) return;
+    const bySent = {};
+    const byRec = {};
+    const rebuild = () => {
+      state.sosAlertsByGroup[gid] = Object.values({ ...bySent, ...byRec })
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      render();
+    };
+    const u1 = onSnapshot(query(collection(db, 'groups', gid, 'sos_alerts'), where('senderId', '==', uid)), (snap) => {
+      Object.keys(bySent).forEach((k) => delete bySent[k]);
+      snap.docs.forEach((d) => { bySent[d.id] = { id: d.id, ...d.data() }; });
+      rebuild();
+    }, logSubErr(`sos_sent_${gid}`));
+    const u2 = onSnapshot(query(collection(db, 'groups', gid, 'sos_alerts'), where('recipientUids', 'array-contains', uid)), (snap) => {
+      Object.keys(byRec).forEach((k) => delete byRec[k]);
+      snap.docs.forEach((d) => { byRec[d.id] = { id: d.id, ...d.data() }; });
+      rebuild();
+    }, logSubErr(`sos_rec_${gid}`));
+    sosUnsubs[gid] = [u1, u2];
+  });
 }
 
 function startListeners(uid) {
@@ -626,9 +776,28 @@ function startListeners(uid) {
     if (snap.exists()) {
       state.me = { id: snap.id, ...snap.data() };
       state.usersById[uid] = state.me;
+      refreshGovernanceListeners(uid);
       render();
     }
   }, logSubErr('me')));
+
+  unsubs.push(onSnapshot(doc(db, 'users', uid), (snap) => {
+    if (snap.exists()) {
+      state.privateUser = { id: snap.id, ...snap.data() };
+      render();
+    }
+  }, logSubErr('private_user')));
+
+  unsubs.push(onSnapshot(doc(db, 'app_config', 'owner'), (snap) => {
+    state.ownerConfig = snap.exists() ? snap.data() : null;
+    refreshGovernanceListeners(uid);
+    render();
+  }, logSubErr('owner_config')));
+
+  unsubs.push(onSnapshot(doc(db, 'app_config', 'global_settings'), (snap) => {
+    state.globalSettings = snap.exists() ? snap.data() : null;
+    render();
+  }, logSubErr('global_settings')));
 
   // Required by firestore.rules line 658: existing().profilePrivacy != 'private'
   unsubs.push(onSnapshot(query(collection(db, 'users_public'), where('profilePrivacy', 'in', ['public', 'friends'])), (snap) => {
@@ -642,6 +811,10 @@ function startListeners(uid) {
 
   unsubs.push(onSnapshot(collection(db, 'users', uid, 'blocked'), (snap) => {
     state.blockedUids = new Set(snap.docs.map((d) => d.id));
+    snap.docs.forEach((d) => {
+      const n = d.data()?.blockedName;
+      if (n) state.blockedNamesById[d.id] = n;
+    });
     mergePosts();
     mergeStories();
     render();
@@ -734,6 +907,7 @@ function startListeners(uid) {
   unsubs.push(onSnapshot(query(collection(db, 'groups'), where('memberUids', 'array-contains', uid), limit(40)), (snap) => {
     state.groupsMine = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     mergeGroups();
+    syncSosGroupListeners(uid);
     render();
   }, logSubErr('groups_mine')));
 
@@ -761,6 +935,23 @@ function startListeners(uid) {
     state.secretSent = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
     render();
   }, logSubErr('sent_secret_loves')));
+
+  unsubs.push(onSnapshot(collection(db, 'users', uid, 'secret_crushes'), (snap) => {
+    state.secretCrushes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    render();
+  }, logSubErr('secret_crushes')));
+
+  unsubs.push(onSnapshot(query(collection(db, 'mutual_crush_matches'), where('participantUids', 'array-contains', uid)), (snap) => {
+    state.mutualMatches = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    render();
+  }, logSubErr('mutual_matches')));
+
+  unsubs.push(onSnapshot(query(collection(db, 'devotion_trials'), where('senderId', '==', uid)), (snap) => {
+    state.devotionTrials = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    render();
+  }, logSubErr('devotion_trials')));
+
+  refreshGovernanceListeners(uid);
 }
 
 let msgUnsub = null;
@@ -950,6 +1141,7 @@ async function sendChatMessage(convId, participantUids, text, mediaUri = '', med
       ? `↩ ${state.replyToMsg.senderName}: "${(state.replyToMsg.text || state.replyToMsg.mediaType).slice(0, 60)}"\n${text}`
       : text;
     state.replyToMsg = null;
+    const expiresAtMs = state.disappearing24h ? Date.now() + 86400000 : 0;
 
     await addDoc(collection(db, 'conversations', convId, 'messages'), {
       conversationId: convId,
@@ -962,13 +1154,14 @@ async function sendChatMessage(convId, participantUids, text, mediaUri = '', med
       reactions: {},
       participantUids,
       isDeleted: false,
-      expiresAtMs: 0,
+      expiresAtMs,
       createdAt: serverTimestamp()
     });
     const preview = text || (mediaType === 'image' ? 'Photo' : mediaType === 'video' ? 'Video' : mediaType === 'audio' ? 'Voice message' : `File: ${fileName || 'Attachment'}`);
     await updateDoc(doc(db, 'conversations', convId), {
       lastMessage: preview.slice(0, 500),
       lastSenderId: state.user.uid,
+      typingUids: arrayRemove(state.user.uid),
       readByUids: [state.user.uid],
       updatedAt: serverTimestamp()
     });
@@ -1208,12 +1401,26 @@ function renderLanding() {
 }
 
 function renderStoriesStrip() {
+  const uid = state.user.uid;
   const me = state.me || { displayName: state.user.displayName, photoUrl: state.user.photoURL };
   const myPhoto = mediaSrc(me.photoUrl);
+  const friendSet = new Set(state.friendships.flatMap((f) => f.participantUids || []).filter((x) => x !== uid));
+  let filtered = state.stories;
+  if (state.storyFilter === 'mine') filtered = filtered.filter((s) => s.authorId === uid);
+  else if (state.storyFilter === 'friends') filtered = filtered.filter((s) => friendSet.has(s.authorId));
+  else if (state.storyFilter === 'highlights') filtered = filtered.filter((s) => Boolean(s.isSavedHighlight));
+
   return `
     <div class="card" style="padding:14px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <span style="font-weight:700;font-size:15px;">Stories</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-weight:700;font-size:15px;">Stories</span>
+          <div class="chip-row">
+            ${[['all', 'All'], ['mine', 'My Stories'], ['friends', 'Friends'], ['highlights', 'Highlights']].map(([k, lbl]) => `
+              <button class="filter-chip ${state.storyFilter === k ? 'active' : ''}" data-story-filter="${k}" style="padding:3px 10px;font-size:11.5px;">${lbl}</button>
+            `).join('')}
+          </div>
+        </div>
         <button class="btn btn-secondary" id="openCreateStoryBtn" style="padding:5px 12px;min-height:30px;font-size:12px;">${iconSvg('plus', 15)}<span>Add Story</span></button>
       </div>
       <div class="stories-row">
@@ -1224,7 +1431,7 @@ function renderStoriesStrip() {
           <div class="story-create-plus">${iconSvg('plus', 16)}</div>
           <div class="story-create-label">Create Story</div>
         </button>
-        ${state.stories.map((s) => {
+        ${filtered.map((s) => {
           const author = resolveAuthor(s.authorId, s.authorName, s.authorAvatar);
           const bgSrc = mediaSrc(s.mediaUri);
           const isCloud = typeof s.mediaUri === 'string' && s.mediaUri.startsWith('firestore://media/');
@@ -1235,6 +1442,7 @@ function renderStoriesStrip() {
               <div class="story-scrim">
                 <span class="story-ring">${avatarHtml(author.name, author.avatar, 30, false)}</span>
                 <div>
+                  ${s.isSavedHighlight ? `<span class="badge" style="font-size:9px;padding:1px 6px;">★ Highlight</span>` : ''}
                   ${s.caption ? `<div style="font-size:11px;margin-bottom:4px;opacity:0.95;line-height:1.25;">${esc(s.caption.slice(0, 46))}</div>` : ''}
                   <div class="story-name">${esc(author.name)}</div>
                 </div>
@@ -1248,13 +1456,17 @@ function renderStoriesStrip() {
 }
 
 function renderPostCard(p) {
+  const uid = state.user?.uid;
   const author = resolveAuthor(p.authorId, p.authorName, p.authorAvatar);
-  const liked = Boolean(state.likedByPost[p.id]);
+  const myEmoji = state.myReactionByPost[p.id] || (state.likedByPost[p.id] ? '👍' : '');
+  const liked = Boolean(myEmoji);
   const saved = state.savedPostIds.has(p.id);
   const commentsOpen = Boolean(state.openComments[p.id]);
   const comments = state.commentsByPost[p.id] || [];
+  const isOwnerOrAuthor = p.authorId === uid || isAdminUser();
+  const pickerOpen = state.reactionPickerPostId === p.id;
   return `
-    <article class="card">
+    <article class="card" style="position:relative;">
       <div class="post-header">
         <div class="post-author-row open-user-profile" style="cursor:pointer;" data-uid="${esc(p.authorId)}">
           ${avatarHtml(author.name, author.avatar, 42, author.online)}
@@ -1266,25 +1478,46 @@ function renderPostCard(p) {
             <div class="post-meta">${fmtTime(p.createdAt)} · ${esc(p.privacy || 'public')}</div>
           </div>
         </div>
-        <button class="icon-btn save-post-btn" data-post-id="${esc(p.id)}" title="Save post" style="width:34px;height:34px;color:${saved ? 'var(--violet-light)' : 'var(--muted)'};">${iconSvg('bookmark', 17)}</button>
+        <div style="display:flex;align-items:center;gap:4px;">
+          ${isOwnerOrAuthor ? `
+            <button class="btn btn-secondary edit-post-btn" data-post-id="${esc(p.id)}" style="padding:4px 9px;min-height:28px;font-size:11.5px;">Edit</button>
+            <button class="icon-btn delete-post-btn" data-post-id="${esc(p.id)}" title="Delete post" style="width:30px;height:30px;color:var(--rose);">${iconSvg('trash', 15)}</button>
+          ` : `
+            <button class="btn btn-secondary report-open-btn" data-rtype="post" data-rid="${esc(p.id)}" style="padding:4px 9px;min-height:28px;font-size:11.5px;">Report</button>
+            <button class="btn btn-secondary block-user-btn" data-uid="${esc(p.authorId)}" data-name="${esc(author.name)}" style="padding:4px 9px;min-height:28px;font-size:11.5px;">Block</button>
+          `}
+          <button class="icon-btn save-post-btn" data-post-id="${esc(p.id)}" title="Save post" style="width:32px;height:32px;color:${saved ? 'var(--violet-light)' : 'var(--muted)'};">${iconSvg('bookmark', 17)}</button>
+        </div>
       </div>
       ${p.content ? `<div class="post-body">${esc(p.content)}</div>` : ''}
       ${p.mediaType === 'image' && p.mediaUri ? mediaImgHtml(p.mediaUri, 'post-media open-lightbox', 'Post photo', `data-lightbox-uri="${esc(p.mediaUri)}"`) : ''}
       ${p.mediaType === 'video' && p.mediaUri ? mediaVideoHtml(p.mediaUri, 'post-media') : ''}
       <div class="post-stats">
-        <span>${p.likesCount || 0} reactions</span>
+        <span>${p.likesCount || 0} reactions ${myEmoji ? `(${myEmoji})` : ''}</span>
         <span>${p.commentsCount || 0} comments · ${p.sharesCount || 0} shares</span>
       </div>
+      ${pickerOpen ? `
+        <div class="reaction-picker-row">
+          ${REACTIONS.map((em) => `<button type="button" class="reaction-emoji-btn pick-post-react-btn" data-post-id="${esc(p.id)}" data-emoji="${em}">${em}</button>`).join('')}
+        </div>
+      ` : ''}
       <div class="post-actions">
-        <button class="action-pill like-btn ${liked ? 'liked' : ''}" data-post-id="${esc(p.id)}">${iconSvg('like', 17)}<span>${liked ? 'Liked' : 'Like'}</span></button>
+        <button class="action-pill like-btn ${liked ? 'liked' : ''}" data-post-id="${esc(p.id)}">${liked ? `<span>${myEmoji}</span>` : iconSvg('like', 17)}<span>${liked ? 'Reacted' : 'Like'}</span></button>
+        <button class="action-pill toggle-react-picker-btn" data-post-id="${esc(p.id)}" title="More reactions" style="flex:0 0 auto;padding:8px 12px;">😊</button>
         <button class="action-pill comment-toggle-btn" data-post-id="${esc(p.id)}">${iconSvg('comment', 17)}<span>Comment</span></button>
-        <button class="action-pill share-post-btn" data-post-id="${esc(p.id)}">${iconSvg('share', 17)}<span>Share</span></button>
+        <button class="action-pill open-share-modal-btn" data-post-id="${esc(p.id)}">${iconSvg('share', 17)}<span>Share</span></button>
       </div>
       ${commentsOpen ? `
         <div class="comments-box">
           ${comments.map((c) => {
             const ca = resolveAuthor(c.authorId, c.authorName, c.authorAvatar);
-            return `<div class="comment-item"><strong>${esc(ca.name)}</strong>: ${esc(c.text)}</div>`;
+            const canDelC = c.authorId === uid || p.authorId === uid || isAdminUser();
+            return `
+              <div class="comment-item" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                <div><strong>${esc(ca.name)}</strong>: ${esc(c.text)}</div>
+                ${canDelC ? `<button class="msg-mini-btn delete-comment-btn" data-post-id="${esc(p.id)}" data-comment-id="${esc(c.id)}" title="Delete comment">${iconSvg('close', 13)}</button>` : ''}
+              </div>
+            `;
           }).join('')}
           <div style="display:flex;gap:8px;margin-top:4px;">
             <input class="field comment-input" data-post-id="${esc(p.id)}" placeholder="Write a comment..." style="padding:8px 12px;" />
@@ -1363,6 +1596,8 @@ function renderCenterStage() {
           ${activeConv ? (() => {
             const otherId = !activeConv.isGroup ? (activeConv.participantUids || []).find((x) => x !== uid) : null;
             const resolved = otherId ? resolveAuthor(otherId, activeConv.participantNames?.[otherId] || activeConv.title) : { name: activeConv.title || 'Group Chat', avatar: activeConv.avatarUrl || '', online: false, verified: false };
+            const othersTyping = (activeConv.typingUids || []).filter((id) => id !== uid);
+            const nowMs = Date.now();
             return `
               <div class="chat-head">
                 <div style="display:flex;align-items:center;gap:10px;min-width:0;">
@@ -1374,22 +1609,25 @@ function renderCenterStage() {
                         <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(resolved.name)}</span>
                         ${resolved.verified ? `<span class="verified-badge">${iconSvg('verified', 14)}</span>` : ''}
                       </div>
-                      <div class="muted" style="font-size:12px;">${resolved.online ? 'Active now' : (activeConv.isGroup ? `${(activeConv.participantUids || []).length} members` : 'HELLO Messenger')}</div>
+                      <div class="muted" style="font-size:12px;">${othersTyping.length ? 'Typing...' : (resolved.online ? 'Active now' : (activeConv.isGroup ? `${(activeConv.participantUids || []).length} members` : 'HELLO Messenger'))}</div>
                     </div>
                   </div>
                 </div>
-                <div style="display:flex;gap:6px;">
+                <div style="display:flex;gap:6px;align-items:center;">
+                  <button class="filter-chip ${state.disappearing24h ? 'active' : ''}" id="toggle24hBtn" title="24h Disappearing Messages" style="padding:4px 9px;font-size:11px;">⏱ 24h ${state.disappearing24h ? 'On' : 'Off'}</button>
                   <button class="icon-btn" id="startAudioCallBtn" title="Audio Call">${iconSvg('call', 18)}</button>
                   <button class="icon-btn" id="startVideoCallBtn" title="Video Call">${iconSvg('video', 18)}</button>
+                  ${activeConv.isGroup ? `<button class="btn btn-secondary" id="leaveGroupChatBtn" style="padding:4px 9px;min-height:30px;font-size:11.5px;">Leave</button>` : (otherId ? `<button class="btn btn-secondary block-user-btn" data-uid="${esc(otherId)}" data-name="${esc(resolved.name)}" style="padding:4px 9px;min-height:30px;font-size:11.5px;">Block</button>` : '')}
                 </div>
               </div>
 
               <div class="chat-msgs" id="chatMsgsBox">
-                ${state.messages.filter((m) => !m.isDeleted).map((m) => {
+                ${state.messages.filter((m) => !m.isDeleted && !(m.expiresAtMs > 0 && nowMs > m.expiresAtMs)).map((m) => {
                   const mine = m.senderId === uid;
                   const reactionVals = Object.values(m.reactions || {});
                   const dlName = (m.fileName || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
                   const cloudSrc = m.mediaUri ? mediaSrc(m.mediaUri) : '';
+                  const emojiTrayOpen = state.activeMsgEmojiId === m.id;
                   return `
                     <div class="msg-row ${mine ? 'mine' : 'theirs'}">
                       ${!mine ? `<div class="muted" style="font-size:11px;margin-bottom:2px;">${esc(resolveAuthor(m.senderId, m.senderName).name)}</div>` : ''}
@@ -1400,11 +1638,16 @@ function renderCenterStage() {
                         ${m.mediaType === 'file' ? `<a data-media-uri="${esc(m.mediaUri || '')}" href="${esc(cloudSrc || '#')}" download="${esc(dlName)}" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;text-decoration:underline;">${iconSvg('file', 16)}<span>${esc(m.fileName || 'Attachment')}</span></a>` : ''}
                         ${m.text ? `<div style="white-space:pre-wrap;">${esc(m.text)}</div>` : ''}
                       </div>
+                      ${emojiTrayOpen ? `
+                        <div class="reaction-picker-row" style="margin-top:4px;">
+                          ${['❤️', '😂', '👍', '😮', '😢'].map((em) => `<button type="button" class="reaction-emoji-btn react-msg-emoji-btn" data-msg-id="${esc(m.id)}" data-emoji="${em}">${em}</button>`).join('')}
+                        </div>
+                      ` : ''}
                       <div class="msg-meta-row">
-                        <span>${fmtTime(m.createdAt)}</span>
+                        <span>${fmtTime(m.createdAt)}${m.expiresAtMs > 0 ? ' · ⏱24h' : ''}</span>
                         ${reactionVals.length ? `<span>${esc(reactionVals.join(' '))}</span>` : ''}
                         <button class="msg-mini-btn reply-msg-btn" data-msg-id="${esc(m.id)}" title="Reply">${iconSvg('reply', 12)}</button>
-                        <button class="msg-mini-btn react-msg-btn" data-msg-id="${esc(m.id)}" title="React with heart">${iconSvg('heart', 12)}</button>
+                        <button class="msg-mini-btn toggle-msg-emoji-btn" data-msg-id="${esc(m.id)}" title="React">${iconSvg('heart', 12)}</button>
                         ${mine ? `<button class="msg-mini-btn unsend-msg-btn" data-msg-id="${esc(m.id)}" title="Unsend">${iconSvg('trash', 12)}</button>` : ''}
                       </div>
                     </div>
@@ -1430,7 +1673,7 @@ function renderCenterStage() {
                 ` : ''}
                 <div class="screenshot-pill">
                   <button class="cam-circle" id="pickChatCameraBtn" type="button" title="Camera Photo or Video">${iconSvg('camera', 19)}</button>
-                  <input id="chatTextInput" type="text" placeholder="${state.isUploading ? (state.uploadLabel || 'Uploading...') : (state.isRecordingVoice ? `Recording voice (${state.recordingSec}s)...` : 'Message...')}" value="${esc(state.msgDraft)}" />
+                  <input id="chatTextInput" type="text" placeholder="${state.isUploading ? (state.uploadLabel || 'Uploading...') : (state.isRecordingVoice ? `Recording voice (${state.recordingSec}s)...` : (state.disappearing24h ? '24h disappearing message...' : 'Message...'))}" value="${esc(state.msgDraft)}" />
                   <button class="pill-icon-btn ${state.isRecordingVoice ? 'recording' : ''}" id="chatMicBtn" type="button" title="Voice message">${iconSvg(state.isRecordingVoice ? 'stop' : 'mic', 19)}</button>
                   <button class="pill-icon-btn" id="chatAttachToggleBtn" type="button" title="Attach">${iconSvg('attach', 19)}</button>
                   ${hasDraft ? `
@@ -1448,35 +1691,52 @@ function renderCenterStage() {
   }
 
   if (state.tab === 'reels') {
-    const reels = state.reels.filter((r) => !q || (r.caption || '').toLowerCase().includes(q) || (r.authorName || '').toLowerCase().includes(q));
+    const reels = state.reels.filter((r) => {
+      if (state.blockedUids.has(r.authorId)) return false;
+      const catOk = state.reelFilter === 'All' || (r.category || '').toLowerCase() === state.reelFilter.toLowerCase();
+      const qOk = !q || (r.caption || '').toLowerCase().includes(q) || (r.authorName || '').toLowerCase().includes(q);
+      return catOk && qOk;
+    });
     return `
       <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
           <div>
             <h3 style="margin:0;">HELLO Reels</h3>
             <div class="muted">Short videos & creator clips</div>
           </div>
           <button class="btn btn-primary" id="openCreateReelBtn">${iconSvg('plus', 16)}<span>Create Reel</span></button>
         </div>
-        ${reels.length === 0 ? `<div class="muted">No Reels posted yet. Tap Create Reel to share one!</div>` : `
+        <div class="chip-row" style="margin-bottom:14px;">
+          ${REEL_CATEGORIES.map((c) => `<button class="filter-chip ${state.reelFilter === c ? 'active' : ''}" data-reel-cat="${c}">${c}</button>`).join('')}
+        </div>
+        ${reels.length === 0 ? `<div class="muted">No Reels match this category yet.</div>` : `
           <div class="grid-cards">
             ${reels.map((r) => {
               const author = resolveAuthor(r.authorId, r.authorName, r.authorAvatar);
               const hex = /^#[0-9A-Fa-f]{6}$/.test(r.coverHex || '') ? r.coverHex : '#1E1B4B';
+              const isMine = r.authorId === uid || isAdminUser();
+              const isSaved = state.savedPostIds.has(r.id);
               return `
                 <div class="card" style="padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--elevated);">
-                  <div class="open-user-profile" data-uid="${esc(r.authorId)}" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                    ${avatarHtml(author.name, author.avatar, 32, author.online)}
-                    <div style="min-width:0;">
-                      <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(author.name)}</div>
-                      <div class="muted" style="font-size:11px;">${esc(r.category || 'Reel')}</div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
+                    <div class="open-user-profile" data-uid="${esc(r.authorId)}" style="display:flex;align-items:center;gap:8px;cursor:pointer;min-width:0;">
+                      ${avatarHtml(author.name, author.avatar, 32, author.online)}
+                      <div style="min-width:0;">
+                        <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(author.name)}</div>
+                        <div class="muted" style="font-size:11px;">${esc(r.category || 'Reel')}</div>
+                      </div>
+                    </div>
+                    <div style="display:flex;gap:4px;">
+                      <button class="icon-btn save-reel-btn" data-reel-id="${esc(r.id)}" title="Save Reel" style="width:28px;height:28px;color:${isSaved ? 'var(--violet-light)' : 'var(--muted)'};">${iconSvg('bookmark', 15)}</button>
+                      ${isMine ? `<button class="icon-btn delete-reel-btn" data-reel-id="${esc(r.id)}" title="Delete Reel" style="width:28px;height:28px;color:var(--rose);">${iconSvg('trash', 15)}</button>` : ''}
                     </div>
                   </div>
                   ${r.videoUri ? mediaVideoHtml(r.videoUri, '', 'controls playsinline style="width:100%;height:280px;object-fit:cover;border-radius:12px;background:#000;"') : `<div style="height:210px;border-radius:12px;background:${hex};display:flex;align-items:center;justify-content:center;padding:14px;text-align:center;font-weight:700;color:#fff;">${esc(r.caption)}</div>`}
                   <div style="font-size:13px;line-height:1.4;">${esc(r.caption)}</div>
-                  <div style="display:flex;gap:8px;">
-                    <button class="action-pill like-reel-btn" data-reel-id="${esc(r.id)}" style="background:var(--card);">${iconSvg('like', 16)}<span>${r.likesCount || 0}</span></button>
-                    <button class="action-pill msg-person-btn" data-uid="${esc(r.authorId)}" style="background:var(--card);">${iconSvg('chat', 16)}<span>Message</span></button>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <button class="action-pill like-reel-btn" data-reel-id="${esc(r.id)}" style="background:var(--card);">${iconSvg('like', 15)}<span>${r.likesCount || 0}</span></button>
+                    <button class="action-pill open-reel-comments-btn" data-reel-id="${esc(r.id)}" style="background:var(--card);">${iconSvg('comment', 15)}<span>${r.commentsCount || 0}</span></button>
+                    <button class="action-pill msg-person-btn" data-uid="${esc(r.authorId)}" style="background:var(--card);">${iconSvg('chat', 15)}<span>Chat</span></button>
                   </div>
                 </div>
               `;
@@ -1598,91 +1858,118 @@ function renderCenterStage() {
       }
     }
 
-    const groups = state.groups.filter((g) => !q || (g.name || '').toLowerCase().includes(q));
-    return `
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
-          <div>
-            <h3 style="margin:0;">Groups (${groups.length})</h3>
-            <div class="muted">Communities & private circles</div>
-          </div>
-          <button class="btn btn-primary" id="openCreateGroupBtn">${iconSvg('plus', 16)}<span>Create Group</span></button>
-        </div>
-        ${groups.length === 0 ? `<div class="muted">No groups found. Create the first one!</div>` : `
-          <div class="grid-cards">
-            ${groups.map((g) => {
-              const joined = (g.memberUids || []).includes(uid);
-              const isCreator = g.creatorId === uid;
-              return `
-                <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:8px;background:var(--elevated);">
-                  <div class="open-group-btn" data-group-id="${esc(g.id)}" style="cursor:pointer;">
-                    <div style="font-weight:800;font-size:15.5px;">${esc(g.name)}</div>
-                    <div class="muted">${esc(g.category || 'Community')} · ${esc(g.privacy)} · ${(g.memberUids || []).length} members</div>
-                    <div style="font-size:13px;line-height:1.45;margin-top:6px;">${esc(g.description || '')}</div>
-                  </div>
-                  <div style="margin-top:auto;padding-top:6px;display:flex;gap:8px;">
-                    <button class="btn btn-secondary open-group-btn" data-group-id="${esc(g.id)}" style="flex:1;">Open</button>
-                    ${isCreator ? `<span class="badge">Admin</span>` : `<button class="btn ${joined ? 'btn-secondary' : 'btn-primary'} join-group-btn" data-group-id="${esc(g.id)}">${joined ? 'Joined' : 'Join'}</button>`}
+  if (state.tab === 'sos') return renderSosTab();
+  if (state.tab === 'settings') return renderSettingsTab();
+  if (state.tab === 'owner_profile') return renderOwnerProfileTab();
+  if (state.tab === 'owner_dashboard') return renderOwnerDashboardTab();
+
+  if (state.tab === 'groups') {
+    if (state.activeGroupId) {
+      const grp = state.groups.find((g) => g.id === state.activeGroupId);
+      if (grp) {
+        const joined = (grp.memberUids || []).includes(uid);
+        const isGroupAdmin = grp.creatorId === uid || (grp.adminUids || []).includes(uid) || isAdminUser();
+        const grpPosts = state.posts.filter((p) => p.groupId === grp.id);
+        const grpAlerts = (state.sosAlertsByGroup[grp.id] || []).slice(0, 6);
+        return `
+          <div style="display:flex;flex-direction:column;gap:14px;">
+            <div class="card">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <button class="icon-btn" id="backToGroupsBtn">${iconSvg('back', 18)}</button>
+                  <div>
+                    <h2 style="margin:0;">${esc(grp.name)}</h2>
+                    <div class="muted">${esc(grp.category || 'Community')} · ${esc(grp.privacy)} · ${(grp.memberUids || []).length} members ${grp.sosEnabled ? '· 🚨 SOS Circle' : ''}</div>
                   </div>
                 </div>
-              `;
-            }).join('')}
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                  ${joined && grp.sosEnabled !== false ? `<button class="btn btn-danger trigger-sos-open-btn" data-group-id="${esc(grp.id)}">🚨 SOS</button>` : ''}
+                  ${isGroupAdmin ? `<button class="btn btn-secondary manage-group-btn" data-group-id="${esc(grp.id)}">Manage Members</button>` : ''}
+                  ${grp.creatorId === uid || isAdminUser() ? `<button class="btn btn-secondary delete-group-btn" data-group-id="${esc(grp.id)}" style="color:var(--rose);">Delete</button>` : ''}
+                  ${grp.creatorId !== uid ? `<button class="btn ${joined ? 'btn-secondary' : 'btn-primary'} join-group-btn" data-group-id="${esc(grp.id)}">${joined ? 'Leave' : 'Join Group'}</button>` : ''}
+                </div>
+              </div>
+              ${grp.description ? `<div style="margin-top:10px;font-size:14px;">${esc(grp.description)}</div>` : ''}
+            </div>
+            ${grpAlerts.length ? `
+              <div class="card sos-alert-card">
+                <div style="font-weight:800;margin-bottom:8px;">Private SOS History (${grpAlerts.length})</div>
+                ${grpAlerts.map((al) => `
+                  <div style="padding:8px 10px;border-radius:10px;background:rgba(244,63,94,0.1);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <div><strong>${esc(al.senderName)}</strong> (${esc(al.status)}): ${esc(al.message)}</div>
+                    ${al.status === 'active' && al.senderId === uid ? `<button class="btn btn-secondary stop-sos-btn" data-group-id="${esc(grp.id)}" data-alert-id="${esc(al.id)}" data-status="stopped">Stop</button>` : `<span class="muted">${fmtTime(al.createdAt)}</span>`}
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+            ${joined ? `
+              <div class="card composer">
+                <textarea id="postDraftInput" rows="2" placeholder="Share something with ${esc(grp.name)}...">${esc(state.postDraft)}</textarea>
+                ${state.postMediaPreview ? `
+                  <div class="preview-wrap">
+                    ${state.postMediaFile?.type?.startsWith('video/') ? `<video controls src="${esc(state.postMediaPreview)}"></video>` : `<img src="${esc(state.postMediaPreview)}" alt="Preview" />`}
+                    <button class="preview-remove-btn" id="clearPostMediaBtn" type="button">${iconSvg('close', 16)}</button>
+                  </div>
+                ` : ''}
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px;">
+                  <button class="btn btn-secondary" id="pickPostMediaBtn" type="button">${iconSvg('photo', 16)}<span>${state.postMediaFile ? 'Change Photo/Video' : 'Photo / Video'}</span></button>
+                  <button class="btn btn-primary" id="publishGroupPostBtn" data-group-id="${esc(grp.id)}" ${state.isUploading ? 'disabled' : ''}>${state.isUploading ? 'Uploading...' : 'Post to Group'}</button>
+                </div>
+              </div>
+            ` : ''}
+            <div class="feed-list">
+              ${grpPosts.length === 0 ? `<div class="card muted">No posts in this group yet.</div>` : grpPosts.map((p) => renderPostCard(p)).join('')}
+            </div>
           </div>
-        `}
+        `;
+      }
+    }
+
+    const groups = state.groups.filter((g) => !q || (g.name || '').toLowerCase().includes(q));
+    return `
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:linear-gradient(135deg,rgba(244,63,94,0.16),rgba(124,58,237,0.12));border-color:rgba(244,63,94,0.35);">
+          <div>
+            <div style="font-weight:800;">🚨 Emergency SOS Hub</div>
+            <div class="muted">Alert your private group circles with optional live location.</div>
+          </div>
+          <button class="btn btn-danger" data-tab="sos">Open SOS Center</button>
+        </div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+            <div>
+              <h3 style="margin:0;">Groups (${groups.length})</h3>
+              <div class="muted">Communities & private circles</div>
+            </div>
+            <button class="btn btn-primary" id="openCreateGroupBtn">${iconSvg('plus', 16)}<span>Create Group</span></button>
+          </div>
+          ${groups.length === 0 ? `<div class="muted">No groups found. Create the first one!</div>` : `
+            <div class="grid-cards">
+              ${groups.map((g) => {
+                const joined = (g.memberUids || []).includes(uid);
+                const isCreator = g.creatorId === uid;
+                return `
+                  <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:8px;background:var(--elevated);">
+                    <div class="open-group-btn" data-group-id="${esc(g.id)}" style="cursor:pointer;">
+                      <div style="font-weight:800;font-size:15.5px;">${esc(g.name)} ${g.sosEnabled ? '<span class="badge" style="color:#FB7185;">SOS</span>' : ''}</div>
+                      <div class="muted">${esc(g.category || 'Community')} · ${esc(g.privacy)} · ${(g.memberUids || []).length} members</div>
+                      <div style="font-size:13px;line-height:1.45;margin-top:6px;">${esc(g.description || '')}</div>
+                    </div>
+                    <div style="margin-top:auto;padding-top:6px;display:flex;gap:8px;">
+                      <button class="btn btn-secondary open-group-btn" data-group-id="${esc(g.id)}" style="flex:1;">Open</button>
+                      ${isCreator ? `<span class="badge">Admin</span>` : `<button class="btn ${joined ? 'btn-secondary' : 'btn-primary'} join-group-btn" data-group-id="${esc(g.id)}">${joined ? 'Joined' : 'Join'}</button>`}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `}
+        </div>
       </div>
     `;
   }
 
-  if (state.tab === 'secret_love') {
-    const allowLove = state.me?.acceptSecretLove !== false;
-    return `
-      <div style="display:flex;flex-direction:column;gap:14px;">
-        <div class="love-hero">
-          <div style="font-size:22px;font-weight:800;">Secret Love ❤️</div>
-          <div style="font-size:13.5px;opacity:0.9;margin-top:4px;">Anonymous admirer notes, Pure Love badges & mutual vault alerts synced with your Android app.</div>
-        </div>
-        <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
-          <div>
-            <div style="font-weight:700;">Allow Secret Love messages</div>
-            <div class="muted">Let admirers send anonymous notes to your HELLO Inbox</div>
-          </div>
-          <button class="btn ${allowLove ? 'btn-primary' : 'btn-secondary'}" id="toggleAcceptLoveBtn">${allowLove ? 'Enabled ✓' : 'Disabled'}</button>
-        </div>
-        <div class="chip-row">
-          <button class="filter-chip ${state.secretTab === 'inbox' ? 'active' : ''}" data-secret-tab="inbox">Inbox (${state.secretInbox.length})</button>
-          <button class="filter-chip ${state.secretTab === 'sent' ? 'active' : ''}" data-secret-tab="sent">Sent (${state.secretSent.length})</button>
-        </div>
-        ${state.secretTab === 'inbox' ? `
-          <div style="display:flex;flex-direction:column;gap:10px;">
-            ${state.secretInbox.length === 0 ? `<div class="card muted">No Secret Love messages yet. When someone sends an anonymous compliment to you, it appears here.</div>` : state.secretInbox.map((m) => `
-              <div class="card" style="display:flex;flex-direction:column;gap:8px;${m.isRead ? '' : 'border-color:var(--rose);'}">
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                  <span style="font-weight:800;font-size:15px;">${esc(m.moodEmoji || '❤️')} ${m.isRevealed ? `From ${esc(m.revealedSenderName)}` : 'Anonymous Admirer'}</span>
-                  <span class="muted" style="font-size:11px;">${fmtTime(m.createdAt)}</span>
-                </div>
-                ${m.senderBadgeTitle ? `<span class="badge">${esc(m.senderBadgeTitle)} · Day ${m.senderTrialDays || 0}</span>` : ''}
-                <div style="font-size:14.5px;line-height:1.5;">${esc(m.message)}</div>
-                <div style="display:flex;gap:8px;">
-                  ${!m.isRead ? `<button class="btn btn-secondary mark-love-read-btn" data-love-id="${esc(m.id)}">Mark Read</button>` : ''}
-                  <button class="btn btn-secondary block-love-btn" data-love-id="${esc(m.id)}">Block</button>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        ` : `
-          <div style="display:flex;flex-direction:column;gap:10px;">
-            ${state.secretSent.length === 0 ? `<div class="card muted">No sent Secret Love notes yet. Complete the Day 7 Pure Love Quest in the HELLO Android app to send anonymous notes!</div>` : state.secretSent.map((s) => `
-              <div class="card">
-                <div style="font-weight:700;">To ${esc(s.recipientName || 'Recipient')} ${esc(s.moodEmoji || '❤️')}</div>
-                <div style="margin-top:4px;font-size:14px;">${esc(s.message)}</div>
-                <div class="muted" style="margin-top:6px;">${s.isRevealed ? 'Identity revealed ✓' : 'Anonymous'}</div>
-              </div>
-            `).join('')}
-          </div>
-        `}
-      </div>
-    `;
-  }
+  if (state.tab === 'secret_love') return renderSecretLoveFull();
 
   if (state.tab === 'hub') {
     const me = state.me || { displayName: state.user.displayName || 'Hello Member', photoUrl: state.user.photoURL || '' };
@@ -1690,16 +1977,22 @@ function renderCenterStage() {
       ['feed', 'home', 'Home Feed', 'Posts & stories'],
       ['friends', 'friends', 'Friends', 'Requests & people'],
       ['groups', 'groups', 'Groups', 'Circles & communities'],
+      ['sos', 'shield', 'Emergency SOS', 'Private circle alerts'],
       ['reels', 'reels', 'Reels', 'Short creator clips'],
       ['messenger', 'chat', 'Messenger', 'Direct & group chats'],
       ['notifications', 'bell', 'Notifications', 'All alerts'],
       ['marketplace', 'shop', 'Marketplace', 'Buy & sell locally'],
       ['pages', 'flag', 'Pages', 'Creators & brands'],
       ['events', 'event', 'Events', 'Meetups & RSVPs'],
-      ['secret_love', 'heart', 'Secret Love ❤️', 'Anonymous notes'],
-      ['saved', 'bookmark', 'Saved Posts', `${state.savedPostIds.size} bookmarked`],
-      ['search', 'search', 'Search', 'Find everything on HELLO']
+      ['secret_love', 'heart', 'Secret Love ❤️', 'Vault & Pure Love Quest'],
+      ['saved', 'bookmark', 'Saved Items', `${state.savedPostIds.size} bookmarked`],
+      ['search', 'search', 'Search', 'Find everything on HELLO'],
+      ['settings', 'user', 'Settings & Privacy', 'Incognito, blocked & alerts'],
+      ['owner_profile', 'verified', 'HELLO Founder', 'Verified creator card']
     ];
+    if (isAdminUser()) {
+      tiles.push(['owner_dashboard', 'shield', 'Owner Command', 'Governance, admins & reports']);
+    }
     return `
       <div style="display:flex;flex-direction:column;gap:14px;">
         <div class="card open-my-profile" style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;">
@@ -1713,7 +2006,7 @@ function renderCenterStage() {
           <span class="badge">View Profile</span>
         </div>
 
-        <h3 style="margin:4px 0 0;">Explore HELLO</h3>
+        <h3 style="margin:4px 0 0;">Explore HELLO (A to Z)</h3>
         <div class="hub-grid">
           ${tiles.map(([tKey, ic, title, sub]) => `
             <button class="hub-tile" data-tab="${tKey}">
@@ -1742,6 +2035,7 @@ function renderCenterStage() {
   if (state.tab === 'marketplace') {
     const cats = ['All', 'Electronics', 'Vehicles', 'Home', 'Fashion', 'Services', 'Other'];
     const items = state.marketplace.filter((m) => {
+      if (state.blockedUids.has(m.sellerId)) return false;
       const catOk = state.marketCat === 'All' || (m.category || '').toLowerCase() === state.marketCat.toLowerCase();
       const qOk = !q || (m.title || '').toLowerCase().includes(q) || (m.description || '').toLowerCase().includes(q);
       return catOk && qOk;
@@ -1761,7 +2055,7 @@ function renderCenterStage() {
         ${items.length === 0 ? `<div class="muted">No Marketplace listings yet.</div>` : `
           <div class="grid-cards">
             ${items.map((item) => {
-              const isMine = item.sellerId === uid;
+              const isMine = item.sellerId === uid || isAdminUser();
               return `
                 <div class="card" style="padding:12px;display:flex;flex-direction:column;gap:6px;background:var(--elevated);">
                   ${item.imageUri ? mediaImgHtml(item.imageUri, 'market-img open-lightbox', item.title, `data-lightbox-uri="${esc(item.imageUri)}"`) : `<div class="market-img" style="display:flex;align-items:center;justify-content:center;color:var(--muted);">No photo</div>`}
@@ -1772,9 +2066,15 @@ function renderCenterStage() {
                   <div style="font-weight:700;">${esc(item.title)}</div>
                   <div class="muted" style="font-size:12px;">${esc(item.condition || 'Available')} · ${esc(item.locationText || 'Local')}</div>
                   ${isMine ? `
-                    <button class="btn btn-secondary toggle-sold-btn" data-item-id="${esc(item.id)}" style="margin-top:6px;">${item.status === 'sold' ? 'Mark Available' : 'Mark Sold'}</button>
+                    <div style="display:flex;gap:6px;margin-top:6px;">
+                      <button class="btn btn-secondary toggle-sold-btn" data-item-id="${esc(item.id)}" style="flex:1;">${item.status === 'sold' ? 'Mark Available' : 'Mark Sold'}</button>
+                      <button class="btn btn-danger delete-mkt-btn" data-item-id="${esc(item.id)}">${iconSvg('trash', 15)}</button>
+                    </div>
                   ` : `
-                    <button class="btn btn-primary market-msg-btn" data-item-id="${esc(item.id)}" style="margin-top:6px;">${iconSvg('chat', 15)}<span>Message Seller</span></button>
+                    <div style="display:flex;gap:6px;margin-top:6px;">
+                      <button class="btn btn-primary market-msg-btn" data-item-id="${esc(item.id)}" style="flex:1;">${iconSvg('chat', 15)}<span>Message</span></button>
+                      <button class="btn btn-secondary report-open-btn" data-rtype="listing" data-rid="${esc(item.id)}">Report</button>
+                    </div>
                   `}
                 </div>
               `;
@@ -1800,12 +2100,16 @@ function renderCenterStage() {
           <div class="grid-cards">
             ${pages.map((pg) => {
               const following = (pg.followerUids || []).includes(uid);
+              const isMine = pg.creatorId === uid || isAdminUser();
               return `
                 <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:8px;background:var(--elevated);">
                   <div style="font-weight:800;font-size:15.5px;">${esc(pg.name)}</div>
                   <div class="muted">${esc(pg.category)} · ${pg.followersCount || 0} followers</div>
                   ${pg.bio ? `<div style="font-size:13px;">${esc(pg.bio)}</div>` : ''}
-                  <button class="btn ${following ? 'btn-secondary' : 'btn-primary'} follow-page-btn" data-page-id="${esc(pg.id)}" style="margin-top:auto;">${following ? 'Following ✓' : 'Follow Page'}</button>
+                  <div style="display:flex;gap:6px;margin-top:auto;">
+                    <button class="btn ${following ? 'btn-secondary' : 'btn-primary'} follow-page-btn" data-page-id="${esc(pg.id)}" style="flex:1;">${following ? 'Following ✓' : 'Follow Page'}</button>
+                    ${isMine ? `<button class="btn btn-danger delete-page-btn" data-page-id="${esc(pg.id)}">${iconSvg('trash', 15)}</button>` : ''}
+                  </div>
                 </div>
               `;
             }).join('')}
@@ -1831,9 +2135,13 @@ function renderCenterStage() {
             ${events.map((ev) => {
               const going = (ev.goingUids || []).includes(uid);
               const interested = (ev.interestedUids || []).includes(uid);
+              const isMine = ev.creatorId === uid || isAdminUser();
               return `
                 <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:8px;background:var(--elevated);">
-                  <div style="font-weight:800;font-size:15.5px;">${esc(ev.title)}</div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div style="font-weight:800;font-size:15.5px;">${esc(ev.title)}</div>
+                    ${isMine ? `<button class="icon-btn delete-event-btn" data-event-id="${esc(ev.id)}" style="width:28px;height:28px;color:var(--rose);">${iconSvg('trash', 15)}</button>` : ''}
+                  </div>
                   <div class="badge">${esc(ev.eventDateText)} · ${esc(ev.eventTimeText)}</div>
                   <div class="muted">${esc(ev.locationName)}</div>
                   ${ev.description ? `<div style="font-size:13px;">${esc(ev.description)}</div>` : ''}
@@ -1852,13 +2160,29 @@ function renderCenterStage() {
 
   if (state.tab === 'saved') {
     const savedPosts = state.posts.filter((p) => state.savedPostIds.has(p.id));
+    const savedReels = state.reels.filter((r) => state.savedPostIds.has(r.id));
     return `
       <div style="display:flex;flex-direction:column;gap:14px;">
         <div class="card">
-          <h3 style="margin:0;">Saved Posts (${savedPosts.length})</h3>
-          <div class="muted">Posts you bookmarked across HELLO Android & Desktop</div>
+          <h3 style="margin:0;">Saved Items (${savedPosts.length + savedReels.length})</h3>
+          <div class="muted">Posts and Reels you bookmarked across HELLO Android & Desktop</div>
         </div>
-        ${savedPosts.length === 0 ? `<div class="card muted">No saved posts yet. Tap the bookmark icon on any post to save it here.</div>` : savedPosts.map((p) => renderPostCard(p)).join('')}
+        ${savedReels.length ? `
+          <div class="card">
+            <h4 style="margin:0 0 10px;">Saved Reels (${savedReels.length})</h4>
+            <div class="grid-cards">
+              ${savedReels.map((r) => `
+                <div class="card" style="padding:12px;background:var(--elevated);">
+                  ${r.videoUri ? mediaVideoHtml(r.videoUri, '', 'controls playsinline style="width:100%;height:200px;border-radius:10px;background:#000;"') : ''}
+                  <div style="font-weight:700;margin-top:6px;">${esc(r.authorName)}</div>
+                  <div style="font-size:13px;">${esc(r.caption)}</div>
+                  <button class="btn btn-secondary save-reel-btn" data-reel-id="${esc(r.id)}" style="margin-top:8px;">Remove Bookmark</button>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+        ${savedPosts.length === 0 && savedReels.length === 0 ? `<div class="card muted">No saved items yet. Tap the bookmark icon on any post or Reel to save it here.</div>` : savedPosts.map((p) => renderPostCard(p)).join('')}
       </div>
     `;
   }
@@ -1873,7 +2197,10 @@ function renderCenterStage() {
             <h3 style="margin:0;">Notifications</h3>
             <div class="muted">${unreadCount ? `${unreadCount} unread alerts` : 'All caught up across HELLO'}</div>
           </div>
-          ${unreadCount ? `<button class="btn btn-secondary" id="markAllReadBtn">${iconSvg('check', 16)}<span>Mark all read</span></button>` : ''}
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            ${unreadCount ? `<button class="btn btn-secondary" id="markAllReadBtn">${iconSvg('check', 16)}<span>Mark all read</span></button>` : ''}
+            ${state.notifications.length ? `<button class="btn btn-secondary" id="clearAllNotifsBtn">${iconSvg('trash', 15)}<span>Clear All</span></button>` : ''}
+          </div>
         </div>
         <div class="chip-row">
           <button class="filter-chip ${state.notifFilter === 'all' ? 'active' : ''}" data-notif-filter="all">All (${state.notifications.length})</button>
@@ -1894,18 +2221,34 @@ function renderCenterStage() {
   }
 
   if (state.tab === 'search') {
-    const peopleHits = state.users.filter((u) => !q || (u.displayName || '').toLowerCase().includes(q) || (u.handle || '').toLowerCase().includes(q)).slice(0, 12);
+    const peopleHits = state.users.filter((u) => !state.blockedUids.has(u.userId || u.id) && (!q || (u.displayName || '').toLowerCase().includes(q) || (u.handle || '').toLowerCase().includes(q))).slice(0, 12);
     const postHits = state.posts.filter((p) => !q || (p.content || '').toLowerCase().includes(q) || (p.authorName || '').toLowerCase().includes(q)).slice(0, 12);
     const groupHits = state.groups.filter((g) => !q || (g.name || '').toLowerCase().includes(q)).slice(0, 8);
+    const mktHits = state.marketplace.filter((m) => !q || (m.title || '').toLowerCase().includes(q) || (m.description || '').toLowerCase().includes(q)).slice(0, 8);
+    const showAll = state.searchScope === 'all';
+
     return `
       <div style="display:flex;flex-direction:column;gap:14px;">
-        <div class="card">
+        <div class="card" style="display:flex;flex-direction:column;gap:10px;">
           <div style="display:flex;align-items:center;gap:10px;background:var(--elevated);border:1px solid var(--border);border-radius:999px;padding:8px 16px;">
             ${iconSvg('search', 18)}
             <input id="globalSearchInput" type="search" placeholder="Search people, posts, groups, marketplace..." value="${esc(state.search)}" style="flex:1;background:transparent;border:none;outline:none;color:var(--text);font-size:14.5px;" />
+            ${q ? `<button class="btn btn-secondary" id="saveRecentSearchBtn" style="padding:4px 10px;min-height:28px;font-size:11.5px;">Save</button>` : ''}
           </div>
+          <div class="chip-row">
+            ${[['all', 'All'], ['people', 'People'], ['posts', 'Posts'], ['groups', 'Groups'], ['marketplace', 'Marketplace']].map(([k, lbl]) => `
+              <button class="filter-chip ${state.searchScope === k ? 'active' : ''}" data-search-scope="${k}">${lbl}</button>
+            `).join('')}
+          </div>
+          ${state.recentSearches.length ? `
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+              <span class="muted" style="font-size:11.5px;">Recent:</span>
+              ${state.recentSearches.map((term) => `<button class="filter-chip recent-search-pill" data-term="${esc(term)}" style="padding:3px 10px;font-size:11.5px;">${esc(term)}</button>`).join('')}
+              <button class="msg-mini-btn" id="clearRecentSearchBtn">Clear</button>
+            </div>
+          ` : ''}
         </div>
-        ${peopleHits.length ? `
+        ${(showAll || state.searchScope === 'people') && peopleHits.length ? `
           <div class="card">
             <h4 style="margin:0 0 10px;">People (${peopleHits.length})</h4>
             <div style="display:flex;flex-direction:column;gap:6px;">
@@ -1918,7 +2261,7 @@ function renderCenterStage() {
             </div>
           </div>
         ` : ''}
-        ${groupHits.length ? `
+        ${(showAll || state.searchScope === 'groups') && groupHits.length ? `
           <div class="card">
             <h4 style="margin:0 0 10px;">Groups (${groupHits.length})</h4>
             <div style="display:flex;flex-direction:column;gap:6px;">
@@ -1931,7 +2274,20 @@ function renderCenterStage() {
             </div>
           </div>
         ` : ''}
-        ${postHits.map((p) => renderPostCard(p)).join('')}
+        ${(showAll || state.searchScope === 'marketplace') && mktHits.length ? `
+          <div class="card">
+            <h4 style="margin:0 0 10px;">Marketplace (${mktHits.length})</h4>
+            <div class="grid-cards">
+              ${mktHits.map((m) => `
+                <div class="card" style="padding:10px;background:var(--elevated);">
+                  <div style="font-weight:700;">${esc(m.title)}</div>
+                  <div class="muted">${esc(m.currency || '$')}${Number(m.price || 0).toFixed(2)} · ${esc(m.locationText || '')}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+        ${(showAll || state.searchScope === 'posts') ? postHits.map((p) => renderPostCard(p)).join('') : ''}
       </div>
     `;
   }
@@ -1941,6 +2297,11 @@ function renderCenterStage() {
     const isMe = viewUid === uid;
     const person = isMe ? (state.me || {}) : (state.usersById[viewUid] || {});
     const myPosts = state.posts.filter((p) => p.authorId === viewUid);
+    const myReels = state.reels.filter((r) => r.authorId === viewUid);
+    const myPhotos = myPosts.filter((p) => p.mediaType === 'image' && p.mediaUri);
+    const savedPosts = isMe ? state.posts.filter((p) => state.savedPostIds.has(p.id)) : [];
+    const pTab = state.profileTab || 'posts';
+
     return `
       <div style="display:flex;flex-direction:column;gap:14px;">
         <div class="card" style="padding:14px;">
@@ -1960,7 +2321,10 @@ function renderCenterStage() {
           ${person.bio ? `<div style="padding:12px 14px 4px;font-size:14px;">${esc(person.bio)}</div>` : ''}
           ${isMe ? `
             <div style="padding:12px 14px 4px;display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--border);margin-top:12px;">
-              <div style="font-weight:700;font-size:14px;">Edit Profile</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-weight:700;font-size:14px;">Edit Profile</span>
+                <button class="btn btn-secondary" data-tab="settings" style="min-height:30px;padding:4px 10px;font-size:12px;">Settings & Privacy</button>
+              </div>
               <input class="field" id="profNameInput" placeholder="Display Name" value="${esc(person.displayName || '')}" />
               <textarea class="field" id="profBioInput" rows="2" placeholder="Bio">${esc(person.bio || '')}</textarea>
               <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
@@ -1973,10 +2337,21 @@ function renderCenterStage() {
             <div style="padding:12px 14px 4px;display:flex;gap:8px;flex-wrap:wrap;">
               <button class="btn btn-primary msg-person-btn" data-uid="${esc(viewUid)}">${iconSvg('chat', 16)}<span>Message</span></button>
               <button class="btn btn-secondary follow-btn" data-uid="${esc(viewUid)}">${state.follows.some((f) => f.targetUid === viewUid) ? 'Following' : 'Follow'}</button>
+              <button class="btn btn-secondary report-open-btn" data-rtype="user" data-rid="${esc(viewUid)}">Report</button>
+              <button class="btn btn-danger block-user-btn" data-uid="${esc(viewUid)}" data-name="${esc(person.displayName || 'User')}">Block</button>
             </div>
           `}
         </div>
-        ${myPosts.map((p) => renderPostCard(p)).join('')}
+        <div class="chip-row">
+          <button class="filter-chip ${pTab === 'posts' ? 'active' : ''}" data-prof-tab="posts">Posts (${myPosts.length})</button>
+          <button class="filter-chip ${pTab === 'reels' ? 'active' : ''}" data-prof-tab="reels">Reels (${myReels.length})</button>
+          <button class="filter-chip ${pTab === 'photos' ? 'active' : ''}" data-prof-tab="photos">Photos (${myPhotos.length})</button>
+          ${isMe ? `<button class="filter-chip ${pTab === 'saved' ? 'active' : ''}" data-prof-tab="saved">Saved (${savedPosts.length})</button>` : ''}
+        </div>
+        ${pTab === 'posts' ? (myPosts.length ? myPosts.map((p) => renderPostCard(p)).join('') : `<div class="card muted">No posts yet.</div>`) : ''}
+        ${pTab === 'reels' ? (myReels.length ? `<div class="grid-cards">${myReels.map((r) => `<div class="card" style="padding:10px;">${r.videoUri ? mediaVideoHtml(r.videoUri, '', 'controls playsinline style="width:100%;height:210px;border-radius:10px;background:#000;"') : ''}<div style="margin-top:6px;font-size:13px;">${esc(r.caption)}</div></div>`).join('')}</div>` : `<div class="card muted">No Reels yet.</div>`) : ''}
+        ${pTab === 'photos' ? (myPhotos.length ? `<div class="grid-cards">${myPhotos.map((p) => `<div class="card" style="padding:8px;">${mediaImgHtml(p.mediaUri, 'market-img open-lightbox', 'Photo', `data-lightbox-uri="${esc(p.mediaUri)}"`)}</div>`).join('')}</div>` : `<div class="card muted">No photos yet.</div>`) : ''}
+        ${pTab === 'saved' && isMe ? (savedPosts.length ? savedPosts.map((p) => renderPostCard(p)).join('') : `<div class="card muted">No saved posts yet.</div>`) : ''}
       </div>
     `;
   }
@@ -2073,20 +2448,36 @@ function renderModals() {
     const s = state.activeStory;
     const author = resolveAuthor(s.authorId, s.authorName, s.authorAvatar);
     const hex = /^#[0-9A-Fa-f]{6}$/.test(s.backgroundHex || '') ? s.backgroundHex : '#1E1B4B';
+    const storyReacts = state.storyReactionsById[s.id] || [];
+    const isMyStory = s.authorId === uid || isAdminUser();
     html += `
       <div class="modal-backdrop" id="modalBackdrop">
         <div class="modal-card story-viewer-card">
           <div style="padding:14px;display:flex;justify-content:space-between;align-items:center;background:rgba(11,14,30,0.88);">
             <div style="display:flex;align-items:center;gap:10px;">
               ${avatarHtml(author.name, author.avatar, 36, false)}
-              <div><div style="font-weight:700;">${esc(author.name)}</div><div class="muted" style="font-size:11px;">${fmtTime(s.createdAt)}</div></div>
+              <div><div style="font-weight:700;">${esc(author.name)}</div><div class="muted" style="font-size:11px;">${fmtTime(s.createdAt)} · ${s.viewersCount || 0} views</div></div>
             </div>
-            <button class="icon-btn close-modals-btn" style="width:34px;height:34px;">${iconSvg('close', 18)}</button>
+            <div style="display:flex;gap:6px;align-items:center;">
+              ${s.authorId === uid ? `<button class="btn btn-secondary" id="toggleStoryHighlightBtn" style="padding:4px 9px;min-height:28px;font-size:11px;">${s.isSavedHighlight ? '★ Highlight' : 'Save Highlight'}</button>` : ''}
+              ${isMyStory ? `<button class="icon-btn" id="deleteStoryBtn" style="width:30px;height:30px;color:#FB7185;">${iconSvg('trash', 15)}</button>` : ''}
+              <button class="icon-btn close-modals-btn" style="width:34px;height:34px;">${iconSvg('close', 18)}</button>
+            </div>
           </div>
-          <div style="min-height:380px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:${hex};padding:18px;text-align:center;">
-            ${s.mediaUri && s.mediaType === 'video' ? mediaVideoHtml(s.mediaUri, '', 'controls autoplay playsinline style="max-width:100%;max-height:420px;border-radius:12px;"') : ''}
-            ${s.mediaUri && s.mediaType !== 'video' ? mediaImgHtml(s.mediaUri, '', 'Story', 'style="max-width:100%;max-height:420px;border-radius:12px;"') : ''}
+          <div style="min-height:340px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:${hex};padding:18px;text-align:center;">
+            ${s.mediaUri && s.mediaType === 'video' ? mediaVideoHtml(s.mediaUri, '', 'controls autoplay playsinline style="max-width:100%;max-height:380px;border-radius:12px;"') : ''}
+            ${s.mediaUri && s.mediaType !== 'video' ? mediaImgHtml(s.mediaUri, '', 'Story', 'style="max-width:100%;max-height:380px;border-radius:12px;"') : ''}
             ${s.caption ? `<div style="margin-top:12px;font-size:16px;font-weight:700;color:#fff;">${esc(s.caption)}</div>` : ''}
+          </div>
+          <div style="padding:12px;background:#111428;display:flex;flex-direction:column;gap:8px;">
+            ${storyReacts.length ? `<div style="font-size:12px;color:#CBD5E1;max-height:70px;overflow-y:auto;">${storyReacts.map((sr) => `<div><strong>${esc(sr.userName)}</strong> ${esc(sr.emoji)} ${sr.replyText ? esc(sr.replyText) : ''}</div>`).join('')}</div>` : ''}
+            <div style="display:flex;justify-content:space-around;gap:6px;">
+              ${STORY_REACTIONS.map((em) => `<button type="button" class="reaction-emoji-btn react-story-btn" data-emoji="${em}">${em}</button>`).join('')}
+            </div>
+            <div style="display:flex;gap:6px;">
+              <input class="field" id="storyReplyInput" placeholder="Reply to story..." style="background:#1B203B;color:#fff;" />
+              <button class="btn btn-primary" id="sendStoryReplyBtn">Send</button>
+            </div>
           </div>
         </div>
       </div>
@@ -2100,6 +2491,10 @@ function renderModals() {
             <button class="icon-btn close-modals-btn" style="width:34px;height:34px;">${iconSvg('close', 18)}</button>
           </div>
           <input class="field" id="storyCaptionInput" placeholder="Write a story caption..." value="${esc(state.storyDraftCaption)}" />
+          <select class="select-field" id="storyPrivacySelect">
+            <option value="public" ${state.storyPrivacy === 'public' ? 'selected' : ''}>Public Story</option>
+            <option value="friends" ${state.storyPrivacy === 'friends' ? 'selected' : ''}>Friends Only</option>
+          </select>
           <div style="display:flex;gap:8px;align-items:center;">
             <span class="muted" style="font-size:12px;">Theme:</span>
             ${['#1E1B4B', '#FF5A5F', '#7C3AED', '#0F766E', '#E11D48'].map((hex) => `
@@ -2183,6 +2578,10 @@ function renderModals() {
             <option value="private" ${state.grpPrivacy === 'private' ? 'selected' : ''}>Private Circle</option>
           </select>
           <textarea class="field" id="grpDescInput" rows="2" placeholder="Description">${esc(state.grpDesc)}</textarea>
+          <label class="setting-row">
+            <span>Enable Emergency SOS Circle</span>
+            <input type="checkbox" id="grpSosChk" ${state.grpSosEnabled ? 'checked' : ''} />
+          </label>
           <button class="btn btn-primary" id="submitGroupBtn">Create Group</button>
         </div>
       </div>
@@ -2246,6 +2645,8 @@ function renderModals() {
         </div>
       </div>
     `;
+  } else {
+    html += renderFeatureModals();
   }
   return html;
 }
@@ -2312,6 +2713,12 @@ function renderShell() {
           </div>
         </header>
 
+        ${state.globalSettings?.maintenanceBanner ? `
+          <div style="max-width:1180px;width:100%;margin:10px auto 0;padding:0 16px;">
+            <div class="notice-box" style="font-weight:600;">📢 ${esc(state.globalSettings.maintenanceBanner)}</div>
+          </div>
+        ` : ''}
+
         ${state.statusBanner ? `
           <div style="max-width:1180px;width:100%;margin:10px auto 0;padding:0 16px;">
             <div class="${state.statusIsError ? 'error-box' : 'notice-box'}" style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
@@ -2340,10 +2747,13 @@ function renderShell() {
                 </div>
               </div>
               <div class="card" style="display:flex;flex-direction:column;gap:6px;padding:12px;">
+                <button class="side-item" data-tab="sos"><span class="side-item-left">${iconSvg('shield', 18)}<span>Emergency SOS</span></span></button>
                 <button class="side-item" data-tab="marketplace"><span class="side-item-left">${iconSvg('shop', 18)}<span>Marketplace</span></span></button>
                 <button class="side-item" data-tab="pages"><span class="side-item-left">${iconSvg('flag', 18)}<span>Pages</span></span></button>
                 <button class="side-item" data-tab="events"><span class="side-item-left">${iconSvg('event', 18)}<span>Events</span></span></button>
-                <button class="side-item" data-tab="saved"><span class="side-item-left">${iconSvg('bookmark', 18)}<span>Saved Posts</span></span></button>
+                <button class="side-item" data-tab="saved"><span class="side-item-left">${iconSvg('bookmark', 18)}<span>Saved Items</span></span></button>
+                <button class="side-item" data-tab="settings"><span class="side-item-left">${iconSvg('user', 18)}<span>Settings & Privacy</span></span></button>
+                ${isAdminUser() ? `<button class="side-item" data-tab="owner_dashboard"><span class="side-item-left">${iconSvg('verified', 18)}<span>Owner Dashboard</span></span></button>` : ''}
               </div>
             </aside>
           ` : ''}
@@ -2493,6 +2903,15 @@ function closeAllModals() {
   state.showCreatePageModal = false;
   state.showCreateEventModal = false;
   state.showNewGroupChatModal = false;
+  state.editPostTarget = null;
+  state.reportTarget = null;
+  state.shareTarget = null;
+  state.openReelCommentsId = null;
+  state.manageGroupModal = null;
+  state.sosModalGroup = null;
+  state.privateChatMatchId = null;
+  state.maskModalMatchId = null;
+  stopFeatureSubListeners();
 }
 
 function bindEvents() {
@@ -2604,6 +3023,7 @@ function bindEvents() {
   document.getElementById('openCreateStoryBtn')?.addEventListener('click', () => { state.showCreateStoryModal = true; render(); });
   document.getElementById('createStoryCardBtn')?.addEventListener('click', () => { state.showCreateStoryModal = true; render(); });
   document.getElementById('storyCaptionInput')?.addEventListener('input', (e) => { state.storyDraftCaption = e.target.value; });
+  document.getElementById('storyPrivacySelect')?.addEventListener('change', (e) => { state.storyPrivacy = e.target.value; });
   document.querySelectorAll('.story-bg-pick').forEach((b) => {
     b.addEventListener('click', () => { state.storyBgHex = b.getAttribute('data-hex'); render(); });
   });
@@ -2612,7 +3032,7 @@ function bindEvents() {
   document.querySelectorAll('.view-story-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const s = state.stories.find((x) => x.id === btn.getAttribute('data-story-id'));
-      if (s) { state.activeStory = s; render(); }
+      if (s) openStoryWithTracking(s);
     });
   });
   document.getElementById('submitStoryBtn')?.addEventListener('click', async () => {
@@ -2624,6 +3044,8 @@ function bindEvents() {
       const me = state.me || { displayName: state.user.displayName || 'Hello Member', photoUrl: state.user.photoURL || '' };
       const uri = file ? await uploadMediaBlob(file, '', 'Publishing story...') : '';
       const mType = file ? (file.type?.startsWith('video/') ? 'video' : 'image') : 'text';
+      const friendUids = state.friendships.flatMap((f) => f.participantUids || []).filter((x) => x !== state.user.uid);
+      const priv = state.storyPrivacy === 'friends' ? 'friends' : 'public';
       await addDoc(collection(db, 'stories'), {
         authorId: state.user.uid,
         authorName: (me.displayName || 'Hello Member').slice(0, 80),
@@ -2632,8 +3054,8 @@ function bindEvents() {
         mediaType: mType,
         caption: cap.slice(0, 500),
         backgroundHex: state.storyBgHex || '#1E1B4B',
-        privacy: 'public',
-        allowedViewerUids: [],
+        privacy: priv,
+        allowedViewerUids: priv === 'friends' ? friendUids.slice(0, 200) : [],
         viewersCount: 0,
         isSavedHighlight: false,
         autoDelete24h: true,
@@ -2725,6 +3147,7 @@ function bindEvents() {
   chatInput?.addEventListener('input', (e) => {
     const hadText = state.msgDraft.trim().length > 0;
     state.msgDraft = e.target.value;
+    if (activeConv) setTypingState(activeConv.id, state.msgDraft.trim().length > 0);
     if (hadText !== (state.msgDraft.trim().length > 0)) render();
   });
   chatInput?.addEventListener('keydown', (e) => {
@@ -2734,6 +3157,7 @@ function bindEvents() {
       sendChatMessage(activeConv.id, activeConv.participantUids || [], t);
     }
   });
+  document.getElementById('toggle24hBtn')?.addEventListener('click', () => { state.disappearing24h = !state.disappearing24h; render(); });
   document.getElementById('chatSendBtn')?.addEventListener('click', () => {
     const t = state.msgDraft.trim();
     if (activeConv && t) {
@@ -2757,11 +3181,21 @@ function bindEvents() {
       if (msg) { state.replyToMsg = msg; render(); }
     });
   });
-  document.querySelectorAll('.react-msg-btn').forEach((btn) => {
+  document.querySelectorAll('.toggle-msg-emoji-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mid = btn.getAttribute('data-msg-id');
+      state.activeMsgEmojiId = state.activeMsgEmojiId === mid ? null : mid;
+      render();
+    });
+  });
+  document.querySelectorAll('.react-msg-emoji-btn').forEach((btn) => {
     btn.addEventListener('click', async () => {
       if (!activeConv || !state.user) return;
       const mid = btn.getAttribute('data-msg-id');
-      await updateDoc(doc(db, 'conversations', activeConv.id, 'messages', mid), { [`reactions.${state.user.uid}`]: '❤️' }).catch(() => {});
+      const em = btn.getAttribute('data-emoji') || '❤️';
+      state.activeMsgEmojiId = null;
+      await updateDoc(doc(db, 'conversations', activeConv.id, 'messages', mid), { [`reactions.${state.user.uid}`]: em }).catch(() => {});
+      render();
     });
   });
   document.querySelectorAll('.unsend-msg-btn').forEach((btn) => {
@@ -2867,6 +3301,7 @@ function bindEvents() {
   document.getElementById('grpCatInput')?.addEventListener('change', (e) => { state.grpCat = e.target.value; });
   document.getElementById('grpPrivacyInput')?.addEventListener('change', (e) => { state.grpPrivacy = e.target.value; });
   document.getElementById('grpDescInput')?.addEventListener('input', (e) => { state.grpDesc = e.target.value; });
+  document.getElementById('grpSosChk')?.addEventListener('change', (e) => { state.grpSosEnabled = e.target.checked; });
   document.getElementById('submitGroupBtn')?.addEventListener('click', async () => {
     if (!state.user) return;
     const name = state.grpName.trim();
@@ -2882,7 +3317,7 @@ function bindEvents() {
         adminUids: [uid],
         memberUids: [uid],
         membersCount: 1,
-        sosEnabled: false,
+        sosEnabled: Boolean(state.grpSosEnabled),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
@@ -3121,6 +3556,35 @@ function bindEvents() {
     });
   });
 
+  // Search scopes, Recent Searches, Profile Tabs, Clear All Notifs
+  document.querySelectorAll('[data-search-scope]').forEach((b) => {
+    b.addEventListener('click', () => { state.searchScope = b.getAttribute('data-search-scope'); render(); });
+  });
+  document.getElementById('saveRecentSearchBtn')?.addEventListener('click', () => {
+    const t = state.search.trim();
+    if (!t) return;
+    state.recentSearches = Array.from(new Set([t, ...state.recentSearches])).slice(0, 8);
+    localStorage.setItem('hello_recent_searches', JSON.stringify(state.recentSearches));
+    render();
+  });
+  document.querySelectorAll('.recent-search-pill').forEach((b) => {
+    b.addEventListener('click', () => { state.search = b.getAttribute('data-term') || ''; render(); });
+  });
+  document.getElementById('clearRecentSearchBtn')?.addEventListener('click', () => {
+    state.recentSearches = [];
+    localStorage.removeItem('hello_recent_searches');
+    render();
+  });
+  document.querySelectorAll('[data-prof-tab]').forEach((b) => {
+    b.addEventListener('click', () => { state.profileTab = b.getAttribute('data-prof-tab'); render(); });
+  });
+  document.getElementById('clearAllNotifsBtn')?.addEventListener('click', async () => {
+    if (!state.user) return;
+    const batch = writeBatch(db);
+    state.notifications.slice(0, 100).forEach((n) => batch.delete(doc(db, 'users', state.user.uid, 'notifications', n.id)));
+    await batch.commit();
+  });
+
   // Close modals
   document.querySelectorAll('.close-modals-btn').forEach((b) => {
     b.addEventListener('click', () => { closeAllModals(); render(); });
@@ -3128,7 +3592,25 @@ function bindEvents() {
   document.getElementById('modalBackdrop')?.addEventListener('click', (e) => {
     if (e.target.id === 'modalBackdrop') { closeAllModals(); render(); }
   });
+
+  bindFeatureEvents();
 }
+
+initFeatures({
+  state,
+  db,
+  auth,
+  GoogleAuthProvider,
+  reauthenticateWithPopup,
+  fs: {
+    collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc,
+    onSnapshot, query, where, limit, serverTimestamp, increment, arrayUnion, arrayRemove, writeBatch
+  },
+  helpers: {
+    esc, fmtTime, showBanner, avatarHtml, mediaImgHtml, mediaVideoHtml, mediaSrc,
+    iconSvg, resolveAuthor, isValidId, render, openOrCreateDm, selectConversation
+  }
+});
 
 onAuthStateChanged(auth, async (u) => {
   state.user = u;

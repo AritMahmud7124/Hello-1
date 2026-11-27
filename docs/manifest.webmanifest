@@ -1,13 +1,14 @@
 {
-  "name": "HELLO — Social & Messenger",
+  "name": "HELLO — Social, Messenger, Reels & SOS",
   "short_name": "HELLO",
-  "description": "Connect with friends, share posts & media, browse Marketplace, and chat in real time on laptop & mobile.",
+  "description": "Official HELLO social network, real-time Messenger, voice notes, video calls, Stories, Reels, Secret Love, Emergency SOS, Marketplace, Pages & Events.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0b1120",
-  "theme_color": "#0f172a",
+  "background_color": "#0B0E1E",
+  "theme_color": "#0B0E1E",
+  "categories": ["social", "communication", "lifestyle"],
   "icons": [
     {
       "src": "./icon-192.png",

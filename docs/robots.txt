@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://aritmahmud7124.github.io/Hello-1/sitemap.xml
