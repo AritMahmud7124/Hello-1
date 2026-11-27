@@ -177,13 +177,15 @@ async function installLaptopApp() {
 
 async function signInGoogle() {
   state.authError = '';
+  state.unauthorizedDomain = '';
   render();
   try {
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
   } catch (err) {
     if (err?.code === 'auth/unauthorized-domain') {
-      state.authError = `Domain "${window.location.hostname}" is not yet authorized in Firebase Auth. Open Firebase Console → Authentication → Settings → Authorized domains and add "${window.location.hostname}", then click Sign in again.`;
+      state.unauthorizedDomain = window.location.hostname;
+      state.authError = `Domain "${window.location.hostname}" is not yet authorized in Firebase Auth (project gen-lang-client-0583025546).`;
     } else {
       state.authError = err?.message || 'Google Sign-In failed.';
     }
@@ -550,7 +552,20 @@ function renderLanding() {
         <button class="btn btn-primary" id="googleSignInBtn" style="padding:12px 18px;font-size:15px;">
           Continue with Google
         </button>
-        ${state.authError ? `<div class="error-box">${esc(state.authError)}</div>` : ''}
+        ${state.authError ? `
+          <div class="error-box">
+            <div>${esc(state.authError)}</div>
+            ${state.unauthorizedDomain ? `
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+                <a class="btn btn-primary" href="https://console.firebase.google.com/project/gen-lang-client-0583025546/authentication/settings" target="_blank" rel="noopener">Open Firebase Authorized Domains</a>
+                <button class="btn btn-secondary" id="copyDomainBtn" type="button">Copy "${esc(state.unauthorizedDomain)}"</button>
+              </div>
+              <div style="margin-top:8px;font-size:12px;opacity:0.9;">
+                Steps: Click <strong>Open Firebase Authorized Domains</strong> → <strong>Authorized domains</strong> → <strong>Add domain</strong> → paste <code>${esc(state.unauthorizedDomain)}</code> → <strong>Add</strong> → click <strong>Continue with Google</strong> again.
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
         <div class="muted" style="line-height:1.5;">
           Uses the same Firebase account, chats, friends, posts, groups, and Marketplace listings as your HELLO Android app.
         </div>
@@ -906,6 +921,13 @@ function render() {
 
 function bindEvents() {
   document.getElementById('googleSignInBtn')?.addEventListener('click', signInGoogle);
+  document.getElementById('copyDomainBtn')?.addEventListener('click', () => {
+    if (state.unauthorizedDomain) {
+      navigator.clipboard?.writeText(state.unauthorizedDomain);
+      const b = document.getElementById('copyDomainBtn');
+      if (b) b.textContent = `Copied "${state.unauthorizedDomain}" ✓`;
+    }
+  });
   document.getElementById('installLaptopBtnTop')?.addEventListener('click', installLaptopApp);
   document.getElementById('installLaptopBtnHero')?.addEventListener('click', installLaptopApp);
   document.getElementById('installLaptopBtnSide')?.addEventListener('click', installLaptopApp);
