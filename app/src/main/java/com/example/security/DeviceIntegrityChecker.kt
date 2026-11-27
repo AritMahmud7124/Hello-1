@@ -2,10 +2,12 @@ package com.example.security
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Debug
 import com.example.BuildConfig
 import java.io.File
+import java.security.MessageDigest
 
 enum class SecurityRiskLevel {
   CLEAN,
@@ -25,13 +27,17 @@ data class DeviceIntegrityReport(
 ) {
   val summary: String
     get() = if (findings.isEmpty()) {
-      "Hardware integrity verified (no root, emulator, or debugger detected)"
+      "Hardware integrity verified (no root, emulator, debugger, hooking, or tampering detected)"
     } else {
       findings.joinToString(" • ")
     }
 }
 
 object DeviceIntegrityChecker {
+
+  private val TRUSTED_SIGNING_SHA256 = setOf(
+    "6DA7E22BE9EDE14E658F2BDCE766E482F0D89BC78C266F309B506391B958301C"
+  )
 
   private val ROOT_BINARY_PATHS = listOf(
     "/system/app/Superuser.apk",
@@ -49,6 +55,12 @@ object DeviceIntegrityChecker {
     "/system/bin/magisk"
   )
 
+  private val HOOKING_ARTIFACT_PATHS = listOf(
+    "/data/local/tmp/frida-server",
+    "/data/local/tmp/re.frida.server",
+    "/system/framework/XposedBridge.jar"
+  )
+
   fun assess(
     context: Context,
     strictDebugEnforcement: Boolean = false
@@ -57,11 +69,21 @@ object DeviceIntegrityChecker {
     val rooted = detectRoot(context, findings)
     val emulator = detectEmulator(findings)
     val debugger = detectDebugger(context, findings)
+    val hooked = detectHookingFramework(context, findings)
+    val tamperedSig = detectRepackagedSignature(context, findings)
     val debugBuild = BuildConfig.DEBUG
 
-    val anyThreat = rooted || emulator || debugger
+    val anyThreat = rooted || emulator || debugger || hooked || tamperedSig
     val enforceBlock = !debugBuild || strictDebugEnforcement
-    val blocked = enforceBlock && (rooted || emulator || Debug.isDebuggerConnected() || Debug.waitingForDebugger() || (!debugBuild && debugger))
+    val blocked = enforceBlock && (
+      rooted ||
+        emulator ||
+        hooked ||
+        tamperedSig ||
+        Debug.isDebuggerConnected() ||
+        Debug.waitingForDebugger() ||
+        (!debugBuild && debugger)
+      )
 
     val riskLevel = when {
       blocked -> SecurityRiskLevel.BLOCKED
@@ -168,5 +190,61 @@ object DeviceIntegrityChecker {
       detected = true
     }
     return detected
+  }
+
+  private fun detectHookingFramework(context: Context, findings: MutableList<String>): Boolean {
+    var detected = false
+    val hookClasses = listOf(
+      "de.robv.android.xposed.XposedBridge",
+      "de.robv.android.xposed.XC_MethodHook",
+      "com.saurik.substrate.MS"
+    )
+    for (cls in hookClasses) {
+      val loaded = runCatching {
+        Class.forName(cls, false, context.classLoader)
+        true
+      }.getOrDefault(false)
+      if (loaded) {
+        findings.add("Runtime hooking framework detected ($cls)")
+        detected = true
+        break
+      }
+    }
+    for (path in HOOKING_ARTIFACT_PATHS) {
+      if (runCatching { File(path).exists() }.getOrDefault(false)) {
+        findings.add("Instrumentation artifact detected ($path)")
+        detected = true
+        break
+      }
+    }
+    return detected
+  }
+
+  @Suppress("DEPRECATION")
+  private fun detectRepackagedSignature(context: Context, findings: MutableList<String>): Boolean {
+    return runCatching {
+      val pm = context.packageManager
+      val pkgName = context.packageName
+      val certs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        val info = pm.getPackageInfo(pkgName, PackageManager.GET_SIGNING_CERTIFICATES)
+        val signingInfo = info.signingInfo ?: return@runCatching false
+        if (signingInfo.hasMultipleSigners()) signingInfo.apkContentsSigners else signingInfo.signingCertificateHistory
+      } else {
+        pm.getPackageInfo(pkgName, PackageManager.GET_SIGNATURES).signatures
+      }
+      if (certs == null || certs.isEmpty()) return@runCatching false
+      val sha256List = certs.map { sig ->
+        MessageDigest.getInstance("SHA-256")
+          .digest(sig.toByteArray())
+          .joinToString("") { "%02X".format(it) }
+      }
+      val recognized = sha256List.any { it in TRUSTED_SIGNING_SHA256 }
+      if (!recognized && !BuildConfig.DEBUG) {
+        findings.add("Unofficial or repackaged APK signing certificate")
+        true
+      } else {
+        false
+      }
+    }.getOrDefault(false)
   }
 }
