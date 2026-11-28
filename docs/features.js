@@ -1480,19 +1480,60 @@ export function renderSettingsTab() {
       </div>
 
       <div class="card" style="display:flex;flex-direction:column;gap:12px;">
-        <h3 style="margin:0;">Voice &amp; Gesture Control (Hands-Free)</h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <h3 style="margin:0;">Voice &amp; Gesture Control (Hands-Free)</h3>
+          <span class="vg-live-pill ${state.vgEnabled ? 'is-on' : ''}">${state.vgEnabled ? '● Active · Listening &amp; Camera On' : 'Off · Battery Saver'}</span>
+        </div>
         <div class="setting-row">
           <div style="flex:1;min-width:0;">
             <div style="font-weight:700;">Voice &amp; Gesture Control</div>
-            <div class="muted">Off by default to save battery. Turn on to navigate &amp; control HELLO by voice ("Home", "Reels", "Marketplace", "Next", "Like", "Back") or front-camera hand gestures (Swipe, Open Palm, Thumbs Up / Pinch).</div>
+            <div class="muted">Off by default to save battery. Turn on to navigate, scroll, play Reels &amp; like posts hands-free using voice and front-camera hand gestures.</div>
           </div>
           <button class="btn ${state.vgEnabled ? 'btn-primary' : 'btn-secondary'}" id="toggleVoiceGestureBtn" type="button">${state.vgEnabled ? 'On ✓' : 'Off'}</button>
         </div>
-        ${state.vgEnabled ? `
-          <div class="notice-box" style="font-size:12.5px;">
-            Active: Say "Reels", "Marketplace", "Profile", "Scroll down", "Next", "Previous", "Pause", "Like", or "Back". Show hand swipe / palm / thumbs-up to front camera.
+
+        <div class="vg-guide-box">
+          <div class="vg-guide-title">How to Use Voice &amp; Gesture Control</div>
+          <div class="vg-guide-grid">
+            <div class="vg-guide-step">
+              <div class="vg-step-head">1. How to Turn On &amp; Permissions</div>
+              <p class="muted" style="margin:0;font-size:12.5px;line-height:1.45;">
+                Tap the toggle above to switch it <b>On</b>, then allow <b>Microphone</b> (for voice commands) and <b>Front Camera</b> (for hand tracking) when your browser asks. If you deny one or your browser lacks support, HELLO handles it safely without crashing.
+              </p>
+            </div>
+            <div class="vg-guide-step">
+              <div class="vg-step-head">2. Voice Commands You Can Say</div>
+              <div class="vg-cmd-chips">
+                <span class="vg-cmd-chip">"Open Home"</span>
+                <span class="vg-cmd-chip">"Open Reels"</span>
+                <span class="vg-cmd-chip">"Open Marketplace"</span>
+                <span class="vg-cmd-chip">"Open Profile"</span>
+                <span class="vg-cmd-chip">"Open Settings"</span>
+                <span class="vg-cmd-chip">"Scroll down" / "Up"</span>
+                <span class="vg-cmd-chip">"Next" / "Previous"</span>
+                <span class="vg-cmd-chip">"Play" / "Pause"</span>
+                <span class="vg-cmd-chip">"Like" / "Select"</span>
+                <span class="vg-cmd-chip">"Go back"</span>
+                <span class="vg-cmd-chip">"Turn off voice"</span>
+              </div>
+            </div>
+            <div class="vg-guide-step">
+              <div class="vg-step-head">3. Hand Gestures (Front Camera)</div>
+              <ul class="vg-gesture-list">
+                <li><b>Swipe Left:</b> Next Reel or Scroll Down</li>
+                <li><b>Swipe Right:</b> Previous Reel or Scroll Up</li>
+                <li><b>Open Palm (hold ~0.7s):</b> Pause/Play Reel or Go Back</li>
+                <li><b>Pinch or Thumbs-Up:</b> Like / Select current item</li>
+              </ul>
+            </div>
+            <div class="vg-guide-step">
+              <div class="vg-step-head">4. How Turning Off Releases Hardware</div>
+              <p class="muted" style="margin:0;font-size:12.5px;line-height:1.45;">
+                Switch the toggle <b>Off</b>, tap <b>Off</b> on the floating mini preview box, say <b>"Turn off voice"</b>, or switch browser tabs — HELLO immediately stops listening and turns off your camera &amp; microphone stream.
+              </p>
+            </div>
           </div>
-        ` : ''}
+        </div>
       </div>
 
       <div class="card" style="display:flex;flex-direction:column;gap:12px;">

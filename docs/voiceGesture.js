@@ -44,13 +44,45 @@ export function createVoiceGestureController({ onCommand, onDisableRequest, show
   let prevFrameData = null;
   let offscreenCanvas = null;
   let offscreenCtx = null;
+  let toastEl = null;
+  let toastTimer = null;
+  let speechHearing = false;
+  let handDetected = false;
+  let announceReadyDone = false;
 
   // Motion history for swipe detection: { x, y, t }
   const motionHistory = [];
 
-  function notify(msg) {
+  function showFloatingToast(msg, kind = 'info') {
+    if (!document.body) return;
+    if (!toastEl || !document.body.contains(toastEl)) {
+      toastEl = document.createElement('div');
+      toastEl.id = 'hello-vg-toast';
+      toastEl.className = 'vg-toast';
+      document.body.appendChild(toastEl);
+    }
+    toastEl.textContent = msg;
+    toastEl.dataset.kind = kind;
+    toastEl.classList.add('is-visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      if (toastEl) toastEl.classList.remove('is-visible');
+    }, 2300);
+  }
+
+  function removeFloatingToast() {
+    clearTimeout(toastTimer);
+    toastTimer = null;
+    if (toastEl && toastEl.parentNode) {
+      toastEl.parentNode.removeChild(toastEl);
+    }
+    toastEl = null;
+  }
+
+  function notify(msg, kind = 'cmd') {
     lastCommandText = msg;
     updateHud();
+    showFloatingToast(msg, kind);
     if (typeof showToast === 'function') {
       showToast(msg);
     }
@@ -115,14 +147,16 @@ export function createVoiceGestureController({ onCommand, onDisableRequest, show
     const pauseBtn = hudEl.querySelector('[data-vg-action="pause"]');
     const dot = hudEl.querySelector('.vg-dot');
 
-    if (vStat) vStat.textContent = paused ? 'Paused' : voiceStatus;
-    if (gStat) gStat.textContent = paused ? 'Paused' : gestureStatus;
+    if (vStat) vStat.textContent = paused ? 'Paused' : (speechHearing ? 'Hearing voice...' : voiceStatus);
+    if (gStat) gStat.textContent = paused ? 'Paused' : (handDetected ? 'Hand detected!' : gestureStatus);
     if (modeEl) modeEl.textContent = detectorMode === 'mediapipe' ? 'AI Hand' : detectorMode === 'motion' ? 'Motion' : 'Cam';
     if (cmdEl) {
-      cmdEl.textContent = lastCommandText || 'Say "Home", "Reels", "Next", "Like", "Back" or use hand gestures';
+      cmdEl.textContent = lastCommandText || 'Say "Home", "Reels", "Next", "Like", "Back" or swipe hand';
     }
     if (pauseBtn) pauseBtn.textContent = paused ? 'Resume' : 'Pause';
     if (dot) dot.classList.toggle('is-paused', paused);
+    hudEl.classList.toggle('is-listening', !paused && speechHearing);
+    hudEl.classList.toggle('is-detecting', !paused && handDetected);
   }
 
   function dispatchVoiceText(rawText) {
@@ -226,6 +260,20 @@ export function createVoiceGestureController({ onCommand, onDisableRequest, show
       recognition.onstart = () => {
         voiceStatus = 'Listening';
         updateHud();
+        if (!announceReadyDone) {
+          announceReadyDone = true;
+          showFloatingToast('Listening for voice commands...', 'voice');
+        }
+      };
+
+      recognition.onspeechstart = () => {
+        speechHearing = true;
+        updateHud();
+      };
+
+      recognition.onspeechend = () => {
+        speechHearing = false;
+        updateHud();
       };
 
       recognition.onresult = (event) => {
@@ -234,6 +282,7 @@ export function createVoiceGestureController({ onCommand, onDisableRequest, show
           const res = event.results[i];
           const transcript = res[0]?.transcript || '';
           if (res.isFinal) {
+            speechHearing = false;
             dispatchVoiceText(transcript);
           } else if (transcript.trim().split(/\s+/).length <= 3) {
             dispatchVoiceText(transcript);
@@ -242,13 +291,16 @@ export function createVoiceGestureController({ onCommand, onDisableRequest, show
       };
 
       recognition.onerror = (event) => {
+        speechHearing = false;
         const err = event?.error || 'error';
         if (err === 'not-allowed' || err === 'service-not-allowed') {
           voiceStatus = 'Mic denied';
           updateHud();
+          showFloatingToast('Microphone permission denied — voice commands off.', 'warn');
           return;
         }
         if (err === 'no-speech' || err === 'aborted') {
+          updateHud();
           return;
         }
         voiceStatus = `Mic: ${err}`;
@@ -256,6 +308,7 @@ export function createVoiceGestureController({ onCommand, onDisableRequest, show
       };
 
       recognition.onend = () => {
+        speechHearing = false;
         if (enabled && !paused && document.visibilityState === 'visible' && voiceStatus !== 'Mic denied') {
           clearTimeout(restartTimer);
           restartTimer = setTimeout(() => {
@@ -277,6 +330,7 @@ export function createVoiceGestureController({ onCommand, onDisableRequest, show
   function stopVoice() {
     clearTimeout(restartTimer);
     restartTimer = null;
+    speechHearing = false;
     if (recognition) {
       try { recognition.onend = null; recognition.onresult = null; recognition.onerror = null; recognition.abort(); } catch {}
       recognition = null;
@@ -348,6 +402,12 @@ export function createVoiceGestureController({ onCommand, onDisableRequest, show
       gestureStatus = err?.name === 'NotAllowedError' ? 'Camera denied' : 'Camera unavailable';
       detectorMode = 'none';
       updateHud();
+      showFloatingToast(
+        err?.name === 'NotAllowedError'
+          ? 'Camera permission denied — hand gestures off.'
+          : 'Front camera unavailable for hand gestures.',
+        'warn'
+      );
     }
   }
 
@@ -367,6 +427,7 @@ export function createVoiceGestureController({ onCommand, onDisableRequest, show
     }
     motionHistory.length = 0;
     palmHoldStartAt = 0;
+    handDetected = false;
     prevFrameData = null;
     gestureStatus = 'Off';
   }
@@ -377,7 +438,7 @@ export function createVoiceGestureController({ onCommand, onDisableRequest, show
     lastGestureAt = now;
     motionHistory.length = 0;
     palmHoldStartAt = 0;
-    notify(`Gesture: ${label}`);
+    notify(`Gesture: ${label}`, 'gesture');
     if (typeof onCommand === 'function') {
       if (type === 'swipe_left') {
         onCommand({ type: 'gesture', gesture: 'swipe_left', label });
@@ -398,7 +459,15 @@ export function createVoiceGestureController({ onCommand, onDisableRequest, show
   function analyzeLandmarks(landmarks, now) {
     if (!landmarks || !landmarks.length) {
       palmHoldStartAt = 0;
+      if (handDetected) {
+        handDetected = false;
+        updateHud();
+      }
       return;
+    }
+    if (!handDetected) {
+      handDetected = true;
+      updateHud();
     }
     const lm = landmarks[0];
     const wrist = lm[0];
@@ -488,6 +557,10 @@ export function createVoiceGestureController({ onCommand, onDisableRequest, show
     prevFrameData.set(frame);
 
     if (count > 85 && count < 1800) {
+      if (!handDetected) {
+        handDetected = true;
+        updateHud();
+      }
       const cx = sumX / count;
       motionHistory.push({ x: cx, t: now });
       while (motionHistory.length > 0 && now - motionHistory[0].t > 550) {
@@ -498,6 +571,9 @@ export function createVoiceGestureController({ onCommand, onDisableRequest, show
         if (dx > 0.22) emitGesture('swipe_left', 'Swipe -> Next / Down');
         else if (dx < -0.22) emitGesture('swipe_right', 'Swipe -> Prev / Up');
       }
+    } else if (handDetected) {
+      handDetected = false;
+      updateHud();
     }
   }
 
@@ -552,6 +628,7 @@ export function createVoiceGestureController({ onCommand, onDisableRequest, show
     if (enabled) return;
     enabled = true;
     paused = false;
+    announceReadyDone = false;
     ensureHud();
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('pagehide', stop);
@@ -563,6 +640,7 @@ export function createVoiceGestureController({ onCommand, onDisableRequest, show
   function stop() {
     enabled = false;
     paused = false;
+    announceReadyDone = false;
     document.removeEventListener('visibilitychange', handleVisibilityChange);
     window.removeEventListener('pagehide', stop);
     stopVoice();
@@ -573,10 +651,12 @@ export function createVoiceGestureController({ onCommand, onDisableRequest, show
     }
     detectorMode = 'idle';
     removeHud();
+    removeFloatingToast();
   }
 
   return {
     isEnabled: () => enabled,
+    getStatus: () => ({ enabled, paused, voiceStatus, gestureStatus, detectorMode, lastCommandText }),
     start,
     stop,
     setEnabled(next) {

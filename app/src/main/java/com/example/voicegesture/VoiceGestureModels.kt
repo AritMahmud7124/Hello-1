@@ -16,9 +16,14 @@ sealed interface VoiceGestureAction {
 data class VoiceGestureStatus(
   val isEnabled: Boolean = false,
   val isPaused: Boolean = false,
+  val isListening: Boolean = false,
+  val isGestureDetected: Boolean = false,
   val voiceState: String = "Off",
   val gestureState: String = "Off",
   val lastCommand: String = "",
+  val statusToast: String = "",
+  val statusToastKind: String = "info",
+  val statusToastSeq: Long = 0L,
   val hasMicPermission: Boolean = false,
   val hasCameraPermission: Boolean = false
 )

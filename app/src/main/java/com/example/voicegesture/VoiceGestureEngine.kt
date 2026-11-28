@@ -166,33 +166,59 @@ class VoiceGestureEngine(
         recognizer.setRecognitionListener(object : RecognitionListener {
           override fun onReadyForSpeech(params: Bundle?) {
             if (isStarted && !isPaused) {
-              _status.update { it.copy(voiceState = "Listening...") }
+              _status.update {
+                val firstReady = it.statusToastSeq == 0L
+                it.copy(
+                  voiceState = "Listening...",
+                  isListening = false,
+                  statusToast = if (firstReady) "Listening for voice commands..." else it.statusToast,
+                  statusToastKind = if (firstReady) "voice" else it.statusToastKind,
+                  statusToastSeq = if (firstReady) 1L else it.statusToastSeq
+                )
+              }
             }
           }
 
-          override fun onBeginningOfSpeech() {}
+          override fun onBeginningOfSpeech() {
+            if (isStarted && !isPaused) {
+              _status.update { it.copy(voiceState = "Hearing speech...", isListening = true) }
+            }
+          }
           override fun onRmsChanged(rmsdB: Float) {}
           override fun onBufferReceived(buffer: ByteArray?) {}
-          override fun onEndOfSpeech() {}
+          override fun onEndOfSpeech() {
+            if (isStarted && !isPaused) {
+              _status.update { it.copy(voiceState = "Listening...", isListening = false) }
+            }
+          }
 
           override fun onError(error: Int) {
             if (!isStarted || isPaused) return
             when (error) {
               SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> {
-                _status.update { it.copy(hasMicPermission = false, voiceState = "Mic permission denied") }
+                _status.update {
+                  it.copy(
+                    hasMicPermission = false,
+                    isListening = false,
+                    voiceState = "Mic permission denied",
+                    statusToast = "Microphone permission denied",
+                    statusToastKind = "warn",
+                    statusToastSeq = it.statusToastSeq + 1L
+                  )
+                }
               }
               SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
               SpeechRecognizer.ERROR_CLIENT -> {
-                _status.update { it.copy(voiceState = "Reconnecting mic...") }
+                _status.update { it.copy(isListening = false, voiceState = "Reconnecting mic...") }
                 scheduleSpeechRestart(700L)
               }
               SpeechRecognizer.ERROR_NO_MATCH,
               SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
-                _status.update { it.copy(voiceState = "Listening...") }
+                _status.update { it.copy(isListening = false, voiceState = "Listening...") }
                 scheduleSpeechRestart(250L)
               }
               else -> {
-                _status.update { it.copy(voiceState = "Listening...") }
+                _status.update { it.copy(isListening = false, voiceState = "Listening...") }
                 scheduleSpeechRestart(650L)
               }
             }
@@ -258,7 +284,16 @@ class VoiceGestureEngine(
     lastSpeechActionMs = now
     lastSpeechPhrase = raw
     val label = describeAction(parsed)
-    _status.update { it.copy(lastCommand = "Voice: $label") }
+    val cmdText = "Voice: $label"
+    _status.update {
+      it.copy(
+        lastCommand = cmdText,
+        isListening = false,
+        statusToast = cmdText,
+        statusToastKind = "voice",
+        statusToastSeq = it.statusToastSeq + 1L
+      )
+    }
     onAction(parsed)
   }
 
@@ -370,8 +405,15 @@ class VoiceGestureEngine(
           motionWindowStartMs = 0L
           largeSpreadHoldStartMs = 0L
           compactPulseCount = 0
+          if (_status.value.isGestureDetected) {
+            _status.update { it.copy(isGestureDetected = false, gestureState = "Hand Camera Active") }
+          }
         }
         return
+      }
+
+      if (!_status.value.isGestureDetected) {
+        _status.update { it.copy(isGestureDetected = true, gestureState = "Hand detected...") }
       }
 
       val cx = sumX / activeCount.toFloat()
@@ -443,7 +485,17 @@ class VoiceGestureEngine(
     resetMotionTracker()
     mainHandler.post {
       if (!isStarted || isPaused) return@post
-      _status.update { it.copy(lastCommand = "Gesture: $label") }
+      val cmdText = "Gesture: $label"
+      _status.update {
+        it.copy(
+          lastCommand = cmdText,
+          isGestureDetected = true,
+          gestureState = "Gesture detected!",
+          statusToast = cmdText,
+          statusToastKind = "gesture",
+          statusToastSeq = it.statusToastSeq + 1L
+        )
+      }
       onAction(action)
     }
   }

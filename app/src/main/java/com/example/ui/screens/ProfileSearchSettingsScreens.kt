@@ -1857,18 +1857,53 @@ fun SettingsScreen(
             )
           }
 
-          if (voiceGestureEnabled || voiceGestureNotice != null) {
+          if (voiceGestureNotice != null) {
             Surface(
               color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.fillMaxWidth()
             ) {
               Text(
-                text = voiceGestureNotice
-                  ?: "Try voice: \"Home\", \"Reels\", \"Marketplace\", \"Next\", \"Like\", \"Back\", \"Scroll down\" · Gestures: Swipe Left/Right (Next/Prev), Open Palm (Pause/Back), Pinch/Thumbs-up (Like).",
+                text = voiceGestureNotice.orEmpty(),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+              )
+            }
+          }
+
+          Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier
+              .fillMaxWidth()
+              .testTag("settings_voice_gesture_guide")
+          ) {
+            Column(
+              modifier = Modifier.padding(12.dp),
+              verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              Text(
+                text = "How to Use Voice & Gesture Control",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+              )
+              VoiceGestureGuideStep(
+                title = "1. Turn On & Permissions",
+                body = "Flip the toggle ON (starts OFF to save battery) and grant Microphone & Front Camera permissions. If denied or unsupported, HELLO continues working normally without crashing."
+              )
+              VoiceGestureGuideStep(
+                title = "2. Supported Voice Commands",
+                body = "Navigation: \"Open Home\", \"Open Reels\", \"Marketplace\", \"Profile\", \"Settings\", \"Messenger\"\nScroll & Back: \"Scroll down\", \"Scroll up\", \"Top\", \"Go back\"\nReels & Actions: \"Next\", \"Previous\", \"Play\", \"Pause\", \"Like\", \"Select\", \"Turn off voice\""
+              )
+              VoiceGestureGuideStep(
+                title = "3. Supported Hand Gestures (Front Camera)",
+                body = "• Swipe Left: Next Reel or Scroll Down\n• Swipe Right: Previous Reel or Scroll Up\n• Open Palm (hold briefly): Pause/Play Reel or Go Back\n• Pinch or Thumbs-Up: Like / Select"
+              )
+              VoiceGestureGuideStep(
+                title = "4. Turning Off & Releasing Hardware",
+                body = "Switch the toggle OFF, tap the close (X) icon on the floating preview box, say \"Turn off voice\", or leave/minimize the app — HELLO immediately stops listening and releases the camera & mic."
               )
             }
           }
@@ -2692,5 +2727,31 @@ private fun PrefSwitch(label: String, checked: Boolean, onChange: (Boolean) -> U
   Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
     Text(label, style = MaterialTheme.typography.bodyMedium)
     Switch(checked = checked, onCheckedChange = onChange)
+  }
+}
+
+@Composable
+private fun VoiceGestureGuideStep(title: String, body: String) {
+  Surface(
+    color = MaterialTheme.colorScheme.surface,
+    shape = RoundedCornerShape(10.dp),
+    modifier = Modifier.fillMaxWidth()
+  ) {
+    Column(
+      modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+      verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+      Text(
+        text = title,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary
+      )
+      Text(
+        text = body,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+    }
   }
 }
