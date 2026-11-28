@@ -78,6 +78,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -156,8 +157,13 @@ import com.example.ui.theme.HelloTheme
 import com.example.ui.viewmodel.CommunityViewModel
 import com.example.ui.viewmodel.MainSocialViewModel
 import com.example.ui.viewmodel.SpacesGovernanceViewModel
+import com.example.voicegesture.VoiceGestureAction
+import com.example.voicegesture.VoiceGestureEngine
+import com.example.voicegesture.VoiceGestureOverlay
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 
 class MainActivity : FragmentActivity() {
@@ -462,19 +468,25 @@ private fun AuthenticatedHelloShell(
   val savedHighlightStories by socialVm.savedHighlightStories.collectAsStateWithLifecycle()
 
   val lifecycleOwner = LocalLifecycleOwner.current
+  var isForegroundStarted by remember { mutableStateOf(true) }
   DisposableEffect(lifecycleOwner, uid) {
     val observer = LifecycleEventObserver { _, event ->
       when (event) {
         Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME -> {
+          isForegroundStarted = true
           socialVm.setAppForegroundOnline(true)
           IncomingCallListenerService.start(context.applicationContext, uid)
         }
-        Lifecycle.Event.ON_STOP -> socialVm.setAppForegroundOnline(false)
+        Lifecycle.Event.ON_STOP -> {
+          isForegroundStarted = false
+          socialVm.setAppForegroundOnline(false)
+        }
         else -> Unit
       }
     }
     lifecycleOwner.lifecycle.addObserver(observer)
     onDispose {
+      isForegroundStarted = false
       lifecycleOwner.lifecycle.removeObserver(observer)
       socialVm.setAppForegroundOnline(false)
     }
@@ -490,6 +502,7 @@ private fun AuthenticatedHelloShell(
   val incognitoPrivateViewing by appPrefs.incognitoPrivateViewing.collectAsStateWithLifecycle(initialValue = false)
   val disappearingChat24h by appPrefs.disappearingChat24h.collectAsStateWithLifecycle(initialValue = false)
   val incognitoAnyActive by appPrefs.incognitoAnyActive.collectAsStateWithLifecycle(initialValue = false)
+  val voiceGestureEnabled by appPrefs.voiceGestureEnabled.collectAsStateWithLifecycle(initialValue = false)
   val prefsScope = rememberCoroutineScope()
 
   LaunchedEffect(reelsAutoAdvancePref, reelsRegionPref) {
@@ -603,6 +616,58 @@ private fun AuthenticatedHelloShell(
       popUpTo(navController.graph.findStartDestination().id) { saveState = true }
       launchSingleTop = true
       restoreState = true
+    }
+  }
+
+  val voiceGestureEvents = remember { MutableSharedFlow<VoiceGestureAction>(extraBufferCapacity = 16) }
+  val sharedVoiceGestureFlow = remember(voiceGestureEvents) { voiceGestureEvents.asSharedFlow() }
+  val currentVgActionHandler = rememberUpdatedState<(VoiceGestureAction) -> Unit> { action ->
+    when (action) {
+      is VoiceGestureAction.Navigate -> {
+        if (action.route in primaryRoutes) {
+          navigateSingleTop(action.route)
+        } else {
+          navController.navigate(action.route) { launchSingleTop = true }
+        }
+      }
+      VoiceGestureAction.Back -> {
+        navController.popBackStack()
+      }
+      VoiceGestureAction.GesturePalm -> {
+        if (currentRoute == HelloRoutes.REELS) {
+          voiceGestureEvents.tryEmit(VoiceGestureAction.MediaPlayPause)
+        } else {
+          navController.popBackStack()
+        }
+      }
+      VoiceGestureAction.Disable -> {
+        prefsScope.launch {
+          appPrefs.setVoiceGestureEnabled(false)
+          snackbarHostState.showSnackbar("Voice & Gesture Control turned off")
+        }
+      }
+      else -> {
+        voiceGestureEvents.tryEmit(action)
+      }
+    }
+  }
+  val voiceGestureEngine = remember(context) {
+    VoiceGestureEngine(context.applicationContext) { action ->
+      currentVgActionHandler.value.invoke(action)
+    }
+  }
+  val voiceGestureStatus by voiceGestureEngine.status.collectAsStateWithLifecycle()
+
+  LaunchedEffect(voiceGestureEnabled, isForegroundStarted) {
+    if (voiceGestureEnabled && isForegroundStarted) {
+      voiceGestureEngine.start(lifecycleOwner)
+    } else {
+      voiceGestureEngine.stop()
+    }
+  }
+  DisposableEffect(voiceGestureEngine) {
+    onDispose {
+      voiceGestureEngine.stop()
     }
   }
 
@@ -918,7 +983,8 @@ private fun AuthenticatedHelloShell(
                 communityVm = communityVm,
                 onOpenStories = { navController.navigate(HelloRoutes.STORIES) },
                 onOpenStoryViewer = { story -> activeStory = story },
-                onOpenProfile = openUserProfile
+                onOpenProfile = openUserProfile,
+                voiceGestureEvents = sharedVoiceGestureFlow
               )
             }
             composable(HelloRoutes.FRIENDS) {
@@ -938,6 +1004,7 @@ private fun AuthenticatedHelloShell(
                 communityVm = communityVm,
                 me = me,
                 currentUserId = uid,
+                voiceGestureEvents = sharedVoiceGestureFlow,
                 onOpenStories = { navController.navigate(HelloRoutes.STORIES) },
                 onOpenProfile = openUserProfile,
                 onOpenSettings = { navController.navigate(HelloRoutes.SETTINGS) }
@@ -1156,6 +1223,10 @@ private fun AuthenticatedHelloShell(
                 },
                 onDisappearingChat24hChange = { enabled ->
                   prefsScope.launch { appPrefs.setDisappearingChat24h(enabled) }
+                },
+                voiceGestureEnabled = voiceGestureEnabled,
+                onVoiceGestureChange = { enabled ->
+                  prefsScope.launch { appPrefs.setVoiceGestureEnabled(enabled) }
                 }
               )
             }
@@ -1194,6 +1265,31 @@ private fun AuthenticatedHelloShell(
                 }
               )
             }
+          }
+
+          if (voiceGestureEnabled && isForegroundStarted) {
+            VoiceGestureOverlay(
+              status = voiceGestureStatus,
+              onAttachPreview = { previewView ->
+                voiceGestureEngine.attachPreview(lifecycleOwner, previewView)
+              },
+              onTogglePause = {
+                voiceGestureEngine.setPaused(!voiceGestureStatus.isPaused)
+              },
+              onTurnOff = {
+                prefsScope.launch { appPrefs.setVoiceGestureEnabled(false) }
+              },
+              modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(
+                  top = when {
+                    hideChrome -> 44.dp
+                    currentRoute == HelloRoutes.REELS -> 64.dp
+                    else -> 10.dp
+                  },
+                  end = 10.dp
+                )
+            )
           }
         }
       }

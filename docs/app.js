@@ -45,9 +45,14 @@ import {
   renderFeatureModals,
   bindFeatureEvents
 } from './features.js';
+import {
+  createVoiceGestureController,
+  isVoiceGestureStoredEnabled,
+  setVoiceGestureStoredEnabled
+} from './voiceGesture.js';
 
 const WEBSITE_URL = 'https://aritmahmud7124.github.io/Hello-1/';
-const APK_URL = 'https://github.com/AritMahmud7124/Hello-1/releases/download/v1.8.6/hello-social-v1.8.6.apk';
+const APK_URL = 'https://github.com/AritMahmud7124/Hello-1/releases/download/v1.8.7/hello-social-v1.8.7.apk';
 const AUTH_SETTINGS_URL = 'https://console.firebase.google.com/project/gen-lang-client-0583025546/authentication/settings';
 const FIRESTORE_DB_ID = 'ai-studio-android-hello-982e615a-60df-4ad0-a009-d7f68361be02';
 
@@ -256,7 +261,25 @@ const state = {
   manageGroupModal: null,
   sosModalGroup: null,
   grpSosEnabled: true,
-  activeMsgEmojiId: null
+  activeMsgEmojiId: null,
+  reelAutoNext: true,
+  reelActiveIndex: 0,
+  marketStatus: 'All',
+  marketSort: 'Newest',
+  mktCurrency: '$',
+  mktCondition: 'Like New',
+  detailListingId: null,
+  editListingTarget: null,
+  activePageId: null,
+  pageCatFilter: 'All',
+  editPageTarget: null,
+  managePageModal: null,
+  pageAvatarFile: null,
+  pageAvatarPreview: '',
+  pageCoverFile: null,
+  pageCoverPreview: '',
+  showEditProfileModal: false,
+  vgEnabled: isVoiceGestureStoredEnabled()
 };
 
 if (state.theme === 'light') document.documentElement.classList.add('light');
@@ -1051,7 +1074,7 @@ function selectConversation(convId, openMobile = true) {
   render();
 }
 
-async function publishPost(groupId = '') {
+async function publishPost(groupId = '', pageId = '') {
   if (!state.user || state.isUploading) return;
   const text = state.postDraft.trim();
   if (!text && !state.postMediaFile) {
@@ -1068,7 +1091,7 @@ async function publishPost(groupId = '') {
     const me = state.me || { displayName: state.user.displayName || 'Hello Member', photoUrl: state.user.photoURL || '' };
     const friendUids = state.friendships.flatMap((f) => f.participantUids || []).filter((x) => x !== state.user.uid);
     const activeGroup = groupId ? state.groups.find((g) => g.id === groupId) : null;
-    const effectivePrivacy = activeGroup?.privacy === 'private' ? 'friends' : state.postPrivacy;
+    const effectivePrivacy = activeGroup?.privacy === 'private' ? 'friends' : (pageId ? 'public' : state.postPrivacy);
     const allowedViewers = activeGroup?.privacy === 'private'
       ? (activeGroup.memberUids || []).slice(0, 200)
       : (effectivePrivacy === 'friends' ? friendUids.slice(0, 200) : []);
@@ -1083,7 +1106,7 @@ async function publishPost(groupId = '') {
       privacy: effectivePrivacy,
       allowedViewerUids: allowedViewers,
       groupId: groupId || '',
-      pageId: '',
+      pageId: pageId || '',
       likesCount: 0,
       commentsCount: 0,
       sharesCount: 0,
@@ -1092,7 +1115,7 @@ async function publishPost(groupId = '') {
     });
     state.postDraft = '';
     setPreviewFile('postMediaFile', 'postMediaPreview', null);
-    showBanner('Post published to HELLO!');
+    showBanner(pageId ? 'Posted to Page!' : (groupId ? 'Posted to Group!' : 'Post published to HELLO!'));
   } catch (e) {
     showBanner(e?.message || 'Could not publish post.', true);
   }
@@ -1384,24 +1407,21 @@ async function toggleJoinGroup(group) {
 }
 
 async function toggleFollowPage(page) {
-  if (!state.user) return;
+  if (!state.user || !page) return;
   const uid = state.user.uid;
   const ref = doc(db, 'pages', page.id);
-  const followers = page.followerUids || [];
+  const followers = Array.isArray(page.followerUids) ? page.followerUids : [];
+  const isFollowing = followers.includes(uid);
+  const nextFollowers = isFollowing
+    ? followers.filter((x) => x !== uid)
+    : Array.from(new Set([...followers, uid]));
   try {
-    if (followers.includes(uid)) {
-      await updateDoc(ref, {
-        followerUids: arrayRemove(uid),
-        followersCount: Math.max(0, (page.followersCount || followers.length) - 1),
-        updatedAt: serverTimestamp()
-      });
-    } else {
-      await updateDoc(ref, {
-        followerUids: arrayUnion(uid),
-        followersCount: (page.followersCount || followers.length) + 1,
-        updatedAt: serverTimestamp()
-      });
-    }
+    await updateDoc(ref, {
+      followerUids: nextFollowers,
+      followersCount: nextFollowers.length,
+      updatedAt: serverTimestamp()
+    });
+    showBanner(isFollowing ? `Unfollowed ${page.name}` : `Following ${page.name}`);
   } catch (e) {
     showBanner(e?.message || 'Could not update page follow.', true);
   }
@@ -1441,7 +1461,7 @@ function renderLanding() {
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">
             <button class="btn btn-violet open-get-app-btn" id="installLaptopBtnHero">${iconSvg('laptop', 17)}<span>Install on Desktop / Laptop</span></button>
             <button class="btn btn-secondary copy-website-url-btn" type="button">${iconSvg('share', 16)}<span>Copy Website Link</span></button>
-            <a class="btn btn-secondary" href="${APK_URL}" target="_blank" rel="noopener noreferrer">${iconSvg('phone', 17)}<span>Download Android APK (v1.8.6)</span></a>
+            <a class="btn btn-secondary" href="${APK_URL}" target="_blank" rel="noopener noreferrer">${iconSvg('phone', 17)}<span>Download Android APK (v1.8.7)</span></a>
           </div>
         </section>
 
@@ -1776,47 +1796,65 @@ function renderCenterStage() {
       return catOk && qOk;
     });
     return `
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-          <div>
-            <h3 style="margin:0;">HELLO Reels</h3>
-            <div class="muted">Short videos & creator clips</div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card" style="padding:14px;">
+          <div class="reels-toolbar">
+            <div>
+              <h3 style="margin:0;">HELLO Reels</h3>
+              <div class="muted">Vertical feed · plays sequentially ${state.reelAutoNext ? 'automatically' : 'manually'}</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              <button class="filter-chip ${state.reelAutoNext ? 'active' : ''}" id="toggleReelAutoNextBtn" type="button">Auto-Next: ${state.reelAutoNext ? 'On' : 'Off'}</button>
+              <button class="btn btn-secondary" id="reelPrevBtn" type="button" style="min-height:34px;padding:6px 12px;">↑ Prev</button>
+              <button class="btn btn-secondary" id="reelNextBtn" type="button" style="min-height:34px;padding:6px 12px;">↓ Next</button>
+              <button class="btn btn-primary" id="openCreateReelBtn">${iconSvg('plus', 16)}<span>Create Reel</span></button>
+            </div>
           </div>
-          <button class="btn btn-primary" id="openCreateReelBtn">${iconSvg('plus', 16)}<span>Create Reel</span></button>
+          <div class="chip-row" style="margin-top:10px;">
+            ${REEL_CATEGORIES.map((c) => `<button class="filter-chip ${state.reelFilter === c ? 'active' : ''}" data-reel-cat="${c}">${c}</button>`).join('')}
+          </div>
         </div>
-        <div class="chip-row" style="margin-bottom:14px;">
-          ${REEL_CATEGORIES.map((c) => `<button class="filter-chip ${state.reelFilter === c ? 'active' : ''}" data-reel-cat="${c}">${c}</button>`).join('')}
-        </div>
-        ${reels.length === 0 ? `<div class="muted">No Reels match this category yet.</div>` : `
-          <div class="grid-cards">
-            ${reels.map((r) => {
+
+        ${reels.length === 0 ? `<div class="card muted">No Reels match this category yet.</div>` : `
+          <div class="reels-snap-feed" id="reelsSnapFeed">
+            ${reels.map((r, idx) => {
               const author = resolveAuthor(r.authorId, r.authorName, r.authorAvatar);
               const hex = /^#[0-9A-Fa-f]{6}$/.test(r.coverHex || '') ? r.coverHex : '#1E1B4B';
               const isMine = r.authorId === uid || isAdminUser();
               const isSaved = state.savedPostIds.has(r.id);
+              const src = r.videoUri ? mediaSrc(r.videoUri) : '';
+              const isCloud = typeof r.videoUri === 'string' && r.videoUri.startsWith('firestore://media/');
               return `
-                <div class="card" style="padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--elevated);">
-                  <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
-                    <div class="open-user-profile" data-uid="${esc(r.authorId)}" style="display:flex;align-items:center;gap:8px;cursor:pointer;min-width:0;">
-                      ${avatarHtml(author.name, author.avatar, 32, author.online)}
-                      <div style="min-width:0;">
-                        <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(author.name)}</div>
-                        <div class="muted" style="font-size:11px;">${esc(r.category || 'Reel')}</div>
+                <section class="reel-slide" data-reel-idx="${idx}" data-reel-id="${esc(r.id)}">
+                  ${r.videoUri ? `
+                    <video class="reel-slide-video" playsinline controls preload="metadata" data-media-uri="${esc(r.videoUri)}" src="${esc(src)}" style="${src || !isCloud ? '' : 'display:none;'}"></video>
+                    ${isCloud ? `<div class="media-loading-box" data-media-fallback="1" style="${src ? 'display:none;' : ''}">Loading Reel video...</div>` : ''}
+                  ` : `
+                    <div class="reel-slide-text-card" style="background:linear-gradient(155deg,${hex},#0B0E1E);">
+                      ${esc(r.caption)}
+                    </div>
+                  `}
+                  <div class="reel-slide-gradient"></div>
+                  <div class="reel-slide-meta">
+                    <div class="open-user-profile" data-uid="${esc(r.authorId)}" style="display:flex;align-items:center;gap:10px;cursor:pointer;width:fit-content;">
+                      ${avatarHtml(author.name, author.avatar, 38, author.online)}
+                      <div>
+                        <div style="font-weight:800;font-size:14px;">${esc(author.name)}</div>
+                        <div style="font-size:11.5px;opacity:0.85;">${esc(r.category || 'Trending')} · Reel ${idx + 1} / ${reels.length}</div>
                       </div>
                     </div>
-                    <div style="display:flex;gap:4px;">
-                      <button class="icon-btn save-reel-btn" data-reel-id="${esc(r.id)}" title="Save Reel" style="width:28px;height:28px;color:${isSaved ? 'var(--violet-light)' : 'var(--muted)'};">${iconSvg('bookmark', 15)}</button>
-                      ${isMine ? `<button class="icon-btn delete-reel-btn" data-reel-id="${esc(r.id)}" title="Delete Reel" style="width:28px;height:28px;color:var(--rose);">${iconSvg('trash', 15)}</button>` : ''}
-                    </div>
+                    <div style="font-size:13.5px;line-height:1.4;">${esc(r.caption)}</div>
                   </div>
-                  ${r.videoUri ? mediaVideoHtml(r.videoUri, '', 'controls playsinline style="width:100%;height:280px;object-fit:cover;border-radius:12px;background:#000;"') : `<div style="height:210px;border-radius:12px;background:${hex};display:flex;align-items:center;justify-content:center;padding:14px;text-align:center;font-weight:700;color:#fff;">${esc(r.caption)}</div>`}
-                  <div style="font-size:13px;line-height:1.4;">${esc(r.caption)}</div>
-                  <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                    <button class="action-pill like-reel-btn" data-reel-id="${esc(r.id)}" style="background:var(--card);">${iconSvg('like', 15)}<span>${r.likesCount || 0}</span></button>
-                    <button class="action-pill open-reel-comments-btn" data-reel-id="${esc(r.id)}" style="background:var(--card);">${iconSvg('comment', 15)}<span>${r.commentsCount || 0}</span></button>
-                    <button class="action-pill msg-person-btn" data-uid="${esc(r.authorId)}" style="background:var(--card);">${iconSvg('chat', 15)}<span>Chat</span></button>
+                  <div class="reel-side-rail">
+                    <button class="reel-rail-btn like-reel-btn" data-reel-id="${esc(r.id)}" title="Like">${iconSvg('like', 19)}</button>
+                    <span class="reel-rail-count">${r.likesCount || 0}</span>
+                    <button class="reel-rail-btn open-reel-comments-btn" data-reel-id="${esc(r.id)}" title="Comments">${iconSvg('comment', 19)}</button>
+                    <span class="reel-rail-count">${r.commentsCount || 0}</span>
+                    <button class="reel-rail-btn save-reel-btn" data-reel-id="${esc(r.id)}" title="Save" style="color:${isSaved ? '#A78BFA' : '#fff'};">${iconSvg('bookmark', 18)}</button>
+                    <button class="reel-rail-btn msg-person-btn" data-uid="${esc(r.authorId)}" title="Message creator">${iconSvg('chat', 18)}</button>
+                    ${isMine ? `<button class="reel-rail-btn delete-reel-btn" data-reel-id="${esc(r.id)}" title="Delete Reel" style="color:#FB7185;">${iconSvg('trash', 17)}</button>` : ''}
                   </div>
-                </div>
+                </section>
               `;
             }).join('')}
           </div>
@@ -2043,7 +2081,7 @@ function renderCenterStage() {
         <div class="card" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
           <div>
             <div style="font-weight:700;">HELLO Website, Laptop &amp; Android App</div>
-            <div class="muted">Install on your laptop, copy the website link, or download Android APK v1.8.6</div>
+            <div class="muted">Install on your laptop, copy the website link, or download Android APK v1.8.7</div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-violet open-get-app-btn" id="installLaptopBtnHub">${iconSvg('laptop', 16)}<span>Website &amp; Laptop App</span></button>
@@ -2068,47 +2106,70 @@ function renderCenterStage() {
   }
 
   if (state.tab === 'marketplace') {
-    const cats = ['All', 'Electronics', 'Vehicles', 'Home', 'Fashion', 'Services', 'Other'];
-    const items = state.marketplace.filter((m) => {
+    const cats = ['All', 'Electronics', 'Vehicles', 'Home', 'Fashion', 'Books', 'Services', 'Other'];
+    let items = state.marketplace.filter((m) => {
       if (state.blockedUids.has(m.sellerId)) return false;
       const catOk = state.marketCat === 'All' || (m.category || '').toLowerCase() === state.marketCat.toLowerCase();
-      const qOk = !q || (m.title || '').toLowerCase().includes(q) || (m.description || '').toLowerCase().includes(q);
-      return catOk && qOk;
+      const statusOk =
+        state.marketStatus === 'All' ||
+        (state.marketStatus === 'Available' && m.status !== 'sold') ||
+        (state.marketStatus === 'Sold' && m.status === 'sold') ||
+        (state.marketStatus === 'Mine' && m.sellerId === uid);
+      const qOk = !q || (m.title || '').toLowerCase().includes(q) || (m.description || '').toLowerCase().includes(q) || (m.locationText || '').toLowerCase().includes(q);
+      return catOk && statusOk && qOk;
     });
+    if (state.marketSort === 'Price ↑') {
+      items = [...items].sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+    } else if (state.marketSort === 'Price ↓') {
+      items = [...items].sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+    }
+
     return `
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+      <div class="card" style="display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
           <div>
             <h3 style="margin:0;">HELLO Marketplace (${items.length})</h3>
-            <div class="muted">Buy & sell locally — tap Message Seller to chat</div>
+            <div class="muted">Buy &amp; sell locally — click any listing for full details or Message Seller</div>
           </div>
           <button class="btn btn-primary" id="openCreateListingBtn">${iconSvg('plus', 16)}<span>Sell Item</span></button>
         </div>
-        <div class="chip-row" style="margin-bottom:14px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <input class="field" id="tabLocalSearchInput" type="search" placeholder="Search items, locations..." value="${esc(state.search)}" style="flex:1;min-width:180px;" />
+          <select class="select-field" id="marketSortSelect" style="width:auto;">
+            ${['Newest', 'Price ↑', 'Price ↓'].map((s) => `<option ${state.marketSort === s ? 'selected' : ''}>${s}</option>`).join('')}
+          </select>
+        </div>
+        <div class="chip-row">
           ${cats.map((c) => `<button class="filter-chip ${state.marketCat === c ? 'active' : ''}" data-market-cat="${c}">${c}</button>`).join('')}
         </div>
-        ${items.length === 0 ? `<div class="muted">No Marketplace listings yet.</div>` : `
+        <div class="chip-row">
+          ${['All', 'Available', 'Sold', 'Mine'].map((st) => `<button class="filter-chip ${state.marketStatus === st ? 'active' : ''}" data-market-status="${st}">${st}</button>`).join('')}
+        </div>
+        ${items.length === 0 ? `<div class="muted">No Marketplace listings match your filters.</div>` : `
           <div class="grid-cards">
             ${items.map((item) => {
               const isMine = item.sellerId === uid || isAdminUser();
               return `
                 <div class="card" style="padding:12px;display:flex;flex-direction:column;gap:6px;background:var(--elevated);">
-                  ${item.imageUri ? mediaImgHtml(item.imageUri, 'market-img open-lightbox', item.title, `data-lightbox-uri="${esc(item.imageUri)}"`) : `<div class="market-img" style="display:flex;align-items:center;justify-content:center;color:var(--muted);">No photo</div>`}
-                  <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <span style="font-weight:800;font-size:16px;color:var(--primary);font-variant-numeric:tabular-nums;">${esc(item.currency || '$')}${Number(item.price || 0).toFixed(2)}</span>
-                    <span class="badge">${esc(item.status || 'available')}</span>
+                  <div class="open-listing-detail-btn" data-item-id="${esc(item.id)}" style="cursor:pointer;">
+                    ${item.imageUri ? mediaImgHtml(item.imageUri, 'market-img', item.title) : `<div class="market-img" style="display:flex;align-items:center;justify-content:center;color:var(--muted);">No photo</div>`}
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                      <span style="font-weight:800;font-size:16px;color:var(--primary);font-variant-numeric:tabular-nums;">${esc(item.currency || '$')}${Number(item.price || 0).toFixed(2)}</span>
+                      <span class="badge">${esc(item.status || 'available')}</span>
+                    </div>
+                    <div style="font-weight:700;margin-top:4px;">${esc(item.title)}</div>
+                    <div class="muted" style="font-size:12px;">${esc(item.category || 'Other')} · ${esc(item.condition || 'Good')} · ${esc(item.locationText || 'Local')}</div>
                   </div>
-                  <div style="font-weight:700;">${esc(item.title)}</div>
-                  <div class="muted" style="font-size:12px;">${esc(item.condition || 'Available')} · ${esc(item.locationText || 'Local')}</div>
                   ${isMine ? `
-                    <div style="display:flex;gap:6px;margin-top:6px;">
-                      <button class="btn btn-secondary toggle-sold-btn" data-item-id="${esc(item.id)}" style="flex:1;">${item.status === 'sold' ? 'Mark Available' : 'Mark Sold'}</button>
+                    <div style="display:flex;gap:6px;margin-top:auto;padding-top:6px;">
+                      <button class="btn btn-secondary open-edit-listing-btn" data-item-id="${esc(item.id)}" style="padding:6px 10px;">Edit</button>
+                      <button class="btn btn-secondary toggle-sold-btn" data-item-id="${esc(item.id)}" style="flex:1;">${item.status === 'sold' ? 'Available' : 'Sold'}</button>
                       <button class="btn btn-danger delete-mkt-btn" data-item-id="${esc(item.id)}">${iconSvg('trash', 15)}</button>
                     </div>
                   ` : `
-                    <div style="display:flex;gap:6px;margin-top:6px;">
+                    <div style="display:flex;gap:6px;margin-top:auto;padding-top:6px;">
                       <button class="btn btn-primary market-msg-btn" data-item-id="${esc(item.id)}" style="flex:1;">${iconSvg('chat', 15)}<span>Message</span></button>
-                      <button class="btn btn-secondary report-open-btn" data-rtype="listing" data-rid="${esc(item.id)}">Report</button>
+                      <button class="btn btn-secondary open-listing-detail-btn" data-item-id="${esc(item.id)}">View</button>
                     </div>
                   `}
                 </div>
@@ -2121,29 +2182,98 @@ function renderCenterStage() {
   }
 
   if (state.tab === 'pages') {
-    const pages = state.pages.filter((pg) => !q || (pg.name || '').toLowerCase().includes(q) || (pg.category || '').toLowerCase().includes(q));
+    if (state.activePageId) {
+      const pg = state.pages.find((p) => p.id === state.activePageId);
+      if (pg) {
+        const following = (pg.followerUids || []).includes(uid);
+        const isPageAdmin = pg.creatorId === uid || (pg.adminUids || []).includes(uid) || isAdminUser();
+        const pagePosts = state.posts.filter((p) => p.pageId === pg.id);
+        return `
+          <div style="display:flex;flex-direction:column;gap:14px;">
+            <div class="card profile-clean-card">
+              <div class="profile-clean-cover" style="height:165px;">
+                ${pg.coverUrl ? mediaImgHtml(pg.coverUrl, '', 'Page cover') : ''}
+                <button class="icon-btn" id="backToPagesBtn" title="Back to Pages" style="position:absolute;top:12px;left:12px;background:rgba(11,14,30,0.75);color:#fff;">${iconSvg('back', 18)}</button>
+              </div>
+              <div class="profile-clean-body">
+                <div class="profile-clean-avatar-wrap">${avatarHtml(pg.name, pg.avatarUrl, 82, false)}</div>
+                <h2 style="margin:8px 0 2px;">${esc(pg.name)}</h2>
+                <div class="muted">${esc(pg.category || 'Creator')} · ${pg.followersCount ?? (pg.followerUids || []).length} followers</div>
+                ${pg.bio ? `<div style="margin-top:8px;font-size:14px;max-width:520px;">${esc(pg.bio)}</div>` : ''}
+                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px;">
+                  <button class="btn ${following ? 'btn-secondary' : 'btn-primary'} follow-page-btn" data-page-id="${esc(pg.id)}">${following ? 'Following ✓' : 'Follow Page'}</button>
+                  ${isPageAdmin ? `<button class="btn btn-secondary open-edit-page-btn" data-page-id="${esc(pg.id)}">Edit Page</button>` : ''}
+                  ${isPageAdmin ? `<button class="btn btn-secondary manage-page-btn" data-page-id="${esc(pg.id)}">Manage Members</button>` : ''}
+                  ${(pg.creatorId === uid || isAdminUser()) ? `<button class="btn btn-danger delete-page-btn" data-page-id="${esc(pg.id)}">${iconSvg('trash', 15)}<span>Delete</span></button>` : ''}
+                </div>
+              </div>
+            </div>
+
+            ${isPageAdmin ? `
+              <div class="card composer">
+                <textarea id="postDraftInput" rows="2" placeholder="Publish an update as ${esc(pg.name)}...">${esc(state.postDraft)}</textarea>
+                ${state.postMediaPreview ? `
+                  <div class="preview-wrap">
+                    ${state.postMediaFile?.type?.startsWith('video/') ? `<video controls src="${esc(state.postMediaPreview)}"></video>` : `<img src="${esc(state.postMediaPreview)}" alt="Preview" />`}
+                    <button class="preview-remove-btn" id="clearPostMediaBtn" type="button">${iconSvg('close', 16)}</button>
+                  </div>
+                ` : ''}
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px;">
+                  <button class="btn btn-secondary" id="pickPostMediaBtn" type="button">${iconSvg('photo', 16)}<span>${state.postMediaFile ? 'Change Media' : 'Photo / Video'}</span></button>
+                  <button class="btn btn-primary" id="publishPagePostBtn" data-page-id="${esc(pg.id)}" ${state.isUploading ? 'disabled' : ''}>${state.isUploading ? 'Uploading...' : 'Post to Page'}</button>
+                </div>
+              </div>
+            ` : ''}
+
+            <div class="feed-list">
+              ${pagePosts.length === 0 ? `<div class="card muted">No posts published on ${esc(pg.name)} yet.</div>` : pagePosts.map((p) => renderPostCard(p)).join('')}
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    const pageCats = ['All', 'Digital Creator', 'Creator', 'Community', 'Business', 'Music', 'Education', 'Tech', 'Sports'];
+    const pages = state.pages.filter((pg) => {
+      const catOk = state.pageCatFilter === 'All' || (pg.category || '').toLowerCase() === state.pageCatFilter.toLowerCase();
+      const qOk = !q || (pg.name || '').toLowerCase().includes(q) || (pg.category || '').toLowerCase().includes(q) || (pg.bio || '').toLowerCase().includes(q);
+      return catOk && qOk;
+    });
     return `
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+      <div class="card" style="display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
           <div>
             <h3 style="margin:0;">HELLO Pages (${pages.length})</h3>
-            <div class="muted">Creators, communities & brands</div>
+            <div class="muted">Creators, communities &amp; brands</div>
           </div>
           <button class="btn btn-primary" id="openCreatePageBtn">${iconSvg('plus', 16)}<span>Create Page</span></button>
         </div>
-        ${pages.length === 0 ? `<div class="muted">No Pages created yet.</div>` : `
+        <input class="field" id="tabLocalSearchInput" type="search" placeholder="Search Pages by name or bio..." value="${esc(state.search)}" />
+        <div class="chip-row">
+          ${pageCats.map((c) => `<button class="filter-chip ${state.pageCatFilter === c ? 'active' : ''}" data-page-cat="${c}">${c}</button>`).join('')}
+        </div>
+        ${pages.length === 0 ? `<div class="muted">No Pages match your filter yet.</div>` : `
           <div class="grid-cards">
             ${pages.map((pg) => {
               const following = (pg.followerUids || []).includes(uid);
-              const isMine = pg.creatorId === uid || isAdminUser();
+              const isMine = pg.creatorId === uid || (pg.adminUids || []).includes(uid) || isAdminUser();
               return `
-                <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:8px;background:var(--elevated);">
-                  <div style="font-weight:800;font-size:15.5px;">${esc(pg.name)}</div>
-                  <div class="muted">${esc(pg.category)} · ${pg.followersCount || 0} followers</div>
-                  ${pg.bio ? `<div style="font-size:13px;">${esc(pg.bio)}</div>` : ''}
-                  <div style="display:flex;gap:6px;margin-top:auto;">
-                    <button class="btn ${following ? 'btn-secondary' : 'btn-primary'} follow-page-btn" data-page-id="${esc(pg.id)}" style="flex:1;">${following ? 'Following ✓' : 'Follow Page'}</button>
-                    ${isMine ? `<button class="btn btn-danger delete-page-btn" data-page-id="${esc(pg.id)}">${iconSvg('trash', 15)}</button>` : ''}
+                <div class="card" style="padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--elevated);">
+                  <div class="open-page-detail-btn" data-page-id="${esc(pg.id)}" style="cursor:pointer;">
+                    <div class="page-card-banner">${pg.coverUrl ? mediaImgHtml(pg.coverUrl, '', pg.name) : ''}</div>
+                    <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+                      ${avatarHtml(pg.name, pg.avatarUrl, 40, false)}
+                      <div style="min-width:0;">
+                        <div style="font-weight:800;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(pg.name)}</div>
+                        <div class="muted" style="font-size:12px;">${esc(pg.category)} · ${pg.followersCount ?? (pg.followerUids || []).length} followers</div>
+                      </div>
+                    </div>
+                    ${pg.bio ? `<div style="font-size:13px;margin-top:6px;line-height:1.4;">${esc(pg.bio.slice(0, 120))}</div>` : ''}
+                  </div>
+                  <div style="display:flex;gap:6px;margin-top:auto;padding-top:4px;">
+                    <button class="btn ${following ? 'btn-secondary' : 'btn-primary'} follow-page-btn" data-page-id="${esc(pg.id)}" style="flex:1;">${following ? 'Following ✓' : 'Follow'}</button>
+                    <button class="btn btn-secondary open-page-detail-btn" data-page-id="${esc(pg.id)}">Open</button>
+                    ${isMine ? `<button class="btn btn-secondary open-edit-page-btn" data-page-id="${esc(pg.id)}">Edit</button>` : ''}
                   </div>
                 </div>
               `;
@@ -2334,49 +2464,71 @@ function renderCenterStage() {
     const myPosts = state.posts.filter((p) => p.authorId === viewUid);
     const myReels = state.reels.filter((r) => r.authorId === viewUid);
     const myPhotos = myPosts.filter((p) => p.mediaType === 'image' && p.mediaUri);
+    const myHighlights = state.stories.filter((s) => s.authorId === viewUid && s.isSavedHighlight);
     const savedPosts = isMe ? state.posts.filter((p) => state.savedPostIds.has(p.id)) : [];
+    const friendSet = new Set(state.friendships.flatMap((f) => f.participantUids || []).filter((x) => x !== uid));
+    const isFriend = friendSet.has(viewUid);
+    const isFollowing = state.follows.some((f) => f.targetUid === viewUid);
+    const isPending = state.friendRequests.some((r) => r.fromUid === uid && r.toUid === viewUid && r.status === 'pending');
     const pTab = state.profileTab || 'posts';
 
     return `
       <div style="display:flex;flex-direction:column;gap:14px;">
-        <div class="card" style="padding:14px;">
-          <div class="profile-cover">
-            ${person.coverUrl ? mediaImgHtml(person.coverUrl, '', 'Cover') : ''}
+        <div class="card profile-clean-card">
+          <div class="profile-clean-cover">
+            ${person.coverUrl ? mediaImgHtml(person.coverUrl, 'open-lightbox', 'Cover', `data-lightbox-uri="${esc(person.coverUrl)}"`) : ''}
           </div>
-          <div class="profile-head-overlap">
-            ${avatarHtml(person.displayName || state.user.displayName, person.photoUrl || (isMe ? state.user.photoURL : ''), 78, person.isOnline)}
-            <div style="flex:1;padding-bottom:6px;">
-              <h2 style="margin:0;display:flex;align-items:center;gap:6px;">
-                <span>${esc(person.displayName || 'Hello Member')}</span>
-                ${person.isVerifiedOwner ? `<span class="verified-badge">${iconSvg('verified', 18)}</span>` : ''}
-              </h2>
-              <div class="muted">${esc(person.handle || '')} · ${person.friendsCount || 0} friends · ${person.followersCount || 0} followers</div>
+          <div class="profile-clean-body">
+            <div class="profile-clean-avatar-wrap">
+              ${avatarHtml(person.displayName || state.user.displayName, person.photoUrl || (isMe ? state.user.photoURL : ''), 92, Boolean(person.isOnline && person.showOnlineStatus !== false))}
+            </div>
+            <h2 style="margin:10px 0 2px;display:flex;align-items:center;justify-content:center;gap:6px;">
+              <span>${esc(person.displayName || 'Hello Member')}</span>
+              ${person.isVerifiedOwner ? `<span class="verified-badge">${iconSvg('verified', 18)}</span>` : ''}
+            </h2>
+            ${person.handle ? `<div class="muted" style="font-size:13px;">${esc(person.handle)}</div>` : ''}
+            ${person.bio ? `<div style="margin-top:8px;font-size:14px;max-width:480px;line-height:1.45;">${esc(person.bio)}</div>` : ''}
+
+            <div class="profile-stats-bar">
+              <div class="profile-stat-pill"><strong>${person.friendsCount || 0}</strong><span>Friends</span></div>
+              <div class="profile-stat-pill"><strong>${person.followersCount || 0}</strong><span>Followers</span></div>
+              <div class="profile-stat-pill"><strong>${myPosts.length}</strong><span>Posts</span></div>
+              <div class="profile-stat-pill"><strong>${myReels.length}</strong><span>Reels</span></div>
+            </div>
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:14px;width:100%;">
+              ${isMe ? `
+                <button class="btn btn-primary" id="openEditProfileModalBtn" style="flex:1;max-width:220px;">Edit Profile</button>
+                <button class="btn btn-secondary" data-tab="settings" style="flex:1;max-width:220px;">Settings &amp; Privacy</button>
+              ` : `
+                <button class="btn btn-primary msg-person-btn" data-uid="${esc(viewUid)}">${iconSvg('chat', 16)}<span>Message</span></button>
+                ${isFriend ? `<span class="badge">Friends ✓</span>` : (isPending ? `<span class="badge">Requested</span>` : `<button class="btn btn-secondary add-friend-btn" data-uid="${esc(viewUid)}">Add Friend</button>`)}
+                <button class="btn btn-secondary follow-btn" data-uid="${esc(viewUid)}">${isFollowing ? 'Following ✓' : 'Follow'}</button>
+                <button class="btn btn-secondary report-open-btn" data-rtype="user" data-rid="${esc(viewUid)}">Report</button>
+                <button class="btn btn-danger block-user-btn" data-uid="${esc(viewUid)}" data-name="${esc(person.displayName || 'User')}">Block</button>
+              `}
             </div>
           </div>
-          ${person.bio ? `<div style="padding:12px 14px 4px;font-size:14px;">${esc(person.bio)}</div>` : ''}
-          ${isMe ? `
-            <div style="padding:12px 14px 4px;display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--border);margin-top:12px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-weight:700;font-size:14px;">Edit Profile</span>
-                <button class="btn btn-secondary" data-tab="settings" style="min-height:30px;padding:4px 10px;font-size:12px;">Settings & Privacy</button>
-              </div>
-              <input class="field" id="profNameInput" placeholder="Display Name" value="${esc(person.displayName || '')}" />
-              <textarea class="field" id="profBioInput" rows="2" placeholder="Bio">${esc(person.bio || '')}</textarea>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-                <button class="btn btn-secondary" id="pickProfAvatarBtn" type="button" ${state.isUploading ? 'disabled' : ''}>${iconSvg('photo', 16)}<span>Change Avatar</span></button>
-                <button class="btn btn-secondary" id="pickProfCoverBtn" type="button" ${state.isUploading ? 'disabled' : ''}>${iconSvg('photo', 16)}<span>Change Cover</span></button>
-                <button class="btn btn-primary" id="saveProfileBtn">Save Changes</button>
-              </div>
-            </div>
-          ` : `
-            <div style="padding:12px 14px 4px;display:flex;gap:8px;flex-wrap:wrap;">
-              <button class="btn btn-primary msg-person-btn" data-uid="${esc(viewUid)}">${iconSvg('chat', 16)}<span>Message</span></button>
-              <button class="btn btn-secondary follow-btn" data-uid="${esc(viewUid)}">${state.follows.some((f) => f.targetUid === viewUid) ? 'Following' : 'Follow'}</button>
-              <button class="btn btn-secondary report-open-btn" data-rtype="user" data-rid="${esc(viewUid)}">Report</button>
-              <button class="btn btn-danger block-user-btn" data-uid="${esc(viewUid)}" data-name="${esc(person.displayName || 'User')}">Block</button>
-            </div>
-          `}
         </div>
+
+        ${myHighlights.length ? `
+          <div class="card" style="padding:12px 14px;">
+            <div style="font-weight:700;font-size:13px;margin-bottom:8px;">Story Highlights</div>
+            <div class="highlights-row">
+              ${myHighlights.map((st) => `
+                <button class="highlight-chip view-story-btn" data-story-id="${esc(st.id)}">
+                  <div class="highlight-ring">
+                    <div class="highlight-inner" style="background:${esc(st.backgroundHex || '#1E1B4B')};">
+                      ${st.mediaUri && st.mediaType !== 'video' ? `<img referrerpolicy="no-referrer" data-media-uri="${esc(st.mediaUri)}" src="${esc(mediaSrc(st.mediaUri))}" alt="Highlight" />` : esc((st.caption || 'Story').slice(0, 8))}
+                    </div>
+                  </div>
+                  <span style="font-size:11px;max-width:70px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(st.caption || 'Highlight')}</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
         <div class="chip-row">
           <button class="filter-chip ${pTab === 'posts' ? 'active' : ''}" data-prof-tab="posts">Posts (${myPosts.length})</button>
           <button class="filter-chip ${pTab === 'reels' ? 'active' : ''}" data-prof-tab="reels">Reels (${myReels.length})</button>
@@ -2385,14 +2537,14 @@ function renderCenterStage() {
         </div>
         ${pTab === 'posts' ? (myPosts.length ? myPosts.map((p) => renderPostCard(p)).join('') : `<div class="card muted">No posts yet.</div>`) : ''}
         ${pTab === 'reels' ? (myReels.length ? `<div class="grid-cards">${myReels.map((r) => `<div class="card" style="padding:10px;">${r.videoUri ? mediaVideoHtml(r.videoUri, '', 'controls playsinline style="width:100%;height:210px;border-radius:10px;background:#000;"') : ''}<div style="margin-top:6px;font-size:13px;">${esc(r.caption)}</div></div>`).join('')}</div>` : `<div class="card muted">No Reels yet.</div>`) : ''}
-        ${pTab === 'photos' ? (myPhotos.length ? `<div class="grid-cards">${myPhotos.map((p) => `<div class="card" style="padding:8px;">${mediaImgHtml(p.mediaUri, 'profile-photo-img open-lightbox', 'Photo', `data-lightbox-uri="${esc(p.mediaUri)}"`)}</div>`).join('')}</div>` : `<div class="card muted">No photos yet.</div>`) : ''}
+        ${pTab === 'photos' ? (myPhotos.length ? `<div class="card"><div class="photos-square-grid">${myPhotos.map((p) => `<div class="photo-square-tile open-lightbox" data-lightbox-uri="${esc(p.mediaUri)}">${mediaImgHtml(p.mediaUri, '', 'Photo')}</div>`).join('')}</div></div>` : `<div class="card muted">No photos yet.</div>`) : ''}
         ${pTab === 'saved' && isMe ? (savedPosts.length ? savedPosts.map((p) => renderPostCard(p)).join('') : `<div class="card muted">No saved posts yet.</div>`) : ''}
       </div>
     `;
   }
 
-  // Home Feed
-  let posts = state.posts.filter((p) => !q || (p.content || '').toLowerCase().includes(q) || (p.authorName || '').toLowerCase().includes(q));
+  // Home Feed (keeps Group and Page posts inside their own spaces)
+  let posts = state.posts.filter((p) => !p.groupId && !p.pageId && (!q || (p.content || '').toLowerCase().includes(q) || (p.authorName || '').toLowerCase().includes(q)));
   const friendSet = new Set(state.friendships.flatMap((f) => f.participantUids || []).filter((x) => x !== uid));
   if (state.feedSort === 'top') {
     posts = [...posts].sort((a, b) => ((b.likesCount || 0) * 2 + (b.commentsCount || 0) + (b.sharesCount || 0)) - ((a.likesCount || 0) * 2 + (a.commentsCount || 0) + (a.sharesCount || 0)));
@@ -2579,10 +2731,20 @@ function renderModals() {
             <button class="icon-btn close-modals-btn" style="width:34px;height:34px;">${iconSvg('close', 18)}</button>
           </div>
           <input class="field" id="mktTitleInput" placeholder="Product title" value="${esc(state.mktTitle)}" />
-          <input class="field" id="mktPriceInput" type="number" min="0" step="0.01" placeholder="Price (e.g. 25)" value="${esc(state.mktPrice)}" />
-          <select class="select-field" id="mktCatInput">
-            ${['Electronics', 'Vehicles', 'Home', 'Fashion', 'Services', 'Other'].map((c) => `<option ${state.mktCat === c ? 'selected' : ''}>${c}</option>`).join('')}
-          </select>
+          <div style="display:grid;grid-template-columns:100px 1fr;gap:8px;">
+            <select class="select-field" id="mktCurrencyInput">
+              ${['$', '৳', '₹', '€', '£'].map((cur) => `<option ${state.mktCurrency === cur ? 'selected' : ''}>${cur}</option>`).join('')}
+            </select>
+            <input class="field" id="mktPriceInput" type="number" min="0" step="0.01" placeholder="Price (e.g. 25)" value="${esc(state.mktPrice)}" />
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <select class="select-field" id="mktCatInput">
+              ${['Electronics', 'Vehicles', 'Home', 'Fashion', 'Books', 'Services', 'Other'].map((c) => `<option ${state.mktCat === c ? 'selected' : ''}>${c}</option>`).join('')}
+            </select>
+            <select class="select-field" id="mktCondInput">
+              ${['New', 'Like New', 'Good', 'Fair'].map((c) => `<option ${state.mktCondition === c ? 'selected' : ''}>${c}</option>`).join('')}
+            </select>
+          </div>
           <input class="field" id="mktLocInput" placeholder="Location (e.g. Dhaka)" value="${esc(state.mktLoc)}" />
           <textarea class="field" id="mktDescInput" rows="2" placeholder="Description">${esc(state.mktDesc)}</textarea>
           ${state.mktMediaPreview ? `
@@ -2631,10 +2793,14 @@ function renderModals() {
           </div>
           <input class="field" id="pageNameInput" placeholder="Page name" value="${esc(state.pageName)}" />
           <select class="select-field" id="pageCatInput">
-            ${['Creator', 'Community', 'Business', 'Music', 'Education', 'Tech', 'Sports'].map((c) => `<option ${state.pageCat === c ? 'selected' : ''}>${c}</option>`).join('')}
+            ${['Digital Creator', 'Creator', 'Community', 'Business', 'Music', 'Education', 'Tech', 'Sports'].map((c) => `<option ${state.pageCat === c ? 'selected' : ''}>${c}</option>`).join('')}
           </select>
           <textarea class="field" id="pageBioInput" rows="2" placeholder="Page bio / description">${esc(state.pageBio)}</textarea>
-          <button class="btn btn-primary" id="submitPageBtn">Create Page</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-secondary" id="pickPageAvatarBtn" type="button">${iconSvg('photo', 15)}<span>${state.pageAvatarFile ? 'Avatar Ready ✓' : 'Page Avatar'}</span></button>
+            <button class="btn btn-secondary" id="pickPageCoverBtn" type="button">${iconSvg('photo', 15)}<span>${state.pageCoverFile ? 'Cover Ready ✓' : 'Cover Banner'}</span></button>
+          </div>
+          <button class="btn btn-primary" id="submitPageBtn" ${state.isUploading ? 'disabled' : ''}>${state.isUploading ? 'Creating...' : 'Create Page'}</button>
         </div>
       </div>
     `;
@@ -2732,7 +2898,7 @@ function renderModals() {
           <div style="padding:14px;border-radius:14px;background:var(--elevated);border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
             <div>
               <strong>📱 Android Phone App (APK)</strong>
-              <div class="muted" style="font-size:12px;">Latest Android release v1.8.6</div>
+              <div class="muted" style="font-size:12px;">Latest Android release v1.8.7</div>
             </div>
             <a class="btn btn-primary" href="${APK_URL}" target="_blank" rel="noopener noreferrer">${iconSvg('phone', 16)}<span>Download APK</span></a>
           </div>
@@ -2883,6 +3049,8 @@ function ensureGlobalFileInputs() {
     <input type="file" accept="image/*" id="gMktFileInput" class="sr-only-input" />
     <input type="file" accept="image/*" id="gProfAvatarInput" class="sr-only-input" />
     <input type="file" accept="image/*" id="gProfCoverInput" class="sr-only-input" />
+    <input type="file" accept="image/*" id="gPageAvatarInput" class="sr-only-input" />
+    <input type="file" accept="image/*" id="gPageCoverInput" class="sr-only-input" />
     <input type="file" accept="image/*,video/*" capture="environment" id="gChatCameraInput" class="sr-only-input" />
     <input type="file" accept="image/*,video/*" id="gChatMediaInput" class="sr-only-input" />
     <input type="file" id="gChatFileInput" class="sr-only-input" />
@@ -2933,6 +3101,16 @@ function ensureGlobalFileInputs() {
       showBanner(err?.message || 'Could not upload cover photo.', true);
     }
   });
+  document.getElementById('gPageAvatarInput').addEventListener('change', (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (f) setPreviewFile('pageAvatarFile', 'pageAvatarPreview', f);
+  });
+  document.getElementById('gPageCoverInput').addEventListener('change', (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (f) setPreviewFile('pageCoverFile', 'pageCoverPreview', f);
+  });
 
   const uploadChatFile = async (file, forcedType = '') => {
     const activeConv = state.conversations.find((c) => c.id === state.activeConvId);
@@ -2963,6 +3141,82 @@ function ensureGlobalFileInputs() {
   });
 }
 
+let reelsObserver = null;
+let reelTextTimer = null;
+
+function scrollToReelSlide(targetIdx) {
+  const feed = document.getElementById('reelsSnapFeed');
+  if (!feed) return;
+  const slides = feed.querySelectorAll('.reel-slide');
+  if (!slides.length) return;
+  const clamped = Math.max(0, Math.min(slides.length - 1, targetIdx));
+  state.reelActiveIndex = clamped;
+  slides[clamped].scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function setupReelsSequentialObserver() {
+  if (reelsObserver) {
+    try { reelsObserver.disconnect(); } catch (_) {}
+    reelsObserver = null;
+  }
+  if (reelTextTimer) {
+    clearTimeout(reelTextTimer);
+    reelTextTimer = null;
+  }
+  if (!state.user || state.tab !== 'reels') return;
+  const feed = document.getElementById('reelsSnapFeed');
+  if (!feed) return;
+  const slides = [...feed.querySelectorAll('.reel-slide')];
+  if (!slides.length) return;
+
+  const activateSlide = (activeIdx) => {
+    state.reelActiveIndex = activeIdx;
+    clearTimeout(reelTextTimer);
+    slides.forEach((slide, idx) => {
+      const vid = slide.querySelector('video');
+      if (vid) {
+        vid.loop = !state.reelAutoNext;
+        if (idx === activeIdx) {
+          vid.onended = () => {
+            if (state.reelAutoNext && idx + 1 < slides.length) {
+              scrollToReelSlide(idx + 1);
+            }
+          };
+          vid.play().catch(() => {
+            vid.muted = true;
+            vid.play().catch(() => {});
+          });
+        } else {
+          vid.onended = null;
+          if (!vid.paused) vid.pause();
+        }
+      } else if (idx === activeIdx && state.reelAutoNext && idx + 1 < slides.length) {
+        reelTextTimer = setTimeout(() => {
+          if (state.tab === 'reels' && state.reelAutoNext && state.reelActiveIndex === idx) {
+            scrollToReelSlide(idx + 1);
+          }
+        }, 6500);
+      }
+    });
+  };
+
+  reelsObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+        const idx = Number(entry.target.getAttribute('data-reel-idx') || 0);
+        activateSlide(idx);
+      }
+    });
+  }, { root: feed, threshold: 0.62 });
+
+  slides.forEach((s) => reelsObserver.observe(s));
+  const initialIdx = Math.max(0, Math.min(slides.length - 1, state.reelActiveIndex || 0));
+  if (initialIdx > 0) {
+    slides[initialIdx].scrollIntoView({ behavior: 'auto', block: 'start' });
+  }
+  activateSlide(initialIdx);
+}
+
 function render() {
   ensureGlobalFileInputs();
   const root = document.getElementById('root');
@@ -2972,6 +3226,7 @@ function render() {
 
   root.innerHTML = state.user ? renderShell() : renderLanding();
   bindEvents();
+  setupReelsSequentialObserver();
 
   if (activeId) {
     const el = document.getElementById(activeId);
@@ -3008,6 +3263,11 @@ function closeAllModals() {
   state.sosModalGroup = null;
   state.privateChatMatchId = null;
   state.maskModalMatchId = null;
+  state.detailListingId = null;
+  state.editListingTarget = null;
+  state.editPageTarget = null;
+  state.managePageModal = null;
+  state.showEditProfileModal = false;
   stopFeatureSubListeners();
 }
 
@@ -3066,12 +3326,18 @@ function bindEvents() {
     state.search = e.target.value;
     render();
   });
+  document.getElementById('tabLocalSearchInput')?.addEventListener('input', (e) => {
+    state.search = e.target.value;
+    render();
+  });
 
   document.querySelectorAll('[data-tab]').forEach((btn) => {
     btn.addEventListener('click', () => {
       state.tab = btn.getAttribute('data-tab');
       if (state.tab === 'profile') state.profileViewUid = null;
+      if (state.tab === 'reels') state.reelActiveIndex = 0;
       state.activeGroupId = null;
+      state.activePageId = null;
       state.mobileShowChat = false;
       state.showAttachMenu = false;
       render();
@@ -3084,7 +3350,7 @@ function bindEvents() {
   document.querySelectorAll('.open-user-profile').forEach((el) => {
     el.addEventListener('click', () => {
       const target = el.getAttribute('data-uid');
-      if (target) { state.profileViewUid = target; state.tab = 'profile'; render(); }
+      if (target) { closeAllModals(); state.profileViewUid = target; state.tab = 'profile'; render(); }
     });
   });
 
@@ -3104,8 +3370,9 @@ function bindEvents() {
   document.getElementById('postPrivacySelect')?.addEventListener('change', (e) => { state.postPrivacy = e.target.value; });
   document.getElementById('pickPostMediaBtn')?.addEventListener('click', () => openPicker('gPostPhotoInput'));
   document.getElementById('clearPostMediaBtn')?.addEventListener('click', () => setPreviewFile('postMediaFile', 'postMediaPreview', null));
-  document.getElementById('publishPostBtn')?.addEventListener('click', () => publishPost(''));
-  document.getElementById('publishGroupPostBtn')?.addEventListener('click', (e) => publishPost(e.currentTarget.getAttribute('data-group-id') || ''));
+  document.getElementById('publishPostBtn')?.addEventListener('click', () => publishPost('', ''));
+  document.getElementById('publishGroupPostBtn')?.addEventListener('click', (e) => publishPost(e.currentTarget.getAttribute('data-group-id') || '', ''));
+  document.getElementById('publishPagePostBtn')?.addEventListener('click', (e) => publishPost('', e.currentTarget.getAttribute('data-page-id') || ''));
 
   document.querySelectorAll('.like-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -3223,6 +3490,12 @@ function bindEvents() {
       showBanner(e?.message || 'Could not publish Reel.', true);
     }
   });
+  document.getElementById('toggleReelAutoNextBtn')?.addEventListener('click', () => {
+    state.reelAutoNext = !state.reelAutoNext;
+    render();
+  });
+  document.getElementById('reelPrevBtn')?.addEventListener('click', () => scrollToReelSlide((state.reelActiveIndex || 0) - 1));
+  document.getElementById('reelNextBtn')?.addEventListener('click', () => scrollToReelSlide((state.reelActiveIndex || 0) + 1));
   document.querySelectorAll('.like-reel-btn').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const rid = btn.getAttribute('data-reel-id');
@@ -3451,10 +3724,19 @@ function bindEvents() {
   document.querySelectorAll('[data-market-cat]').forEach((btn) => {
     btn.addEventListener('click', () => { state.marketCat = btn.getAttribute('data-market-cat'); render(); });
   });
+  document.querySelectorAll('[data-market-status]').forEach((btn) => {
+    btn.addEventListener('click', () => { state.marketStatus = btn.getAttribute('data-market-status'); render(); });
+  });
+  document.getElementById('marketSortSelect')?.addEventListener('change', (e) => {
+    state.marketSort = e.target.value;
+    render();
+  });
   document.getElementById('openCreateListingBtn')?.addEventListener('click', () => { state.showCreateListingModal = true; render(); });
   document.getElementById('mktTitleInput')?.addEventListener('input', (e) => { state.mktTitle = e.target.value; });
+  document.getElementById('mktCurrencyInput')?.addEventListener('change', (e) => { state.mktCurrency = e.target.value; });
   document.getElementById('mktPriceInput')?.addEventListener('input', (e) => { state.mktPrice = e.target.value; });
   document.getElementById('mktCatInput')?.addEventListener('change', (e) => { state.mktCat = e.target.value; });
+  document.getElementById('mktCondInput')?.addEventListener('change', (e) => { state.mktCondition = e.target.value; });
   document.getElementById('mktLocInput')?.addEventListener('input', (e) => { state.mktLoc = e.target.value; });
   document.getElementById('mktDescInput')?.addEventListener('input', (e) => { state.mktDesc = e.target.value; });
   document.getElementById('pickMktMediaBtn')?.addEventListener('click', () => openPicker('gMktFileInput'));
@@ -3477,9 +3759,9 @@ function bindEvents() {
         title: title.slice(0, 120),
         description: state.mktDesc.trim().slice(0, 1000),
         price,
-        currency: '$',
+        currency: state.mktCurrency || '$',
         category: state.mktCat || 'Other',
-        condition: 'Good',
+        condition: state.mktCondition || 'Like New',
         locationText: state.mktLoc.trim().slice(0, 100) || 'Local',
         imageUri,
         status: 'available',
@@ -3495,37 +3777,54 @@ function bindEvents() {
     }
   });
   document.querySelectorAll('.toggle-sold-btn').forEach((btn) => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
       const item = state.marketplace.find((m) => m.id === btn.getAttribute('data-item-id'));
-      if (item) await updateDoc(doc(db, 'marketplace_listings', item.id), { status: item.status === 'sold' ? 'available' : 'sold', updatedAt: serverTimestamp() });
+      if (!item) return;
+      try {
+        const nextStatus = item.status === 'sold' ? 'available' : 'sold';
+        await updateDoc(doc(db, 'marketplace_listings', item.id), { status: nextStatus, updatedAt: serverTimestamp() });
+        showBanner(nextStatus === 'sold' ? 'Listing marked as Sold.' : 'Listing marked Available.');
+      } catch (err) {
+        showBanner(err?.message || 'Could not update listing status.', true);
+      }
     });
   });
   document.querySelectorAll('.market-msg-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const item = state.marketplace.find((m) => m.id === btn.getAttribute('data-item-id'));
       if (!item) return;
+      closeAllModals();
       const seller = state.usersById[item.sellerId] || { userId: item.sellerId, displayName: item.sellerName || 'Seller' };
       openOrCreateDm(seller, `Is this available? (${item.title} · ${item.currency || '$'}${Number(item.price || 0).toFixed(2)})`, item.imageUri || '', item.imageUri ? 'image' : 'none');
     });
   });
 
   // Pages & Events
+  document.querySelectorAll('[data-page-cat]').forEach((btn) => {
+    btn.addEventListener('click', () => { state.pageCatFilter = btn.getAttribute('data-page-cat'); render(); });
+  });
   document.getElementById('openCreatePageBtn')?.addEventListener('click', () => { state.showCreatePageModal = true; render(); });
   document.getElementById('pageNameInput')?.addEventListener('input', (e) => { state.pageName = e.target.value; });
   document.getElementById('pageCatInput')?.addEventListener('change', (e) => { state.pageCat = e.target.value; });
   document.getElementById('pageBioInput')?.addEventListener('input', (e) => { state.pageBio = e.target.value; });
+  document.getElementById('pickPageAvatarBtn')?.addEventListener('click', () => openPicker('gPageAvatarInput'));
+  document.getElementById('pickPageCoverBtn')?.addEventListener('click', () => openPicker('gPageCoverInput'));
   document.getElementById('submitPageBtn')?.addEventListener('click', async () => {
-    if (!state.user) return;
+    if (!state.user || state.isUploading) return;
     const name = state.pageName.trim();
     if (name.length < 2) { showBanner('Page name must be at least 2 characters.', true); return; }
     try {
       const uid = state.user.uid;
+      const avatarUrl = state.pageAvatarFile ? await uploadMediaBlob(state.pageAvatarFile, '', 'Uploading Page avatar...') : '';
+      const coverUrl = state.pageCoverFile ? await uploadMediaBlob(state.pageCoverFile, '', 'Uploading Page cover...') : '';
       await addDoc(collection(db, 'pages'), {
         name: name.slice(0, 100),
         category: state.pageCat || 'Creator',
         bio: state.pageBio.trim().slice(0, 600),
-        avatarUrl: '',
-        coverUrl: '',
+        avatarUrl,
+        coverUrl,
         creatorId: uid,
         adminUids: [uid],
         followerUids: [uid],
@@ -3534,13 +3833,16 @@ function bindEvents() {
         updatedAt: serverTimestamp()
       });
       state.pageName = ''; state.pageBio = ''; state.showCreatePageModal = false;
+      setPreviewFile('pageAvatarFile', 'pageAvatarPreview', null);
+      setPreviewFile('pageCoverFile', 'pageCoverPreview', null);
       showBanner('Page created!');
     } catch (e) {
       showBanner(e?.message || 'Could not create page.', true);
     }
   });
   document.querySelectorAll('.follow-page-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const pg = state.pages.find((p) => p.id === btn.getAttribute('data-page-id'));
       if (pg) toggleFollowPage(pg);
     });
@@ -3715,6 +4017,141 @@ function bindEvents() {
   bindFeatureEvents();
 }
 
+async function toggleVoiceGesture() {
+  const next = !state.vgEnabled;
+  state.vgEnabled = next;
+  setVoiceGestureStoredEnabled(next);
+  if (next) {
+    await vgController.start();
+    showBanner('Voice & Gesture Control enabled.');
+  } else {
+    vgController.stop();
+    showBanner('Voice & Gesture Control disabled.');
+  }
+  render();
+}
+
+const vgController = createVoiceGestureController({
+  onCommand(cmd) {
+    if (!state.user) return;
+    if (cmd.type === 'navigate') {
+      closeAllModals();
+      const targetTab = cmd.tab === 'home' ? 'feed' : (cmd.tab === 'secretlove' ? 'secret_love' : cmd.tab);
+      state.tab = targetTab;
+      if (targetTab === 'profile') state.profileViewUid = null;
+      if (targetTab === 'reels') state.reelActiveIndex = 0;
+      render();
+      return;
+    }
+    if (cmd.type === 'scroll') {
+      if (state.tab === 'reels') {
+        scrollToReelSlide((state.reelActiveIndex || 0) + (cmd.delta > 0 ? 1 : -1));
+      } else {
+        window.scrollBy({ top: cmd.delta || 400, behavior: 'smooth' });
+      }
+      return;
+    }
+    if (cmd.type === 'scrollTop') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    if (cmd.type === 'back') {
+      if (state.activeStory || state.lightboxUri || state.detailListingId || state.editListingTarget || state.editPageTarget || state.managePageModal || state.showEditProfileModal) {
+        closeAllModals();
+      } else if (state.activeGroupId) {
+        state.activeGroupId = null;
+      } else if (state.activePageId) {
+        state.activePageId = null;
+      } else if (state.tab !== 'feed') {
+        state.tab = 'feed';
+      }
+      render();
+      return;
+    }
+    if (cmd.type === 'media') {
+      if (state.tab === 'reels') {
+        if (cmd.action === 'next') scrollToReelSlide((state.reelActiveIndex || 0) + 1);
+        else if (cmd.action === 'prev') scrollToReelSlide((state.reelActiveIndex || 0) - 1);
+        else if (cmd.action === 'pause' || cmd.action === 'play') {
+          const feed = document.getElementById('reelsSnapFeed');
+          const slide = feed?.querySelectorAll('.reel-slide')?.[state.reelActiveIndex || 0];
+          const vid = slide?.querySelector('video');
+          if (vid) {
+            if (cmd.action === 'pause') vid.pause();
+            else vid.play().catch(() => {});
+          }
+        }
+      }
+      return;
+    }
+    if (cmd.type === 'interact') {
+      if (cmd.action === 'like') {
+        if (state.tab === 'reels') {
+          const feed = document.getElementById('reelsSnapFeed');
+          const slide = feed?.querySelectorAll('.reel-slide')?.[state.reelActiveIndex || 0];
+          const rid = slide?.getAttribute('data-reel-id');
+          if (rid) updateDoc(doc(db, 'reels', rid), { likesCount: increment(1) }).catch(() => {});
+        } else {
+          const firstPost = state.posts.find((p) => !p.groupId && !p.pageId);
+          if (firstPost) toggleLike(firstPost);
+        }
+      } else if (cmd.action === 'select') {
+        if (state.tab === 'feed' && state.posts[0]) {
+          toggleComments(state.posts[0].id);
+        } else if (state.tab === 'marketplace' && state.marketplace[0]) {
+          state.detailListingId = state.marketplace[0].id;
+          render();
+        } else if (state.tab === 'pages' && state.pages[0]) {
+          state.activePageId = state.pages[0].id;
+          render();
+        }
+      }
+      return;
+    }
+    if (cmd.type === 'gesture') {
+      if (cmd.gesture === 'swipe_left') {
+        if (state.tab === 'reels') scrollToReelSlide((state.reelActiveIndex || 0) + 1);
+        else window.scrollBy({ top: 420, behavior: 'smooth' });
+      } else if (cmd.gesture === 'swipe_right') {
+        if (state.tab === 'reels') scrollToReelSlide((state.reelActiveIndex || 0) - 1);
+        else window.scrollBy({ top: -420, behavior: 'smooth' });
+      } else if (cmd.gesture === 'open_palm') {
+        if (state.tab === 'reels') {
+          const feed = document.getElementById('reelsSnapFeed');
+          const slide = feed?.querySelectorAll('.reel-slide')?.[state.reelActiveIndex || 0];
+          const vid = slide?.querySelector('video');
+          if (vid) {
+            if (vid.paused) vid.play().catch(() => {});
+            else vid.pause();
+          }
+        } else if (state.tab !== 'feed') {
+          state.tab = 'feed';
+          render();
+        }
+      } else if (cmd.gesture === 'thumbs_pinch') {
+        if (state.tab === 'reels') {
+          const feed = document.getElementById('reelsSnapFeed');
+          const slide = feed?.querySelectorAll('.reel-slide')?.[state.reelActiveIndex || 0];
+          const rid = slide?.getAttribute('data-reel-id');
+          if (rid) updateDoc(doc(db, 'reels', rid), { likesCount: increment(1) }).catch(() => {});
+        } else {
+          const firstPost = state.posts.find((p) => !p.groupId && !p.pageId);
+          if (firstPost) toggleLike(firstPost);
+        }
+      }
+    }
+  },
+  onDisableRequest() {
+    state.vgEnabled = false;
+    setVoiceGestureStoredEnabled(false);
+    render();
+  },
+  showToast(msg) {
+    state.statusBanner = msg;
+    state.statusIsError = false;
+  }
+});
+
 initFeatures({
   state,
   db,
@@ -3728,7 +4165,8 @@ initFeatures({
   helpers: {
     esc, fmtTime, showBanner, avatarHtml, mediaImgHtml, mediaVideoHtml, mediaSrc,
     iconSvg, resolveAuthor, isValidId, render, openOrCreateDm, selectConversation,
-    openGetAppModal, websiteUrl: WEBSITE_URL, apkUrl: APK_URL
+    openGetAppModal, uploadMediaBlob, setPreviewFile, toggleVoiceGesture,
+    websiteUrl: WEBSITE_URL, apkUrl: APK_URL
   }
 });
 
@@ -3738,11 +4176,16 @@ onAuthStateChanged(auth, async (u) => {
     try {
       await ensureWebProfile(u);
       startListeners(u.uid);
+      if (isVoiceGestureStoredEnabled()) {
+        state.vgEnabled = true;
+        vgController.start();
+      }
     } catch (e) {
       state.authError = e?.message || 'Unable to load profile';
     }
   } else {
     clearSubs();
+    vgController.stop();
     state.me = null;
   }
   render();

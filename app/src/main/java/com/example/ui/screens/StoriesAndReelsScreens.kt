@@ -98,6 +98,8 @@ import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import com.example.voicegesture.VoiceGestureAction
+import kotlinx.coroutines.flow.SharedFlow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -3078,6 +3080,7 @@ fun ReelsScreen(
   communityVm: CommunityViewModel? = null,
   me: PublicUser? = null,
   currentUserId: String = "",
+  voiceGestureEvents: SharedFlow<VoiceGestureAction>? = null,
   onOpenStories: () -> Unit,
   onOpenProfile: (String) -> Unit = {},
   onOpenSettings: () -> Unit = {}
@@ -3153,6 +3156,45 @@ fun ReelsScreen(
           }
         } else {
           val pagerState = rememberPagerState(pageCount = { items.size })
+          var externalToggleNonce by remember { mutableIntStateOf(0) }
+          var externalLikeNonce by remember { mutableIntStateOf(0) }
+          var externalLikeTargetPage by remember { mutableIntStateOf(-1) }
+
+          LaunchedEffect(voiceGestureEvents, items.size) {
+            voiceGestureEvents?.collect { action ->
+              if (items.isEmpty()) return@collect
+              val cur = pagerState.currentPage
+              when (action) {
+                is VoiceGestureAction.MediaNext -> {
+                  if (items.size > 1) {
+                    pagerState.animateScrollToPage((cur + 1) % items.size)
+                  }
+                }
+                is VoiceGestureAction.Scroll -> {
+                  if (action.direction > 0 && items.size > 1) {
+                    pagerState.animateScrollToPage((cur + 1) % items.size)
+                  } else if (action.direction < 0 && items.size > 1) {
+                    pagerState.animateScrollToPage((cur - 1 + items.size) % items.size)
+                  }
+                }
+                is VoiceGestureAction.MediaPrevious -> {
+                  if (items.size > 1) {
+                    pagerState.animateScrollToPage((cur - 1 + items.size) % items.size)
+                  }
+                }
+                is VoiceGestureAction.MediaPlayPause,
+                is VoiceGestureAction.GesturePalm -> {
+                  externalToggleNonce++
+                }
+                is VoiceGestureAction.Like,
+                is VoiceGestureAction.Select -> {
+                  externalLikeTargetPage = cur
+                  externalLikeNonce++
+                }
+                else -> Unit
+              }
+            }
+          }
 
           LaunchedEffect(pagerState) {
             snapshotFlow { pagerState.settledPage }
@@ -3193,7 +3235,8 @@ fun ReelsScreen(
 
             fun advanceToNextReel() {
               if (autoAdvanceEnabled && items.size > 1) {
-                val next = (page + 1) % items.size
+                val cur = pagerState.currentPage
+                val next = (cur + 1) % items.size
                 scope.launch {
                   pagerState.animateScrollToPage(next)
                 }
@@ -3257,6 +3300,12 @@ fun ReelsScreen(
               effectiveCurrentUid.isNotBlank() && (it.authorId == effectiveCurrentUid || item.authorId == effectiveCurrentUid)
             }
 
+            LaunchedEffect(externalLikeNonce) {
+              if (externalLikeNonce > 0 && isCurrentPage && externalLikeTargetPage == page) {
+                triggerLike(forceLikeOnly = true)
+              }
+            }
+
             Box(modifier = Modifier.fillMaxSize()) {
               if (item.youtubeVideoId.isNotBlank()) {
                 YouTubeEmbedPlayerBox(
@@ -3265,6 +3314,7 @@ fun ReelsScreen(
                   modifier = Modifier.fillMaxSize(),
                   cornerRadius = 0.dp,
                   showControls = false,
+                  externalToggleNonce = if (isCurrentPage) externalToggleNonce else 0,
                   seekRequestSec = ytSeekRequest,
                   onProgressUpdate = { cur, dur ->
                     if (!isScrubbing) {
@@ -3276,7 +3326,13 @@ fun ReelsScreen(
                   onVideoEnded = {
                     viewModel.trackEngagement(item.uniqueId, item.category, EngagementSignal.FULL_WATCH)
                     advanceToNextReel()
-                  }
+                  },
+                  onSkipNext = if (items.size > 1) {
+                    {
+                      val cur = pagerState.currentPage
+                      scope.launch { pagerState.animateScrollToPage((cur + 1) % items.size) }
+                    }
+                  } else null
                 )
               } else if (item.videoUri.isNotBlank()) {
                 VideoPlayerBox(
@@ -3288,6 +3344,7 @@ fun ReelsScreen(
                   defaultHeight = null,
                   cornerRadius = 0.dp,
                   showMediaController = false,
+                  externalToggleNonce = if (isCurrentPage) externalToggleNonce else 0,
                   seekRequestMs = videoSeekRequestMs,
                   onProgressUpdate = { posMs, durMs ->
                     if (!isScrubbing) {

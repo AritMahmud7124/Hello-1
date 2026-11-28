@@ -477,6 +477,7 @@ fun VideoPlayerBox(
   defaultHeight: Dp? = 230.dp,
   cornerRadius: Dp = 16.dp,
   showMediaController: Boolean = true,
+  externalToggleNonce: Int = 0,
   seekRequestMs: Pair<Int, Long>? = null,
   onProgressUpdate: ((positionMs: Long, durationMs: Long) -> Unit)? = null,
   onDoubleTap: (() -> Unit)? = null,
@@ -491,6 +492,7 @@ fun VideoPlayerBox(
     mutableStateOf<Uri?>(if (FirestoreMediaStore.isFirestoreMediaUri(videoUri)) null else Uri.parse(videoUri))
   }
   var videoViewRef by remember { mutableStateOf<VideoView?>(null) }
+  var mediaPlayerRef by remember(videoUri) { mutableStateOf<MediaPlayer?>(null) }
   var prepared by remember(videoUri) { mutableStateOf(false) }
   val latestOnProgressState = rememberUpdatedState(onProgressUpdate)
   val latestOnDoubleTapState = rememberUpdatedState(onDoubleTap)
@@ -521,6 +523,11 @@ fun VideoPlayerBox(
     val vv = videoViewRef ?: return@LaunchedEffect
     if (isActive && autoPlay && resolvedUri != null && prepared) {
       if (!vv.isPlaying) {
+        val dur = runCatching { vv.duration }.getOrDefault(0)
+        val pos = runCatching { vv.currentPosition }.getOrDefault(0)
+        if (dur > 0 && pos >= dur - 250) {
+          runCatching { vv.seekTo(0) }
+        }
         vv.start()
         isPlaying = true
       }
@@ -529,6 +536,31 @@ fun VideoPlayerBox(
         vv.pause()
       }
       isPlaying = false
+    }
+  }
+
+  LaunchedEffect(looping, onVideoEnded, mediaPlayerRef, prepared) {
+    val mp = mediaPlayerRef ?: return@LaunchedEffect
+    if (!prepared) return@LaunchedEffect
+    runCatching {
+      mp.isLooping = looping && onVideoEnded == null
+    }
+  }
+
+  LaunchedEffect(externalToggleNonce) {
+    if (externalToggleNonce <= 0 || !isActive || !prepared) return@LaunchedEffect
+    val vv = videoViewRef ?: return@LaunchedEffect
+    if (vv.isPlaying) {
+      vv.pause()
+      isPlaying = false
+    } else {
+      val dur = runCatching { vv.duration }.getOrDefault(0)
+      val pos = runCatching { vv.currentPosition }.getOrDefault(0)
+      if (dur > 0 && pos >= dur - 250) {
+        runCatching { vv.seekTo(0) }
+      }
+      vv.start()
+      isPlaying = true
     }
   }
 
@@ -604,6 +636,7 @@ fun VideoPlayerBox(
             setMediaController(controller)
           }
           setOnPreparedListener { mp ->
+            mediaPlayerRef = mp
             prepared = true
             hasError = false
             runCatching {
@@ -738,10 +771,12 @@ fun YouTubeEmbedPlayerBox(
   modifier: Modifier = Modifier,
   cornerRadius: Dp = 0.dp,
   showControls: Boolean = true,
+  externalToggleNonce: Int = 0,
   seekRequestSec: Pair<Int, Float>? = null,
   onProgressUpdate: ((currentSec: Float, durationSec: Float) -> Unit)? = null,
   onDoubleTap: (() -> Unit)? = null,
-  onVideoEnded: (() -> Unit)? = null
+  onVideoEnded: (() -> Unit)? = null,
+  onSkipNext: (() -> Unit)? = null
 ) {
   val context = LocalContext.current
   val safeId = remember(videoId) { videoId.trim().replace(Regex("[^a-zA-Z0-9_-]"), "") }
@@ -834,9 +869,15 @@ fun YouTubeEmbedPlayerBox(
     """.trimIndent()
   }
 
-  LaunchedEffect(isActive, webViewRef) {
+  LaunchedEffect(isActive, webViewRef, reloadNonce) {
     val wv = webViewRef ?: return@LaunchedEffect
     wv.evaluateJavascript("if (typeof setPlaybackActive === 'function') { setPlaybackActive($isActive); }", null)
+  }
+
+  LaunchedEffect(externalToggleNonce) {
+    if (externalToggleNonce <= 0 || !isActive) return@LaunchedEffect
+    val wv = webViewRef ?: return@LaunchedEffect
+    wv.evaluateJavascript("if (typeof togglePlayback === 'function') { togglePlayback(); }", null)
   }
 
   LaunchedEffect(seekRequestSec, webViewRef) {
@@ -938,6 +979,11 @@ fun YouTubeEmbedPlayerBox(
               reloadNonce++
             }) {
               Text("Retry", color = Color.White)
+            }
+            if (onSkipNext != null) {
+              OutlinedButton(onClick = onSkipNext) {
+                Text("Next Reel", color = Color.White)
+              }
             }
             Button(onClick = {
               runCatching {

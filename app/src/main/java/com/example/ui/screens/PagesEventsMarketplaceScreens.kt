@@ -1113,7 +1113,7 @@ fun MarketplaceScreen(
   var detailListing by remember { mutableStateOf<MarketplaceListing?>(null) }
   var shareListingTarget by remember { mutableStateOf<MarketplaceListing?>(null) }
 
-  val categories = remember { listOf("All", "Electronics", "Home", "Fashion", "Vehicles", "Books", "Services") }
+  val categories = remember { listOf("All", "Electronics", "Home", "Fashion", "Vehicles", "Books", "Services", "Other") }
 
   Column(modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -1615,7 +1615,7 @@ private fun MarketplaceEditorDialog(
 
         Text("Category", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-          listOf("Electronics", "Home", "Fashion", "Vehicles", "Books", "Services").forEach { cat ->
+          listOf("Electronics", "Home", "Fashion", "Vehicles", "Books", "Services", "Other").forEach { cat ->
             FilterChip(selected = category == cat, onClick = { category = cat }, label = { Text(cat) })
           }
         }

@@ -3,6 +3,7 @@ package com.example.ui.viewmodel
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.media.FirestoreMediaStore
 import com.example.data.model.AdminRecord
 import com.example.data.model.DevotionTrial
 import com.example.data.model.EventEntity
@@ -400,7 +401,7 @@ class SpacesGovernanceViewModel(
   private suspend fun uploadPageImageIfLocal(context: Context?, rawUri: String): String? {
     val clean = rawUri.trim()
     if (clean.isBlank()) return ""
-    if (clean.startsWith("http://") || clean.startsWith("https://") || clean.startsWith("hellomedia://")) {
+    if (clean.startsWith("http://") || clean.startsWith("https://") || FirestoreMediaStore.isFirestoreMediaUri(clean)) {
       return clean
     }
     if (context == null) return clean
@@ -544,7 +545,7 @@ class SpacesGovernanceViewModel(
         imageUri.isNotBlank() &&
         !imageUri.startsWith("http://") &&
         !imageUri.startsWith("https://") &&
-        !imageUri.startsWith("hellomedia://")
+        !FirestoreMediaStore.isFirestoreMediaUri(imageUri)
       ) {
         _isUploadingMedia.value = true
         val uploadResult = socialRepository.uploadMedia(context, imageUri, "marketplace")

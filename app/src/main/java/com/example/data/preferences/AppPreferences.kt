@@ -44,6 +44,7 @@ class AppPreferences(private val context: Context) {
   private val incognitoHideStatusKey = booleanPreferencesKey("incognito_hide_status")
   private val incognitoPrivateViewingKey = booleanPreferencesKey("incognito_private_viewing")
   private val disappearingChat24hKey = booleanPreferencesKey("disappearing_chat_24h")
+  private val voiceGestureEnabledKey = booleanPreferencesKey("voice_gesture_enabled")
 
   val themeMode: Flow<ThemeMode> = context.helloPrefsDataStore.data.map { prefs ->
     ThemeMode.fromValue(prefs[themeKey])
@@ -75,6 +76,10 @@ class AppPreferences(private val context: Context) {
 
   val disappearingChat24h: Flow<Boolean> = context.helloPrefsDataStore.data.map { prefs ->
     prefs[disappearingChat24hKey] ?: false
+  }
+
+  val voiceGestureEnabled: Flow<Boolean> = context.helloPrefsDataStore.data.map { prefs ->
+    prefs[voiceGestureEnabledKey] ?: false
   }
 
   val incognitoAnyActive: Flow<Boolean> = context.helloPrefsDataStore.data.map { prefs ->
@@ -117,6 +122,10 @@ class AppPreferences(private val context: Context) {
 
   suspend fun setDisappearingChat24h(enabled: Boolean) {
     context.helloPrefsDataStore.edit { it[disappearingChat24hKey] = enabled }
+  }
+
+  suspend fun setVoiceGestureEnabled(enabled: Boolean) {
+    context.helloPrefsDataStore.edit { it[voiceGestureEnabledKey] = enabled }
   }
 
   suspend fun addSearchHistory(query: String) {

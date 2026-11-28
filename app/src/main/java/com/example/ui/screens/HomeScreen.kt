@@ -105,6 +105,8 @@ import com.example.ui.components.resolveLiveAuthor
 import com.example.ui.viewmodel.CommunityViewModel
 import com.example.ui.viewmodel.FeedSortMode
 import com.example.ui.viewmodel.MainSocialViewModel
+import com.example.voicegesture.VoiceGestureAction
+import kotlinx.coroutines.flow.SharedFlow
 
 @Composable
 fun HomeScreen(
@@ -116,7 +118,8 @@ fun HomeScreen(
   communityVm: CommunityViewModel? = null,
   onOpenStories: () -> Unit,
   onOpenStoryViewer: (Story) -> Unit,
-  onOpenProfile: (String) -> Unit = {}
+  onOpenProfile: (String) -> Unit = {},
+  voiceGestureEvents: SharedFlow<VoiceGestureAction>? = null
 ) {
   val context = LocalContext.current
   val me by viewModel.currentUser.collectAsStateWithLifecycle()
@@ -163,6 +166,39 @@ fun HomeScreen(
       FeedSortMode.FRIENDS -> merged
         .filter { it.authorId == currentUserId || it.authorId in friendUids }
         .sortedByDescending { it.createdAt?.seconds ?: 0L }
+    }
+  }
+
+  LaunchedEffect(voiceGestureEvents, combinedPosts) {
+    voiceGestureEvents?.collect { action ->
+      when (action) {
+        is VoiceGestureAction.Scroll -> {
+          if (action.toTop) {
+            listState.animateScrollToItem(0)
+          } else {
+            val total = listState.layoutInfo.totalItemsCount.coerceAtLeast(1)
+            val target = (listState.firstVisibleItemIndex + action.direction * 2).coerceIn(0, total - 1)
+            listState.animateScrollToItem(target)
+          }
+        }
+        is VoiceGestureAction.MediaNext -> {
+          val total = listState.layoutInfo.totalItemsCount.coerceAtLeast(1)
+          val target = (listState.firstVisibleItemIndex + 2).coerceIn(0, total - 1)
+          listState.animateScrollToItem(target)
+        }
+        is VoiceGestureAction.MediaPrevious -> {
+          val target = (listState.firstVisibleItemIndex - 2).coerceAtLeast(0)
+          listState.animateScrollToItem(target)
+        }
+        is VoiceGestureAction.Like -> {
+          val postOffset = if (globalSettings.maintenanceBanner.isNotBlank()) 5 else 4
+          val postIdx = (listState.firstVisibleItemIndex - postOffset).coerceIn(0, (combinedPosts.size - 1).coerceAtLeast(0))
+          combinedPosts.getOrNull(postIdx)?.let { post ->
+            viewModel.reactToPost(post, "❤️")
+          }
+        }
+        else -> Unit
+      }
     }
   }
 

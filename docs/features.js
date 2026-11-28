@@ -531,12 +531,191 @@ export async function deleteMarketplaceItem(id) {
 }
 
 export async function deletePageItem(id) {
-  const { db, fs, helpers } = ctx;
+  const { state, db, fs, helpers } = ctx;
   try {
     await fs.deleteDoc(fs.doc(db, 'pages', id));
+    if (state.activePageId === id) state.activePageId = null;
     helpers.showBanner('Page deleted.');
   } catch (e) {
     helpers.showBanner(e?.message || 'Could not delete page.', true);
+  }
+}
+
+export async function toggleFollowPage(pg) {
+  const { state, db, fs, helpers } = ctx;
+  const uid = state.user?.uid;
+  if (!uid || !pg) return;
+  try {
+    const existing = Array.isArray(pg.followerUids) ? pg.followerUids : [];
+    const isFollowing = existing.includes(uid);
+    const nextFollowers = isFollowing
+      ? existing.filter((x) => x !== uid)
+      : Array.from(new Set([...existing, uid]));
+    await fs.updateDoc(fs.doc(db, 'pages', pg.id), {
+      followerUids: nextFollowers,
+      followersCount: nextFollowers.length,
+      updatedAt: fs.serverTimestamp()
+    });
+    helpers.showBanner(isFollowing ? `Unfollowed ${pg.name}` : `Following ${pg.name}`);
+  } catch (e) {
+    helpers.showBanner(e?.message || 'Could not update Page follow state.', true);
+  }
+}
+
+export async function addPageFollower(pg, targetUid) {
+  const { db, fs, helpers } = ctx;
+  if (!pg || !targetUid) return;
+  try {
+    const existing = Array.isArray(pg.followerUids) ? pg.followerUids : [];
+    if (existing.includes(targetUid)) return;
+    const next = [...existing, targetUid];
+    await fs.updateDoc(fs.doc(db, 'pages', pg.id), {
+      followerUids: next,
+      followersCount: next.length,
+      updatedAt: fs.serverTimestamp()
+    });
+    helpers.showBanner('Member added to Page.');
+  } catch (e) {
+    helpers.showBanner(e?.message || 'Could not add Page member.', true);
+  }
+}
+
+export async function removePageFollower(pg, targetUid) {
+  const { db, fs, helpers } = ctx;
+  if (!pg || !targetUid || targetUid === pg.creatorId) return;
+  try {
+    const existing = Array.isArray(pg.followerUids) ? pg.followerUids : [];
+    const next = existing.filter((x) => x !== targetUid);
+    const nextAdmins = (Array.isArray(pg.adminUids) ? pg.adminUids : [pg.creatorId])
+      .filter((x) => x !== targetUid || x === pg.creatorId);
+    if (!nextAdmins.includes(pg.creatorId)) nextAdmins.push(pg.creatorId);
+    await fs.updateDoc(fs.doc(db, 'pages', pg.id), {
+      followerUids: next,
+      followersCount: next.length,
+      adminUids: nextAdmins,
+      updatedAt: fs.serverTimestamp()
+    });
+    helpers.showBanner('Member removed from Page.');
+  } catch (e) {
+    helpers.showBanner(e?.message || 'Could not remove Page member.', true);
+  }
+}
+
+export async function togglePageAdmin(pg, targetUid) {
+  const { db, fs, helpers } = ctx;
+  if (!pg || !targetUid || targetUid === pg.creatorId) return;
+  try {
+    const admins = Array.isArray(pg.adminUids) ? [...pg.adminUids] : [pg.creatorId];
+    const isAd = admins.includes(targetUid);
+    const nextAdmins = isAd ? admins.filter((x) => x !== targetUid) : Array.from(new Set([...admins, targetUid]));
+    if (!nextAdmins.includes(pg.creatorId)) nextAdmins.push(pg.creatorId);
+    const followers = Array.isArray(pg.followerUids) ? pg.followerUids : [];
+    const nextFollowers = !isAd && !followers.includes(targetUid) ? [...followers, targetUid] : followers;
+    await fs.updateDoc(fs.doc(db, 'pages', pg.id), {
+      adminUids: nextAdmins,
+      followerUids: nextFollowers,
+      followersCount: nextFollowers.length,
+      updatedAt: fs.serverTimestamp()
+    });
+    helpers.showBanner(isAd ? 'Removed Page Admin role.' : 'Promoted to Page Admin!');
+  } catch (e) {
+    helpers.showBanner(e?.message || 'Could not update Page Admin.', true);
+  }
+}
+
+export async function saveEditedPage(pageId, form) {
+  const { state, db, fs, helpers } = ctx;
+  const pg = state.pages.find((x) => x.id === pageId);
+  if (!pg || !state.user) return;
+  const name = (form.name || '').trim();
+  if (name.length < 2) {
+    helpers.showBanner('Page name must be at least 2 characters.', true);
+    return;
+  }
+  try {
+    let avatarUrl = pg.avatarUrl || '';
+    let coverUrl = pg.coverUrl || '';
+    if (state.pageAvatarFile && helpers.uploadMediaBlob) {
+      avatarUrl = await helpers.uploadMediaBlob(state.pageAvatarFile, '', 'Uploading Page avatar...');
+    }
+    if (state.pageCoverFile && helpers.uploadMediaBlob) {
+      coverUrl = await helpers.uploadMediaBlob(state.pageCoverFile, '', 'Uploading Page cover...');
+    }
+    await fs.updateDoc(fs.doc(db, 'pages', pageId), {
+      name: name.slice(0, 100),
+      category: (form.category || pg.category || 'Creator').slice(0, 40),
+      bio: (form.bio || '').trim().slice(0, 600),
+      avatarUrl,
+      coverUrl,
+      updatedAt: fs.serverTimestamp()
+    });
+    state.editPageTarget = null;
+    if (helpers.setPreviewFile) {
+      helpers.setPreviewFile('pageAvatarFile', 'pageAvatarPreview', null);
+      helpers.setPreviewFile('pageCoverFile', 'pageCoverPreview', null);
+    }
+    helpers.showBanner('Page updated!');
+  } catch (e) {
+    helpers.showBanner(e?.message || 'Could not update Page.', true);
+  }
+}
+
+export async function saveEditedListing(listingId, form) {
+  const { state, db, fs, helpers } = ctx;
+  const item = state.marketplace.find((x) => x.id === listingId);
+  if (!item || !state.user) return;
+  const title = (form.title || '').trim();
+  const price = parseFloat(form.price ?? '0');
+  if (title.length < 2 || Number.isNaN(price) || price < 0) {
+    helpers.showBanner('Enter a valid product title and price.', true);
+    return;
+  }
+  try {
+    let imageUri = item.imageUri || '';
+    if (state.mktMediaFile && helpers.uploadMediaBlob) {
+      imageUri = await helpers.uploadMediaBlob(state.mktMediaFile, '', 'Updating listing photo...');
+    }
+    await fs.updateDoc(fs.doc(db, 'marketplace_listings', listingId), {
+      title: title.slice(0, 120),
+      description: (form.description || '').trim().slice(0, 1000),
+      price,
+      currency: (form.currency || '$').slice(0, 6),
+      category: (form.category || 'Other').slice(0, 40),
+      condition: (form.condition || 'Good').slice(0, 40),
+      locationText: (form.locationText || 'Local').trim().slice(0, 100) || 'Local',
+      imageUri,
+      updatedAt: fs.serverTimestamp()
+    });
+    state.editListingTarget = null;
+    if (helpers.setPreviewFile) {
+      helpers.setPreviewFile('mktMediaFile', 'mktMediaPreview', null);
+    }
+    helpers.showBanner('Marketplace listing updated!');
+  } catch (e) {
+    helpers.showBanner(e?.message || 'Could not update listing.', true);
+  }
+}
+
+export async function saveProfileModalChanges(form) {
+  const { state, db, fs, helpers } = ctx;
+  if (!state.user) return;
+  const name = (form.displayName || '').trim();
+  if (!name) {
+    helpers.showBanner('Display name cannot be empty.', true);
+    return;
+  }
+  try {
+    await fs.updateDoc(fs.doc(db, 'users_public', state.user.uid), {
+      displayName: name.slice(0, 80),
+      bio: (form.bio || '').trim().slice(0, 300),
+      profilePrivacy: ['public', 'friends', 'private'].includes(form.profilePrivacy) ? form.profilePrivacy : (state.me?.profilePrivacy || 'public'),
+      acceptSecretLove: Boolean(form.acceptSecretLove),
+      updatedAt: fs.serverTimestamp()
+    });
+    state.showEditProfileModal = false;
+    helpers.showBanner('Profile saved across phone & web!');
+  } catch (e) {
+    helpers.showBanner(e?.message || 'Could not update profile.', true);
   }
 }
 
@@ -1301,6 +1480,22 @@ export function renderSettingsTab() {
       </div>
 
       <div class="card" style="display:flex;flex-direction:column;gap:12px;">
+        <h3 style="margin:0;">Voice &amp; Gesture Control (Hands-Free)</h3>
+        <div class="setting-row">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:700;">Voice &amp; Gesture Control</div>
+            <div class="muted">Off by default to save battery. Turn on to navigate &amp; control HELLO by voice ("Home", "Reels", "Marketplace", "Next", "Like", "Back") or front-camera hand gestures (Swipe, Open Palm, Thumbs Up / Pinch).</div>
+          </div>
+          <button class="btn ${state.vgEnabled ? 'btn-primary' : 'btn-secondary'}" id="toggleVoiceGestureBtn" type="button">${state.vgEnabled ? 'On ✓' : 'Off'}</button>
+        </div>
+        ${state.vgEnabled ? `
+          <div class="notice-box" style="font-size:12.5px;">
+            Active: Say "Reels", "Marketplace", "Profile", "Scroll down", "Next", "Previous", "Pause", "Like", or "Back". Show hand swipe / palm / thumbs-up to front camera.
+          </div>
+        ` : ''}
+      </div>
+
+      <div class="card" style="display:flex;flex-direction:column;gap:12px;">
         <h3 style="margin:0;">Profile Privacy & Recovery</h3>
         <div>
           <label class="muted">Who can view your full profile?</label>
@@ -1728,6 +1923,195 @@ export function renderFeatureModals() {
     `;
   }
 
+  if (state.detailListingId) {
+    const item = state.marketplace.find((x) => x.id === state.detailListingId);
+    if (item) {
+      const seller = helpers.resolveAuthor(item.sellerId, item.sellerName, item.sellerAvatar);
+      const isMine = item.sellerId === uid || isAdminUser();
+      return `
+        <div class="modal-backdrop" id="modalBackdrop">
+          <div class="modal-card" style="max-width:560px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <h3 style="margin:0;">${esc(item.title)}</h3>
+              <button class="icon-btn close-modals-btn" style="width:34px;height:34px;">${iconSvg('close', 18)}</button>
+            </div>
+            ${item.imageUri ? helpers.mediaImgHtml(item.imageUri, 'mkt-detail-img open-lightbox', item.title, `data-lightbox-uri="${esc(item.imageUri)}"`) : ''}
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+              <div style="font-size:22px;font-weight:800;color:var(--primary);">${esc(item.currency || '$')}${Number(item.price || 0).toFixed(2)}</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <span class="badge">${esc(item.category || 'Other')}</span>
+                <span class="badge">${esc(item.condition || 'Good')}</span>
+                <span class="badge">${esc(item.status || 'available')}</span>
+              </div>
+            </div>
+            <div class="muted">📍 ${esc(item.locationText || 'Local')} · Posted ${fmtTime(item.createdAt)}</div>
+            ${item.description ? `<div style="font-size:14px;line-height:1.5;white-space:pre-wrap;">${esc(item.description)}</div>` : ''}
+            <div class="side-item open-user-profile" data-uid="${esc(item.sellerId)}" style="background:var(--elevated);cursor:pointer;">
+              <span class="side-item-left">
+                ${avatarHtml(seller.name, seller.avatar, 36, seller.online)}
+                <div>
+                  <div style="font-weight:700;">${esc(seller.name)}</div>
+                  <div class="muted" style="font-size:11.5px;">View seller profile</div>
+                </div>
+              </span>
+              <span class="badge">Seller</span>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              ${isMine ? `
+                <button class="btn btn-secondary open-edit-listing-btn" data-item-id="${esc(item.id)}">Edit Listing</button>
+                <button class="btn btn-primary toggle-sold-btn" data-item-id="${esc(item.id)}">${item.status === 'sold' ? 'Mark Available' : 'Mark Sold'}</button>
+                <button class="btn btn-danger delete-mkt-btn" data-item-id="${esc(item.id)}">Delete</button>
+              ` : `
+                <button class="btn btn-primary market-msg-btn" data-item-id="${esc(item.id)}" style="flex:1;">${iconSvg('chat', 16)}<span>Message Seller</span></button>
+                <button class="btn btn-secondary report-open-btn" data-rtype="listing" data-rid="${esc(item.id)}">Report</button>
+              `}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  if (state.editListingTarget) {
+    const it = state.editListingTarget;
+    return `
+      <div class="modal-backdrop" id="modalBackdrop">
+        <div class="modal-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <h3 style="margin:0;">Edit Marketplace Listing</h3>
+            <button class="icon-btn close-modals-btn" style="width:34px;height:34px;">${iconSvg('close', 18)}</button>
+          </div>
+          <input class="field" id="editMktTitle" placeholder="Title" value="${esc(it.title || '')}" />
+          <div style="display:grid;grid-template-columns:100px 1fr;gap:8px;">
+            <select class="select-field" id="editMktCurrency">
+              ${['$', '৳', '₹', '€', '£'].map((cur) => `<option ${it.currency === cur ? 'selected' : ''}>${cur}</option>`).join('')}
+            </select>
+            <input class="field" id="editMktPrice" type="number" min="0" step="0.01" placeholder="Price" value="${esc(String(it.price ?? '0'))}" />
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <select class="select-field" id="editMktCat">
+              ${['Electronics', 'Vehicles', 'Home', 'Fashion', 'Books', 'Services', 'Other'].map((c) => `<option ${it.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+            </select>
+            <select class="select-field" id="editMktCond">
+              ${['New', 'Like New', 'Good', 'Fair'].map((c) => `<option ${it.condition === c ? 'selected' : ''}>${c}</option>`).join('')}
+            </select>
+          </div>
+          <input class="field" id="editMktLoc" placeholder="Location" value="${esc(it.locationText || '')}" />
+          <textarea class="field" id="editMktDesc" rows="3" placeholder="Description">${esc(it.description || '')}</textarea>
+          ${state.mktMediaPreview ? `
+            <div class="preview-wrap"><img src="${esc(state.mktMediaPreview)}" alt="New photo" /><button class="preview-remove-btn" id="clearMktMediaBtn" type="button">${iconSvg('close', 16)}</button></div>
+          ` : (it.imageUri ? helpers.mediaImgHtml(it.imageUri, 'market-img', 'Current photo') : '')}
+          <button class="btn btn-secondary" id="pickMktMediaBtn" type="button">${iconSvg('photo', 16)}<span>${state.mktMediaFile ? 'Change Selected Photo' : 'Replace Product Photo'}</span></button>
+          <button class="btn btn-primary" id="saveEditListingBtn" data-item-id="${esc(it.id)}" ${state.isUploading ? 'disabled' : ''}>${state.isUploading ? 'Saving...' : 'Save Changes'}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  if (state.editPageTarget) {
+    const pg = state.editPageTarget;
+    return `
+      <div class="modal-backdrop" id="modalBackdrop">
+        <div class="modal-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <h3 style="margin:0;">Edit Page</h3>
+            <button class="icon-btn close-modals-btn" style="width:34px;height:34px;">${iconSvg('close', 18)}</button>
+          </div>
+          <input class="field" id="editPageName" placeholder="Page name" value="${esc(pg.name || '')}" />
+          <select class="select-field" id="editPageCat">
+            ${['Digital Creator', 'Creator', 'Community', 'Business', 'Music', 'Education', 'Tech', 'Sports'].map((c) => `<option ${pg.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+          </select>
+          <textarea class="field" id="editPageBio" rows="3" placeholder="Page bio">${esc(pg.bio || '')}</textarea>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-secondary" id="pickPageAvatarBtn" type="button">${iconSvg('photo', 15)}<span>${state.pageAvatarFile ? 'Avatar Ready ✓' : 'Page Avatar'}</span></button>
+            <button class="btn btn-secondary" id="pickPageCoverBtn" type="button">${iconSvg('photo', 15)}<span>${state.pageCoverFile ? 'Cover Ready ✓' : 'Cover Banner'}</span></button>
+          </div>
+          <button class="btn btn-primary" id="saveEditPageBtn" data-page-id="${esc(pg.id)}" ${state.isUploading ? 'disabled' : ''}>${state.isUploading ? 'Saving...' : 'Save Page Changes'}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  if (state.managePageModal) {
+    const pg = state.pages.find((p) => p.id === state.managePageModal);
+    if (!pg) return '';
+    const followerSet = new Set(pg.followerUids || []);
+    const adminSet = new Set(pg.adminUids || [pg.creatorId]);
+    const isCreator = pg.creatorId === uid;
+    const candidates = state.users.filter((u) => !followerSet.has(u.userId || u.id));
+    return `
+      <div class="modal-backdrop" id="modalBackdrop">
+        <div class="modal-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <h3 style="margin:0;">Manage ${esc(pg.name)}</h3>
+            <button class="icon-btn close-modals-btn" style="width:34px;height:34px;">${iconSvg('close', 18)}</button>
+          </div>
+          <div style="font-weight:700;font-size:13px;">Followers &amp; Admins (${(pg.followerUids || []).length})</div>
+          <div style="max-height:175px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+            ${(pg.followerUids || []).map((fid) => {
+              const u = helpers.resolveAuthor(fid, 'Member');
+              const isCr = fid === pg.creatorId;
+              const isAd = adminSet.has(fid);
+              return `
+                <div class="setting-row">
+                  <span>${esc(u.name)} ${isCr ? '<span class="badge">Owner</span>' : (isAd ? '<span class="badge">Admin</span>' : '')}</span>
+                  ${!isCr ? `
+                    <div style="display:flex;gap:6px;">
+                      ${isCreator ? `<button class="btn btn-secondary toggle-page-admin-btn" data-page-id="${esc(pg.id)}" data-uid="${esc(fid)}" style="min-height:30px;padding:3px 9px;font-size:11.5px;">${isAd ? 'Remove Admin' : 'Make Admin'}</button>` : ''}
+                      <button class="btn btn-danger remove-page-mem-btn" data-page-id="${esc(pg.id)}" data-uid="${esc(fid)}" style="min-height:30px;padding:3px 9px;font-size:11.5px;">Remove</button>
+                    </div>
+                  ` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+          <div style="font-weight:700;font-size:13px;margin-top:6px;">Add People to Page</div>
+          <div style="max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+            ${candidates.length === 0 ? `<div class="muted">Everyone discoverable already follows this Page.</div>` : candidates.map((u) => `
+              <div class="setting-row">
+                <span>${esc(u.displayName)}</span>
+                <button class="btn btn-primary add-page-mem-btn" data-page-id="${esc(pg.id)}" data-uid="${esc(u.userId || u.id)}" style="min-height:30px;padding:3px 10px;font-size:11.5px;">Add</button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (state.showEditProfileModal) {
+    const me = state.me || {};
+    return `
+      <div class="modal-backdrop" id="modalBackdrop">
+        <div class="modal-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <h3 style="margin:0;">Edit Profile</h3>
+            <button class="icon-btn close-modals-btn" style="width:34px;height:34px;">${iconSvg('close', 18)}</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-secondary" id="pickProfAvatarBtn" type="button" ${state.isUploading ? 'disabled' : ''}>${iconSvg('photo', 15)}<span>Change Avatar</span></button>
+            <button class="btn btn-secondary" id="pickProfCoverBtn" type="button" ${state.isUploading ? 'disabled' : ''}>${iconSvg('photo', 15)}<span>Change Cover</span></button>
+          </div>
+          <input class="field" id="editProfNameInput" placeholder="Display Name" value="${esc(me.displayName || state.user?.displayName || '')}" />
+          <textarea class="field" id="editProfBioInput" rows="3" placeholder="Bio">${esc(me.bio || '')}</textarea>
+          <div>
+            <label class="muted">Profile Privacy</label>
+            <select class="select-field" id="editProfPrivacySelect" style="margin-top:4px;">
+              <option value="public" ${(me.profilePrivacy || 'public') === 'public' ? 'selected' : ''}>Public</option>
+              <option value="friends" ${me.profilePrivacy === 'friends' ? 'selected' : ''}>Friends Only</option>
+              <option value="private" ${me.profilePrivacy === 'private' ? 'selected' : ''}>Private</option>
+            </select>
+          </div>
+          <label class="setting-row">
+            <span>Allow Secret Love Messages</span>
+            <input type="checkbox" id="editProfLoveChk" ${me.acceptSecretLove !== false ? 'checked' : ''} />
+          </label>
+          <button class="btn btn-primary" id="saveEditProfileModalBtn" ${state.isUploading ? 'disabled' : ''}>Save Changes</button>
+        </div>
+      </div>
+    `;
+  }
+
   return '';
 }
 
@@ -2006,6 +2390,9 @@ export function bindFeatureEvents() {
     localStorage.setItem('hello_incog_view', state.incognitoPrivateViewing ? '1' : '0');
     helpers.render();
   });
+  document.getElementById('toggleVoiceGestureBtn')?.addEventListener('click', () => {
+    helpers.toggleVoiceGesture?.();
+  });
   document.getElementById('settingsProfilePrivacy')?.addEventListener('change', async (e) => {
     if (!state.user) return;
     await fs.updateDoc(fs.doc(db, 'users_public', state.user.uid), {
@@ -2033,6 +2420,102 @@ export function bindFeatureEvents() {
   });
   document.getElementById('installLaptopBtnSettings')?.addEventListener('click', () => helpers.openGetAppModal?.());
   document.getElementById('signOutBtnSettings')?.addEventListener('click', () => ctx.auth.signOut());
+
+  // Marketplace Detail / Edit, Page Detail / Edit / Members, Edit Profile Modal
+  document.querySelectorAll('.open-listing-detail-btn').forEach((b) => {
+    b.addEventListener('click', () => {
+      state.detailListingId = b.getAttribute('data-item-id');
+      helpers.render();
+    });
+  });
+  document.querySelectorAll('.open-edit-listing-btn').forEach((b) => {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const it = state.marketplace.find((x) => x.id === b.getAttribute('data-item-id'));
+      if (it) {
+        state.detailListingId = null;
+        state.editListingTarget = it;
+        helpers.setPreviewFile?.('mktMediaFile', 'mktMediaPreview', null);
+        helpers.render();
+      }
+    });
+  });
+  document.getElementById('saveEditListingBtn')?.addEventListener('click', (e) => {
+    const lid = e.currentTarget.getAttribute('data-item-id');
+    saveEditedListing(lid, {
+      title: document.getElementById('editMktTitle')?.value,
+      price: document.getElementById('editMktPrice')?.value,
+      currency: document.getElementById('editMktCurrency')?.value,
+      category: document.getElementById('editMktCat')?.value,
+      condition: document.getElementById('editMktCond')?.value,
+      locationText: document.getElementById('editMktLoc')?.value,
+      description: document.getElementById('editMktDesc')?.value
+    });
+  });
+
+  document.querySelectorAll('.open-page-detail-btn').forEach((b) => {
+    b.addEventListener('click', () => {
+      state.activePageId = b.getAttribute('data-page-id');
+      helpers.render();
+    });
+  });
+  document.getElementById('backToPagesBtn')?.addEventListener('click', () => {
+    state.activePageId = null;
+    helpers.render();
+  });
+  document.querySelectorAll('.open-edit-page-btn').forEach((b) => {
+    b.addEventListener('click', () => {
+      const pg = state.pages.find((p) => p.id === b.getAttribute('data-page-id'));
+      if (pg) {
+        state.editPageTarget = pg;
+        helpers.render();
+      }
+    });
+  });
+  document.getElementById('saveEditPageBtn')?.addEventListener('click', (e) => {
+    const pid = e.currentTarget.getAttribute('data-page-id');
+    saveEditedPage(pid, {
+      name: document.getElementById('editPageName')?.value,
+      category: document.getElementById('editPageCat')?.value,
+      bio: document.getElementById('editPageBio')?.value
+    });
+  });
+  document.querySelectorAll('.manage-page-btn').forEach((b) => {
+    b.addEventListener('click', () => {
+      state.managePageModal = b.getAttribute('data-page-id');
+      helpers.render();
+    });
+  });
+  document.querySelectorAll('.add-page-mem-btn').forEach((b) => {
+    b.addEventListener('click', () => {
+      const pg = state.pages.find((p) => p.id === b.getAttribute('data-page-id'));
+      if (pg) addPageFollower(pg, b.getAttribute('data-uid'));
+    });
+  });
+  document.querySelectorAll('.remove-page-mem-btn').forEach((b) => {
+    b.addEventListener('click', () => {
+      const pg = state.pages.find((p) => p.id === b.getAttribute('data-page-id'));
+      if (pg) removePageFollower(pg, b.getAttribute('data-uid'));
+    });
+  });
+  document.querySelectorAll('.toggle-page-admin-btn').forEach((b) => {
+    b.addEventListener('click', () => {
+      const pg = state.pages.find((p) => p.id === b.getAttribute('data-page-id'));
+      if (pg) togglePageAdmin(pg, b.getAttribute('data-uid'));
+    });
+  });
+  document.getElementById('openEditProfileModalBtn')?.addEventListener('click', () => {
+    state.showEditProfileModal = true;
+    helpers.render();
+  });
+  document.getElementById('saveEditProfileModalBtn')?.addEventListener('click', () => {
+    saveProfileModalChanges({
+      displayName: document.getElementById('editProfNameInput')?.value,
+      bio: document.getElementById('editProfBioInput')?.value,
+      profilePrivacy: document.getElementById('editProfPrivacySelect')?.value,
+      acceptSecretLove: document.getElementById('editProfLoveChk')?.checked
+    });
+  });
 
   // Owner Dashboard
   document.querySelectorAll('[data-owner-tab]').forEach((b) => {

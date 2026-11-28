@@ -1,10 +1,13 @@
 package com.example.ui.screens
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -51,8 +54,10 @@ import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.PanTool
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -1716,7 +1721,9 @@ fun SettingsScreen(
   onIncognitoMasterChange: (Boolean) -> Unit = {},
   onIncognitoHideStatusChange: (Boolean) -> Unit = {},
   onIncognitoPrivateViewingChange: (Boolean) -> Unit = {},
-  onDisappearingChat24hChange: (Boolean) -> Unit = {}
+  onDisappearingChat24hChange: (Boolean) -> Unit = {},
+  voiceGestureEnabled: Boolean = false,
+  onVoiceGestureChange: (Boolean) -> Unit = {}
 ) {
   val context = LocalContext.current
   val vault = remember(context, vaultStorage) { vaultStorage ?: EncryptedVaultStorage(context) }
@@ -1746,6 +1753,28 @@ fun SettingsScreen(
   var isSavingRecovery by remember { mutableStateOf(false) }
   var showDeleteConfirm by remember { mutableStateOf(false) }
   var showTuningDetails by remember { mutableStateOf(false) }
+  var voiceGestureNotice by remember { mutableStateOf<String?>(null) }
+  val voiceGesturePermissionLauncher = rememberLauncherForActivityResult(
+    ActivityResultContracts.RequestMultiplePermissions()
+  ) { grants ->
+    val camGranted = grants[Manifest.permission.CAMERA] ?: (
+      ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+    )
+    val micGranted = grants[Manifest.permission.RECORD_AUDIO] ?: (
+      ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    )
+    if (camGranted || micGranted) {
+      voiceGestureNotice = when {
+        camGranted && micGranted -> "Voice & Gesture control is active."
+        camGranted -> "Camera gestures active (Microphone permission denied)."
+        else -> "Voice commands active (Camera permission denied)."
+      }
+      onVoiceGestureChange(true)
+    } else {
+      voiceGestureNotice = "Camera & Microphone permissions were denied. Voice & Gesture control remains OFF."
+      onVoiceGestureChange(false)
+    }
+  }
 
   LazyColumn(
     modifier = Modifier.fillMaxSize(),
@@ -1756,6 +1785,95 @@ fun SettingsScreen(
 
     item {
       HelloWebsiteAndLaptopCard()
+    }
+
+    item {
+      Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier.testTag("settings_voice_gesture_card")
+      ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Row(
+              modifier = Modifier.weight(1f).padding(end = 12.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+              Surface(
+                shape = CircleShape,
+                color = if (voiceGestureEnabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.size(40.dp)
+              ) {
+                Box(contentAlignment = Alignment.Center) {
+                  Icon(
+                    imageVector = if (voiceGestureEnabled) Icons.Rounded.Mic else Icons.Rounded.PanTool,
+                    contentDescription = "Voice and Gesture Control",
+                    tint = if (voiceGestureEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                  )
+                }
+              }
+              Column {
+                Text(
+                  text = "Voice & Gesture Control",
+                  style = MaterialTheme.typography.titleSmall,
+                  fontWeight = FontWeight.Bold
+                )
+                Text(
+                  text = if (voiceGestureEnabled) {
+                    "Hands-free active · Control tabs, Reels, scroll & likes with voice and front camera."
+                  } else {
+                    "OFF by default to save battery · Enable to navigate HELLO by voice or hand gestures."
+                  },
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+            }
+            Switch(
+              checked = voiceGestureEnabled,
+              onCheckedChange = { enable ->
+                if (!enable) {
+                  voiceGestureNotice = null
+                  onVoiceGestureChange(false)
+                } else {
+                  val camOk = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                  val micOk = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                  if (camOk && micOk) {
+                    voiceGestureNotice = "Voice & Gesture control is active."
+                    onVoiceGestureChange(true)
+                  } else {
+                    voiceGesturePermissionLauncher.launch(
+                      arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+                    )
+                  }
+                }
+              },
+              modifier = Modifier.testTag("settings_voice_gesture_switch")
+            )
+          }
+
+          if (voiceGestureEnabled || voiceGestureNotice != null) {
+            Surface(
+              color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Text(
+                text = voiceGestureNotice
+                  ?: "Try voice: \"Home\", \"Reels\", \"Marketplace\", \"Next\", \"Like\", \"Back\", \"Scroll down\" · Gestures: Swipe Left/Right (Next/Prev), Open Palm (Pause/Back), Pinch/Thumbs-up (Like).",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+              )
+            }
+          }
+        }
+      }
     }
 
     item {
